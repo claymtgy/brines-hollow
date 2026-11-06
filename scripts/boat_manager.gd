@@ -158,7 +158,8 @@ func _on_peer_disconnected(id: int) -> void:
 # ---------------------------------------------------------------- seats
 
 func _unhandled_input(e: InputEvent) -> void:
-	if e.is_action_pressed("interact") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	var can_interact: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or (main.controller != null and main.controller.current_type != ControllerManager.Type.KEYBOARD_MOUSE)
+	if e.is_action_pressed("interact") and can_interact:
 		interact()
 
 
@@ -168,6 +169,8 @@ func interact() -> void:
 	if p == null or not _world_ready():
 		return
 	if p.is_seated():
+		if main.controller:
+			main.controller.reset_triggers()
 		var spot = p.boat.find_exit_spot()
 		if spot == null:
 			main.hud.show_toast("Row closer to land or a dock to step off")
@@ -307,10 +310,18 @@ func _physics_process(delta: float) -> void:
 				f = debug_input.x
 				t = debug_input.y
 				hard = debug_input.z > 0.5
-			elif p.input_enabled and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-				f = Input.get_axis("move_back", "move_forward")
-				t = Input.get_axis("move_right", "move_left")
-				hard = Input.is_action_pressed("sprint")
+			elif p.input_enabled:
+				var can_input: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or (main.controller != null and main.controller.current_type != ControllerManager.Type.KEYBOARD_MOUSE)
+				if can_input:
+					f = Input.get_axis("move_back", "move_forward")
+					t = Input.get_axis("move_right", "move_left")
+					hard = Input.is_action_pressed("sprint")
+					if absf(f) > 0.1 and main.controller:
+						if b.row_power > 0.8 and sin(b.row_phase) > 0.9:
+							main.controller.pulse_row()
+						main.controller.apply_rowing(b.row_power, b.row_phase)
+					elif main.controller:
+						main.controller.reset_triggers()
 		b.simulate(delta, f, t, hard)
 	if main.is_net and multiplayer.multiplayer_peer != null:
 		_send_t -= delta
@@ -340,6 +351,10 @@ func _process(_delta: float) -> void:
 		var b := nearest_boardable(p.position)
 		if b != null:
 			prompt = "F  Board rowboat" if b.free_seat() == 0 else "F  Ride along"
+		elif main.entities != null:
+			var ent: WorldEntity = main.entities.get_closest_interactable(p.position)
+			if ent != null:
+				prompt = ent.get_interaction_prompt(p)
 	main.hud.set_prompt(prompt)
 	# Remote avatars may have been created after a seat change.
 	for id in main.remotes:

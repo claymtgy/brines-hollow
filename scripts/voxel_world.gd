@@ -100,6 +100,12 @@ func _ready() -> void:
 	tsh.code = """
 shader_type spatial;
 uniform float voxel = 0.18;
+// Foliage fade: leaves near the line from the camera (fade_eye) to the player's head
+// (fade_target) are dithered away so trees never hide your character.
+uniform bool fade_enabled = true;
+uniform vec3 fade_eye = vec3(0.0);
+uniform vec3 fade_target = vec3(0.0);
+uniform float fade_radius = 1.6;
 varying vec3 wpos;
 varying vec3 wnrm;
 vec3 to_linear(vec3 c) {
@@ -111,14 +117,31 @@ uint hash3(ivec3 p) {
 	h = h ^ (h >> 16u);
 	return h & 65535u;
 }
+varying vec3 lin_col;
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = (MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	lin_col = to_linear(COLOR.rgb);   // once per vertex, not per pixel
 }
+const float BAYER[16] = float[](0.0, 0.5, 0.125, 0.625, 0.75, 0.25, 0.875, 0.375,
+		0.1875, 0.6875, 0.0625, 0.5625, 0.9375, 0.4375, 0.8125, 0.3125);
 void fragment() {
+	// Vertex alpha = colour-variation amount, +0.5 when the voxel is foliage.
+	bool foliage = COLOR.a >= 0.5;
+	float variation = foliage ? COLOR.a - 0.5 : COLOR.a;
+	if (foliage && fade_enabled) {
+		vec3 ab = fade_target - fade_eye;
+		float t = dot(wpos - fade_eye, ab) / max(dot(ab, ab), 1e-4);
+		if (t > -0.1 && t < 1.0) {
+			float d = distance(wpos, fade_eye + ab * clamp(t, 0.0, 1.0));
+			float k = smoothstep(fade_radius, fade_radius * 0.4, d) * 0.9;
+			ivec2 fc = ivec2(FRAGCOORD.xy) & ivec2(3);
+			if (k > BAYER[fc.x + fc.y * 4]) { discard; }
+		}
+	}
 	ivec3 cell = ivec3(floor(wpos / voxel - wnrm * 0.5));
-	float b = 1.0 + (float(hash3(cell)) / 65535.0 - 0.5) * 2.0 * COLOR.a;
-	ALBEDO = to_linear(clamp(COLOR.rgb * b, 0.0, 1.0));
+	float b = 1.0 + (float(hash3(cell)) / 65535.0 - 0.5) * 2.0 * variation;
+	ALBEDO = min(lin_col * pow(b, 2.2), vec3(1.0));   // == to_linear(rgb * b) for b ~ 1
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.25;
 }
@@ -643,6 +666,10 @@ func _add_light(p: Vector3i, m: int) -> void:
 	l.omni_range = 7.0
 	l.omni_attenuation = 1.4
 	l.light_energy = 0.0
+	l.visible = false             # SkyCycle switches lamps on at dusk
+	l.distance_fade_enabled = true  # far lamps drop out of the lighting pass
+	l.distance_fade_begin = 45.0
+	l.distance_fade_length = 15.0
 	l.shadow_enabled = false
 	l.add_to_group("lamps")
 	lamps_root.add_child(l)

@@ -23,11 +23,22 @@ var slots: Array = []
 var info_label: Label
 var swatch: ColorRect
 var help: PanelContainer
+var help_label: Label
+var controller: ControllerManager
 var fps_label: Label
 var underwater: ColorRect
 var toast: Label
 var prompt: Label
 var bottom_bar: VBoxContainer
+var vitality_panel: PanelContainer
+var health_bar: ProgressBar
+var health_label: Label
+var stamina_bar: ProgressBar
+var stamina_label: Label
+var breath_bar: ProgressBar
+var stomach_label: Label
+var rested_label: Label
+var minimap: Minimap
 var _toast_t := 0.0
 
 
@@ -209,6 +220,13 @@ func _build_hud(theme: Theme) -> void:
 	fps_label.visible = false
 	hud_root.add_child(fps_label)
 
+	# Top-right: Diegetic Nautical Minimap (equipment-gated)
+	minimap = Minimap.new()
+	minimap.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	minimap.position = Vector2(-210, 80)
+	minimap.visible = false
+	hud_root.add_child(minimap)
+
 	# Bottom: hotbar + info
 	var bottom := VBoxContainer.new()
 	bottom_bar = bottom
@@ -222,11 +240,12 @@ func _build_hud(theme: Theme) -> void:
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 8)
 	bottom.add_child(bar)
-	for i in 3:
+	const TOOL_LABELS := ["1  Pickaxe", "2  Hammer", "3  Blueprints", "4  Rod", "5  Farm"]
+	for i in TOOL_LABELS.size():
 		var p := PanelContainer.new()
 		var l := Label.new()
-		l.text = ["1  Pickaxe", "2  Hammer", "3  Blueprints"][i]
-		l.custom_minimum_size = Vector2(130, 0)
+		l.text = TOOL_LABELS[i]
+		l.custom_minimum_size = Vector2(105, 0)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		p.add_child(l)
 		bar.add_child(p)
@@ -249,18 +268,10 @@ func _build_hud(theme: Theme) -> void:
 	help.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	help.position = Vector2(16, -170)
 	hud_root.add_child(help)
-	var hl := Label.new()
-	hl.add_theme_font_size_override("font_size", 15)
-	hl.text = """CONTROLS  (F1 to hide)
-WASD  move     Shift  sprint     Space  jump / swim up
-Mouse  look    Wheel  zoom    V  swap shoulder
-LMB  use tool  MMB  pick material
-1 / 2 / 3  Pickaxe / Hammer / Blueprints
-Q / E  previous / next material or prefab
-Z / X  brush size     R  rotate prefab     G  grid snap
-Hold T  fast-forward time (watch the tide)
-F3  stats     Esc  free mouse"""
-	help.add_child(hl)
+	help_label = Label.new()
+	help_label.add_theme_font_size_override("font_size", 15)
+	help.add_child(help_label)
+	_update_help_text()
 
 	toast = Label.new()
 	toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -283,10 +294,152 @@ F3  stats     Esc  free mouse"""
 	prompt.add_theme_constant_override("outline_size", 8)
 	hud_root.add_child(prompt)
 
+	_build_vitality_panel(theme)
+
+
+func _build_vitality_panel(theme: Theme) -> void:
+	vitality_panel = PanelContainer.new()
+	vitality_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	vitality_panel.position = Vector2(16, -170)
+	vitality_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	hud_root.add_child(vitality_panel)
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	vitality_panel.add_child(v)
+
+	# Health bar
+	var hb_box := HBoxContainer.new()
+	hb_box.add_theme_constant_override("separation", 6)
+	v.add_child(hb_box)
+
+	var h_icon := Label.new()
+	h_icon.text = "♥"
+	h_icon.add_theme_color_override("font_color", Color(0.95, 0.35, 0.35))
+	h_icon.add_theme_font_size_override("font_size", 14)
+	hb_box.add_child(h_icon)
+
+	health_bar = ProgressBar.new()
+	health_bar.custom_minimum_size = Vector2(160, 12)
+	health_bar.show_percentage = false
+	var hp_bg := StyleBoxFlat.new()
+	hp_bg.bg_color = Color(0.18, 0.10, 0.10, 0.8)
+	hp_bg.set_corner_radius_all(4)
+	var hp_fill := StyleBoxFlat.new()
+	hp_fill.bg_color = Color(0.88, 0.25, 0.25)
+	hp_fill.set_corner_radius_all(4)
+	health_bar.add_theme_stylebox_override("background", hp_bg)
+	health_bar.add_theme_stylebox_override("fill", hp_fill)
+	hb_box.add_child(health_bar)
+
+	health_label = Label.new()
+	health_label.add_theme_font_size_override("font_size", 12)
+	health_label.text = "25/25"
+	hb_box.add_child(health_label)
+
+	# Stamina bar
+	var sb_box := HBoxContainer.new()
+	sb_box.add_theme_constant_override("separation", 6)
+	v.add_child(sb_box)
+
+	var s_icon := Label.new()
+	s_icon.text = "⚡"
+	s_icon.add_theme_color_override("font_color", Color(0.95, 0.75, 0.25))
+	s_icon.add_theme_font_size_override("font_size", 14)
+	sb_box.add_child(s_icon)
+
+	stamina_bar = ProgressBar.new()
+	stamina_bar.custom_minimum_size = Vector2(160, 12)
+	stamina_bar.show_percentage = false
+	var sta_bg := StyleBoxFlat.new()
+	sta_bg.bg_color = Color(0.18, 0.16, 0.10, 0.8)
+	sta_bg.set_corner_radius_all(4)
+	var sta_fill := StyleBoxFlat.new()
+	sta_fill.bg_color = Color(0.92, 0.72, 0.22)
+	sta_fill.set_corner_radius_all(4)
+	stamina_bar.add_theme_stylebox_override("background", sta_bg)
+	stamina_bar.add_theme_stylebox_override("fill", sta_fill)
+	sb_box.add_child(stamina_bar)
+
+	stamina_label = Label.new()
+	stamina_label.add_theme_font_size_override("font_size", 12)
+	stamina_label.text = "50/50"
+	sb_box.add_child(stamina_label)
+
+	# Breath bar (visible underwater or when depleted)
+	breath_bar = ProgressBar.new()
+	breath_bar.custom_minimum_size = Vector2(160, 8)
+	breath_bar.show_percentage = false
+	var br_bg := StyleBoxFlat.new()
+	br_bg.bg_color = Color(0.08, 0.15, 0.18, 0.8)
+	br_bg.set_corner_radius_all(3)
+	var br_fill := StyleBoxFlat.new()
+	br_fill.bg_color = Color(0.28, 0.78, 0.88)
+	br_fill.set_corner_radius_all(3)
+	breath_bar.add_theme_stylebox_override("background", br_bg)
+	breath_bar.add_theme_stylebox_override("fill", br_fill)
+	breath_bar.visible = false
+	v.add_child(breath_bar)
+
+	# 3-Meal Satiety info
+	stomach_label = Label.new()
+	stomach_label.add_theme_font_size_override("font_size", 11)
+	stomach_label.add_theme_color_override("font_color", DIM)
+	v.add_child(stomach_label)
+
+	# Rested buff indicator
+	rested_label = Label.new()
+	rested_label.add_theme_font_size_override("font_size", 11)
+	rested_label.add_theme_color_override("font_color", Color(0.65, 0.90, 0.75))
+	rested_label.text = "⚓ Sea-Breeze Rested (+50% Sta)"
+	rested_label.visible = false
+	v.add_child(rested_label)
+
+
+func set_controller(cm: ControllerManager) -> void:
+	controller = cm
+	if controller:
+		controller.controller_type_changed.connect(func(_type: ControllerManager.Type) -> void:
+			_update_help_text()
+		)
+		_update_help_text()
+
+
+func _update_help_text() -> void:
+	if help_label == null:
+		return
+	if controller == null or controller.current_type == ControllerManager.Type.KEYBOARD_MOUSE:
+		help_label.text = """CONTROLS  (F1 to hide)
+WASD  move     Shift  sprint     Space  jump / swim up
+Mouse  look    Wheel  zoom       V  swap shoulder
+LMB  use tool  RMB  plant/alt    MMB  pick material
+1-5  Pickaxe / Hammer / Blueprints / Rod / Farm
+Q / E  previous / next material, prefab, or seed
+Z / X  brush size     R  rotate prefab     G  grid snap
+Hold T  fast-forward time (watch the tide)
+F3  stats     Esc  free mouse"""
+	elif controller.current_type == ControllerManager.Type.DUALSENSE:
+		help_label.text = """CONTROLS (DUALSENSE)  (Touchpad / F1 to hide)
+Left Stick  move           L3 / ○  sprint       ✕  jump / swim up
+Right Stick  look          L1 / R1  cycle tool  R3  pick material
+R2  use tool (dig/place/reel)  L2  plant seeds  □  board / interact
+D-Pad L/R  cycle seed/prefab   D-Pad U/D  brush size
+△  rotate prefab           Touchpad  grid snap  Options  menu"""
+	else:
+		help_label.text = """CONTROLS (XBOX)  (View / F1 to hide)
+Left Stick  move           LS / B  sprint       A  jump / swim up
+Right Stick  look          LB / RB  cycle tool  RS  pick material
+RT  use tool (dig/place/reel)  LT  plant seeds  X  board / interact
+D-Pad L/R  cycle seed/prefab   D-Pad U/D  brush size
+Y  rotate prefab           View  grid snap      Menu  menu"""
+
 
 func set_prompt(text: String) -> void:
-	if prompt != null and prompt.text != text:
-		prompt.text = text
+	var formatted := text
+	if controller != null:
+		formatted = controller.format_prompt_for_active_device(text)
+	if prompt != null and prompt.text != formatted:
+		prompt.text = formatted
 
 
 func show_toast(text: String) -> void:
@@ -330,22 +483,131 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	var state := "high tide" if rel > 0.9 else ("low tide" if rel < -0.9 else trend)
 	tide_label.text = "Tide %s %+.1f m  (%s)%s" % [arrow, rel, state, "   >> fast-forward" if sky.time_scale > 1.0 else ""]
 	peers_label.text = peers_text
-	for i in 3:
+
+	# Update Vitality UI
+	if player.vitality != null and vitality_panel != null:
+		var vit: VitalityController = player.vitality
+		var max_h: float = vit.get_max_hp()
+		var max_s: float = vit.get_max_stamina()
+		var max_b: float = vit.get_max_breath()
+
+		health_bar.max_value = max_h
+		health_bar.value = vit.current_hp
+		health_label.text = "%d/%d" % [int(ceil(vit.current_hp)), int(round(max_h))]
+
+		stamina_bar.max_value = max_s
+		stamina_bar.value = vit.current_stamina
+		stamina_label.text = "%d/%d" % [int(ceil(vit.current_stamina)), int(round(max_s))]
+
+		# Breath bar visibility: when submerged or breath depleted
+		var show_breath: bool = cam_under or vit.current_breath < max_b - 0.5
+		breath_bar.visible = show_breath
+		if show_breath:
+			breath_bar.max_value = max_b
+			breath_bar.value = vit.current_breath
+
+		# Satiety stomach readout
+		var meals: Array[Dictionary] = vit.get_active_meals()
+		if meals.is_empty():
+			stomach_label.text = "Stomach empty (25 HP / 50 Sta)"
+		else:
+			var parts: Array[String] = []
+			for m in meals:
+				var mins_rem: int = int(ceil(m.remaining_sec / 60.0))
+				parts.append("%s (%dm)" % [m.name, mins_rem])
+			stomach_label.text = "• " + " | ".join(parts)
+
+		rested_label.visible = vit.is_rested
+
+	# Update Minimap (Equipment-gated by dedicated map slot)
+	if minimap != null:
+		var map_tier := 0
+		var map_name := ""
+		if player.inventory and player.inventory.is_minimap_enabled():
+			var map_def: ItemDef = player.inventory.get_equipped_map_def()
+			if map_def:
+				map_name = map_def.name
+				if map_def.id == &"parchment_shore_chart":
+					map_tier = 1
+				elif map_def.id == &"hydrographic_sea_chart":
+					map_tier = 2
+				elif map_def.id == &"master_chronometer_chart":
+					map_tier = 3
+
+		if map_tier > 0 and not minimap._texture_generated and world != null and world.gen != null:
+			minimap.bake_chart_texture(world)
+
+		var lm_list: Array[Dictionary] = []
+		if world != null and world.gen != null:
+			lm_list = world.gen.starter_spawns
+
+		var boat_pos_list: Array[Vector3] = []
+		if player.boat != null:
+			boat_pos_list.append(player.boat.position)
+
+		minimap.update_state(
+			map_tier,
+			map_name,
+			player.position,
+			player.rig.yaw if player.rig != null else player.facing,
+			sky.water_level_vox * VoxelWorld.VS if sky != null else 0.0,
+			lm_list,
+			boat_pos_list
+		)
+
+	for i in slots.size():
 		(slots[i] as PanelContainer).self_modulate = Color(1.6, 1.25, 0.8, 1.0) if player.tool == i else Color(1, 1, 1, 0.75)
+	var is_gamepad := controller != null and controller.current_type != ControllerManager.Type.KEYBOARD_MOUSE
+	var use_btn: String = controller.get_glyph(&"use") if is_gamepad else "LMB"
+	var alt_btn: String = controller.get_glyph(&"alt_use") if is_gamepad else "RMB"
+	var cycle_btn: String = "D-Pad L/R" if is_gamepad else "Q/E"
+	var size_btn: String = "D-Pad U/D" if is_gamepad else "Z/X"
+	var pick_btn: String = controller.get_glyph(&"pick") if is_gamepad else "MMB"
+	var rot_btn: String = controller.get_glyph(&"rotate") if is_gamepad else "R"
+	var snap_btn: String = controller.get_glyph(&"snap") if is_gamepad else "G"
+
 	var r: int = Player.BRUSHES[player.brush]
 	match player.tool:
 		0:
 			swatch.visible = false
-			info_label.text = "Dig brush %d   (Z/X size)" % (r * 2 + 1)
+			info_label.text = "Dig brush %d   (%s size)" % [r * 2 + 1, size_btn]
 		1:
 			swatch.visible = true
 			swatch.color = Palette.COLORS[player.current_material()]
-			info_label.text = "%s   brush %d   (Q/E material, Z/X size, MMB pick)" % [
-				Palette.NAMES[player.current_material()], r * 2 + 1]
+			info_label.text = "%s   brush %d   (%s mat, %s size, %s pick)" % [
+				Palette.NAMES[player.current_material()], r * 2 + 1, cycle_btn, size_btn, pick_btn]
 		2:
 			swatch.visible = false
 			var pf: Dictionary = Prefabs.all()[player.prefab_id]
-			info_label.text = "%s   (Q/E change, R rotate, G snap: %s)" % [pf.name, "on" if player.snap else "off"]
+			info_label.text = "%s   (%s change, %s rotate, %s snap: %s)" % [
+				pf.name, cycle_btn, rot_btn, snap_btn, "on" if player.snap else "off"]
+		3:
+			swatch.visible = false
+			if player.fishing:
+				match player.fishing.current_state:
+					FishingController.State.IDLE:
+						info_label.text = "Fishing Rod   (Aim at sea, hold [%s] to cast)" % use_btn
+					FishingController.State.CASTING:
+						info_label.text = "Casting... Power %.0f%%   (Release %s)" % [player.fishing_cast_power * 100.0, use_btn]
+					FishingController.State.WAITING_FOR_BITE:
+						info_label.text = "Bobber floating at %.1f m... Waiting for bite" % player.fishing.line_distance
+					FishingController.State.NIBBLING:
+						info_label.text = ">> NIBBLE! <<   Get ready to strike!"
+					FishingController.State.HOOK_WINDOW:
+						info_label.text = ">>> BITE! CLICK [%s] TO HOOK! <<<" % use_btn
+					FishingController.State.REELING:
+						info_label.text = "Reeling! Distance: %.1f m   Tension: %.0f%%   (Hold/Pulse %s)" % [
+							player.fishing.line_distance, player.fishing.line_tension * 100.0, use_btn]
+					FishingController.State.CAUGHT:
+						info_label.text = "Fish landed!   (%s to cast again)" % use_btn
+					FishingController.State.LOST:
+						info_label.text = "Fish got away!   (%s to recast)" % use_btn
+			else:
+				info_label.text = "Fishing Rod"
+		4:
+			swatch.visible = false
+			info_label.text = "Farm Hoe: [%s] Till/Harvest   [%s] Plant Seeds   [%s] Select Seed" % [
+				use_btn, alt_btn, cycle_btn]
 	if fps_label.visible:
 		var p := player.position / VoxelWorld.VS
 		fps_label.text = "%d fps   %d k verts\nvoxel %d, %d, %d" % [

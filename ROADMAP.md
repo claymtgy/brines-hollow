@@ -35,21 +35,30 @@ Goal: Tech de-risking and the fundamental data models that every gameplay layer 
 
 | Item | Why | Size | Status |
 |---|---|---|---|
-| **C++ voxel core** (GDExtension: storage, meshing, raycast, collision, brushes, fill) | GDScript meshing was ~10 ms/chunk; Steam Deck needs headroom | M | 🔨 In progress |
-| **Archipelago world** — seeded island placement, varied island sizes/biomes, open sea between | Core world shape | L | Planned |
+| **C++ voxel core** (GDExtension: storage, meshing, raycast, collision, brushes, fill) | GDScript meshing was ~10 ms/chunk; Steam Deck needs headroom | M | ✅ Complete |
+| **Archipelago world** — seeded island placement, varied island sizes/biomes, open sea between | Core world shape | L | 🔨 In progress |
 | **Expanded Island Scale & Vertical Depth** — Starter Island scaled to ~600m–800m diameter; world height increased from 23m (4 chunks) to 46m–69m (8–12 chunks) | Fits expansive multi-tier village, agricultural fields, and deep subterranean cave networks | M | Planned |
-| **Chunk streaming + LOD** — load/unload chunks around players, low-detail distant islands | Memory and GPU scaling | L | Planned |
-| **Dedicated server** — headless Linux build, world persistence, admin config | Villages live on when players log off | L | Planned |
-| **Chunk-diff sync** — server sends edited chunks on demand instead of replaying an edit log | Scalable network sync | M | Planned |
-| **Save / load** — per-region chunk diff files + world seed + entity/NPC state | Persistence across play sessions | M | Planned |
-| **Entity layer** (doors, chests, stations, crops, traps as objects, not voxels) | NPCs, crafting, farming, and combat need it | M | Planned |
-| **Inventory & Resource System** (data-driven definitions, slot limits, stacking, containers) | Foundation for crafting, trade, and building | M | Planned |
-| **Controller support + Steam Deck UI scale** | Handheld validation from day one | M | Planned |
-| **Settings menu** (sensitivity, FOV, shoulder, keybinds, quality presets) | Player comfort & testing | S | Planned |
-| **Foliage fade near camera** | Visual clarity under trees and kelp | S | Planned |
+| **Chunk streaming + LOD** — load/unload chunks around players, low-detail distant islands | Memory and GPU scaling | L | ✅ Complete |
+| **Dedicated server** — headless Linux build, world persistence, admin config | Villages live on when players log off | L | ✅ Complete (headless `--server`, autosave 30 s) |
+| **Chunk-diff sync** — server sends edited chunks on demand instead of replaying an edit log | Scalable network sync | M | ✅ Complete (edited columns at join, then live commands) |
+| **Save / load** — per-region chunk diff files + world seed + entity/NPC state | Persistence across play sessions | M | ✅ Complete (terrain, farm, village, boats, lights, player profiles) |
+| **Entity layer** (workstations, chests, beds, barber mirror, physical objects) | Proximity interactions, stations, persistent furniture | M | ✅ Complete |
+| **Diegetic Parchment Minimap & Chart System** (equipment-gated 3-tier nautical charts, depth soundings, landmark pins) | Navigation, tide contours, and co-op cartography | M | ✅ Complete |
+| **Inventory & Resource System** (data-driven definitions, slot limits, stacking, containers) | Foundation for crafting, trade, and building | M | ✅ Complete |
+| **Crafting & Culinary Cooking Systems** (workbenches, campfire skillets, hearth cauldrons, smokehouses, salteries, teahouses) | Food buffs, construction materials, and trade provisions | M | ✅ Complete |
+| **Vitality Triad (Health, Stamina & Nourishment)** — diet-driven max HP/stamina, non-punitive hunger, exertion curves, comfort rest | Core survival and physical exertion loops without punitive starvation | M | ✅ Complete |
+| **Armor & Weapon Equipment System** (damage types, armor slots, weapon swings, recoil/tether physics) | Combat, hunting, and defensive utility | M | ✅ Complete |
+| **Character Customizer & Fisherfolk Wardrobe** (voxel-mesh hair, beards, skin tones, oilskins, sou'westers, paperdoll clothing) | Visual identity and player expression in co-op | M | ✅ Complete |
+| **Controller support + Steam Deck UI scale** (DualSense, Xbox, Adaptive Triggers, vibration, glyphs) | Handheld validation and tactile nautical feedback from day one | M | ✅ Complete |
+| **Settings menu** (sensitivity, FOV, shoulder, keybinds, quality presets) | Player comfort & testing | S | ✅ Complete (Esc menu: controls, graphics presets incl. Steam Deck, UI scale, key rebinding) |
+| **Foliage fade near camera** | Visual clarity under trees and kelp | S | ✅ Complete (dithered fade between camera and player) |
 
 ### Inventory & Storage Specifications
-- **Player Inventory:** 36 slots + 8 quickbar hotkeys + equipment paperdoll (head, chest, legs, boots, tool belt, accessory).
+- **Player Inventory:** 36 slots + 8 quickbar hotkeys + equipment paperdoll (head, chest, legs, boots, backpack, accessory, and dedicated **Map/Cartography slot**).
+- **Equipment-Gated Minimap:**
+  - To preserve natural coastal immersion, the HUD does not display an omnipresent minimap by default.
+  - Equipping a crafted navigational chart into the dedicated **Map Equipment Slot** unlocks a stylized parchment minimap in the corner of the screen.
+  - Higher chart tiers progressively reveal topography, bathymetric shallow reefs, dynamic low/high tide boundaries, and discovered cave entrances.
 - **Stacking Logic:** 999 for raw voxels/wood/stone; 20 for food/consumables; 1 for gear/tools.
 - **Backpack Upgrades:** Canvas Sack (starter) → Driftwood Rucksack (36 slots) → Seal-Leather Bag (44 slots) → Deep-Diver's Waterproof Pack (52 slots, waterproof).
 - **Storage Entities:** Watertight Sea Barrels (preserve seafood freshness), Storage Crates, and Shared Town Stockpiles with configurable category filters.
@@ -98,14 +107,56 @@ Goal: A rich, relaxing sandbox loop with no combat required.
   - *Mason's Chisel:* Allows rounding block edges, carving decorative corbels, fluting stone pillars, and shaping dynamic roof eaves.
   - *Architect's Drafting Desk:* Box-select player builds to generate physical Blueprint Scrolls that can be traded in-game or exported to Steam Workshop.
   - *Cozy Home Decor:* Wall-mounted fish taxidermy, placeable live-fish glass aquariums, textile dye vats for banners, and custom pottery.
-- **Culinary Buffs:** Food eliminates fatigue and grants gentle exploration perks (e.g., +Swim Speed, +Diving Lung Capacity, +Cold/Storm Immunity, +Mining Yield).
 
 
-### 4. Coastal Watercraft (Tier 1 Boats)
+### 4. Vitality Triad: Nourishment (Hunger), Health & Stamina
+- **Nourishment & Satiety (Non-Punitive Hunger):**
+  - **The 3-Meal Satiety Stomach:** Players can digest up to 3 distinct food items simultaneously (e.g., Smoked Mackerel + Samphire Clam Chowder + Shore-Wheat Hardtack).
+  - **Diet-Driven Vitality:** Rather than punishing players with starvation death (violating Pillar 2: *\"Home is always safe\"*), food functions as an empowering preparation mechanic. Each meal adds a specific bonus to **Max Health**, **Max Stamina**, and **HP Regeneration/sec**, lasting 15 to 30 minutes of real-world time.
+  - **No Starvation Death at Home:** When nourishment falls to zero, stats simply revert to baseline unbuffed survival values (25 Base HP, 50 Base Stamina, no passive combat regeneration). Players will never drop dead while tending crops, building homes, or fishing at the pier.
+  - **Food Hierarchy & Culinary Crafting:**
+    - *Tier 0 (Foraged Shore Bites):* Wild berries, kelp fronds, raw samphire (+5–10 HP, short duration).
+    - *Tier 1 (Campfire Skillet):* Roasted Mackerel, charred mushrooms, boiled clams (+15–25 HP, +20 Stamina).
+    - *Tier 2 (Hearth Pots & Chowders):* Tidepool Bouillabaisse, Salt-Cured Cod & Kale Stew (+35–50 HP, +40 Stamina, +1.5 HP/s regen).
+    - *Tier 3 (Banquets & Tavern Feasts):* Smoked Salmon & Truffle Pie, Glazed Abyssal Crab (+60–80 HP, +60 Stamina, deep cold immunity, diving lung buffs).
+- **Health, Damage & Non-Punitive Defeat:**
+  - **Damage Sources:** Melee/projectile monster attacks, falls from cliffs, barotrauma pressure damage at deep benthic depths (without diving suit), freezing hypothermia in Arctic currents, and drowning (asphyxiation when air gauge reaches 0).
+  - **Natural & Assisted Healing:** Natural HP regeneration ticks continuously while nourished. Sitting near a crackling campfire, hearth, or bathhouse accelerates healing and applies the *\"Sea-Breeze Rested\"* buff (+50% stamina regen, +20% skill gain).
+  - **Opt-In Danger & Non-Punitive Defeat:** If health reaches zero, the player faints and awakens safely ashore beside the nearest village hearth, campsite, or home bed. Inventories are never permanently destroyed; items remain secured in a buoyant driftwood sea-chest at the defeat point with an in-world beacon.
+- **Stamina, Physical Exertion & Aquatic Fatigue:**
+  - **Action Fuel:** Fuels sprinting, double-jumping, heavy tool excavation (quarrying granite/limestone), farming soil tilling, line casting, reeling thrashing fish, rowing against rip currents, and combat actions (dodge rolling, heavy anchor swings, parries).
+  - **Exertion & Breathlessness:** Completely draining stamina triggers a brief 2-second \"Out of Breath\" panting state where movement slows and advanced maneuvers are locked.
+  - **Aquatic & Current Drag:** Swimming against prevailing tides or undertow drains stamina faster. Exhausting stamina in open water causes the player to tread water sluggishly and burn oxygen 50% faster, making stamina-replenishing drinks (Chicory Kelp Brew, Mint Tea) crucial for maritime divers.
+  - **Recharge Mechanics:** Stamina rapidly recharges when walking or standing still; recharge rates are doubled by the Rested buff or when sheltered under dry village roofs during storms.
+
+
+### 5. Character Customizer & Fisherfolk Wardrobe
+- **Voxel Character Architecture:**
+  - Chunky stylized aesthetic built at $2\times$ terrain resolution ($U = 0.09\text{ m}$ per character voxel), maintaining the cozy coastal diorama visual identity.
+  - Articulated rigid-part mesh rigging (torso, head, neck, shoulders, elbows, hips, knees).
+- **Physical Personalization:**
+  - **Skin Tones & Complexions:** Weathered coastal complexions (tanned, freckled, pale brine, deep sun-baked), flushed windburned cheeks, and expressive eye colors.
+  - **Hair Styles:** Cropped deckhand, wind-tossed waves, sailor's braid, fisherman's topknot, receding harbor-master, side-parted curls, bald with mutton chops.
+  - **Facial Hair:** Salt-and-pepper sea captain's beard, trimmed spade beard, bristly walrus mustache, braided sailor goatee, clean-shaven.
+- **Coastal Maritime Wardrobe & Outfits:**
+  - **Headwear:** Iconic Sou'wester (wide brim with oilskin neck flap), thick wool watch cap / knit beanie, captain's peaked cap, broad straw sun hat, copper diving bell helmet, woven kelp wreath.
+  - **Outerwear & Torso:** Heavy waxed oilskin slickers (canary yellow, storm navy, kelp green, brick red), cable-knit Aran fisherman sweaters, patched canvas smocks, deckhand vests, brass-buttoned pea coats.
+  - **Pants & Footwear:** High hip waders, rolled-up duck canvas trousers, sea boots with brass buckles, barefoot deck tread.
+- **Dynamic In-World Wear & Environmental Reactions:**
+  - *Wetness Shader:* Character models darken and glisten when hit by rainfall or breaking surf; dynamically dry off when resting near village campfires or tavern hearths.
+  - *Tidal Mud Splatters:* Wading through intertidal mud flats accumulates mud textures on boots and cuffs, washed off by ocean swimming or freshwater showers.
+- **Co-op Visual Identity & The Barber Shop:**
+  - Distinctive color palette combinations ensure players remain instantly recognizable in 4–8 player co-op sessions.
+  - *The Looking Glass & Barber Shop:* Craftable village furniture (Standing Mirror) and recruitable Town Barber NPC allowing players to alter hairstyles, beards, and clothing dyes at any time in town.
+- **Visual Equipment Paperdoll:**
+  - Equipped backpacks (Canvas Sack $\to$ Driftwood Frame $\to$ Seal Leather $\to$ Diving Gear), tool belts, and accessories visibly render on the character model in real time.
+
+
+### 6. Coastal Watercraft (Tier 1 Boats)
 - **Driftwood Rowboat / Coracle:** Lightweight, manually rowed; agile in shallow tidal flats and narrow sea caves; can be beached or tied to pier bollards.
 - **Outrigger Canoe / Sea Skiff:** Fast shallow-draft coastal craft with a small lateen sail and a live-well compartment for fresh fish storage. Allows safe crossing between adjacent islets.
 
-### 5. Subterranean World & Cave Networks
+### 7. Subterranean World & Cave Networks
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
 - **Karst Limestone Caverns:** Multi-chamber caverns beneath island plateaus featuring stalactites, glowing moss patches, and subterranean freshwater aquifers that supply village wells.
 - **Abandoned Brass Mines & Catacombs:** Ancient pre-deluge extraction tunnels with rickety timber shoring, ore veins (copper, iron, tin), rusted minecarts, and forgotten subterranean workbenches.
@@ -174,14 +225,51 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
   - *Old Man Corin (Blind Lighthouse Keeper):* Folklore, tide anomalies, secrets of ancient bells.
   - *Cartographer Vane:* Island charting, landmark exploration, sea stack beacons.
   - *Town Notice Board:* Dynamic procedural requests from villagers ("Gather 15 Tide Kale for the winter stew").
-- **Diegetic Navigation:**
-  - No intrusive mini-maps. Navigation uses an in-world brass *Mariner's Compass*, visible rotating beams from built *Lighthouses*, and a hand-sketched *Field Logbook*.
+- **Diegetic Navigation & The Map Equipment Slot:**
+  - Standard gameplay maintains immersion with clean HUD framing, using an in-world brass *Mariner's Compass*, visible rotating beams from built *Lighthouses*, and a hand-sketched *Field Logbook*.
+  - **Minimap Enablement via Map Slot:** Equipping a crafted nautical chart into the dedicated **Map Equipment Slot** activates a corner parchment minimap on the HUD.
+  - *Tier 1: Parchment Shore Chart* — Island coastlines, player coordinates/heading, and built campfires.
+  - *Tier 2: Hydrographic Sea Chart* — Adds bathymetric depth contours, shallow reef hazards, and dynamic low/high tide boundaries.
+  - *Tier 3: Master Chronometer Chart* — Adds wind arrows, ocean current streams, distant lighthouse bearings, and co-op player skiff icons.
 - **Light Storyline — "What the Tides Uncovered":**
   - Unravel the mystery of the ancient civilization swallowed by the "Great Deluge."
   - Discover 4 ancient Tide Regulators across the archipelago to restore natural balance.
 
-### 3. Combat, Archetypes & Starter Biome Boss
-- **Combat Fundamentals:** Stamina, dodge roll, parry window, hit-stop, telegraphs.
+### 3. Combat, Marine Arsenal & Armor Tiers
+- **Combat Fundamentals:** Stamina management, directional dodge roll, parry window, hit-stop feedback, and telegraph cues.
+- **Armor System & Utility Tiers (Paperdoll: Head, Chest, Legs, Boots, Accessory):**
+  - **Tier 1 (Scavenged Coastal Garb):** *Driftwood-Slat Vest & Woven Kelp Mesh* — Lightweight, zero swimming penalty, basic blunt dampening against crab pinches.
+  - **Tier 2 (Maritime Working Armor):**
+    - *Cured Seal-Leather Suit:* Cured with sea salt and blubber; provides thermal insulation and reduces swimming stamina consumption by 40% in freezing night tides.
+    - *Mud-Crab Chitin Carapace:* Harvested from coastal Mud-Claw brutes; high blunt resistance and wave-slam knockdown immunity.
+    - *Tide-Gilded Brass Lamellar:* Forged from reclaimed ship brass; superior slashing defense against pirate cutlasses.
+  - **Tier 3 (Specialized Biome Protection):**
+    - *Spiny Coralmail & Urchin Pauldrons:* Living staghorn coral reflects piercing damage back at attackers (thorns effect); crafted with sea-glass rivets.
+    - *Volcanic Basalt Harness:* Forged from Caldera basalt plates; total immunity to boiling sulfur vents and scalding water surges.
+    - *Borean Fur & Blubber Parka:* Prevents hypothermia in freezing arctic waters and sub-zero blizzard squalls.
+  - **Tier 4 (Abyssal & Deluge Relic Suits):**
+    - *Brass-Diver Heavy Bathysphere Rig:* Heavy copper diving helm, weighted boots, and pressurized breastplate; allows walking firmly on the deep seafloor, immune to abyssal crushing pressure.
+    - *Leviathan-Scale Cuirass:* Forged from iridescent scales of defeated biome leviathans; grants a water-dash evasion and bioluminescent aura that pacifies abyssal horrors.
+- **Weapons & Combat Styles (Marine Arsenal):**
+  - **Harpoons & Tridents (Thrust, Throw & Retrieval):**
+    - *Flint Harpoon → Whale-Iron Barbed Harpoon → Abyssal Anchor Trident.*
+    - *Signature Mechanics:* Thrown with a tethered retrieval line; hooks into large sea monsters to pull them in, or grapples the player to ship hulls and cliff faces. Unhindered underwater drag.
+  - **Seafarer's Blades (Cutlasses, Boarding Axes & Machetes):**
+    - *Rusty Deck Cutlass → Brass-Hilted Scimitar → Corsair's Damascus Sabre.*
+    - *Signature Mechanics:* High-mobility sweeping cleaves, parry-riposte timing windows, cuts through dense underwater kelp canopies and ship rigging.
+  - **Anchor Mauls & Bludgeons (Crushing & Voxel Breakers):**
+    - *Driftwood War-Club → Lead-Weighted Pier Mallet → Titan Coral Anchor Maul.*
+    - *Signature Mechanics:* High stagger, shatters thick crustacean chitin armor, smashes destructible dungeon barriers and brittle reef formations.
+  - **Nautical Ranged (Spearguns, Arbalests & Flare Pistols):**
+    - *Pneumatic Speargun:* High-velocity underwater quarrels with zero water resistance.
+    - *Deck Swivel Arbalest:* Heavy two-handed bolt thrower with multi-target piercing.
+    - *Signal Flare Pistol:* Ignites targets, illuminates pitch-black sea caverns, and blinds photophobic subterranean predators.
+  - **Trapper & Non-Lethal Control Tools:**
+    - *Weighted Throwing Nets:* Entangles and slows agile predators, dragging aquatic beasts to the seafloor.
+    - *Iron Spring Cage Traps:* Deployed on tidal flats to capture Mud-Claws automatically when the incoming tide triggers the pressure plate.
+  - **Brine Occultism & Tidal Lanterns:**
+    - *Phosphor Lantern Staff:* Channels bioluminescent rays to reveal hidden underwater currents, expose invisible cave wraiths, and burn abyssal cultists.
+    - *Tide-Chime Tuning Fork:* Emits resonant acoustic pulses that repel piranha swarms and shatter brittle volcanic glass.
 - **Four Distinct Combat Archetypes:**
   - *The Heavy Harpooner:* Reach weapon with pull mechanics, impaling strikes, monster tethering to rock pillars, heavy armor.
   - *The Tide Duellist:* Dual cutlasses, parry windows, ripostes, bleed damage, swift mobility.

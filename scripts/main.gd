@@ -15,6 +15,14 @@ var player: Player
 var rig: CameraRig
 var hud: Hud
 var boats: BoatManager
+var farm: FarmManager
+var quests: QuestManager
+var village: SettlementManager
+var entities: EntityManager
+var session: Session
+var settings: GameSettings
+var settings_menu: SettingsMenu
+var controller: ControllerManager = ControllerManager.new()
 
 var is_net := false
 var edit_log: Array = []
@@ -24,10 +32,11 @@ var _send_t := 0.0
 var _time_sync_t := 0.0
 var _started := false
 var _args := {}
+var _assigned_spawn_idx: int = -1
 
 
 func _ready() -> void:
-	_setup_input()
+	controller.setup_input_map()
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		_args[kv[0]] = kv[1] if kv.size() > 1 else ""
@@ -39,15 +48,6 @@ func _ready() -> void:
 	if _args.has("time"):
 		sky.time_of_day = float(_args.time)
 	world = VoxelWorld.new()
-	if _args.has("radius"):
-		world.mesh_radius = int(_args.radius)  # full-detail radius in chunk columns (Deck: 7)
-	if _args.has("deck"):
-		# Steam Deck preset (until the settings menu exists): smaller full-detail radius,
-		# no MSAA, shorter single-split shadows.
-		world.mesh_radius = 7
-		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-		sky.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-		sky.sun.directional_shadow_max_distance = 30.0
 	add_child(world)
 	world.loading_progress.connect(func(t: String, f: float) -> void: hud.set_loading(true, t, f))
 	world.dug.connect(_on_dug)
@@ -61,6 +61,7 @@ func _ready() -> void:
 			Vector3(VoxelWorld.WX * VS * 0.5, 9, VoxelWorld.WZ * VS + 25))
 
 	hud = Hud.new()
+	hud.set_controller(controller)
 	add_child(hud)
 	hud.solo_pressed.connect(start_solo)
 	hud.host_pressed.connect(start_host)
@@ -72,13 +73,40 @@ func _ready() -> void:
 	boats.main = self
 	add_child(boats)
 
+	# Persistence, join sync, player profiles, shared state, dedicated server (Phase 1B).
+	session = Session.new()
+	session.name = "Session"
+	add_child(session)
+	session.setup(self, _args)
+
+	# Player settings (user://settings.cfg). Dev args override for this run only:
+	#   --preset=deck|low|medium|high   --deck   --radius=N
+	settings = GameSettings.load_or_default()
+	if _args.has("deck"):
+		settings.apply_preset(GameSettings.Preset.DECK)
+	elif _args.has("preset"):
+		var pi := ["deck", "low", "medium", "high"].find(String(_args.preset).to_lower())
+		if pi >= 0:
+			settings.apply_preset(pi)
+	if _args.has("radius"):
+		settings.view_distance = int(_args.radius)
+	settings.apply(self)
+	get_viewport().size_changed.connect(func() -> void:
+		get_viewport().scaling_3d_scale = settings.effective_render_scale(get_viewport()))
+	settings_menu = SettingsMenu.new()
+	settings_menu.name = "SettingsMenu"
+	add_child(settings_menu)
+	settings_menu.setup(self, settings)
+
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
-	if _args.has("host"):
+	if _args.has("server"):
+		session.start_dedicated(int(_args.server) if String(_args.server).is_valid_int() else PORT)
+	elif _args.has("host"):
 		start_host()
 	elif _args.has("join"):
 		start_join(_args.join if _args.join != "" else "127.0.0.1")
@@ -89,28 +117,7 @@ func _ready() -> void:
 
 
 func _setup_input() -> void:
-	var keys := {
-		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN],
-		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-		"jump": [KEY_SPACE], "sprint": [KEY_SHIFT],
-		"tool_1": [KEY_1], "tool_2": [KEY_2], "tool_3": [KEY_3],
-		"prev_item": [KEY_Q], "next_item": [KEY_E],
-		"brush_down": [KEY_Z], "brush_up": [KEY_X],
-		"rotate": [KEY_R], "snap": [KEY_G], "fast_time": [KEY_T], "swap_shoulder": [KEY_V],
-	}
-	for action in keys:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		for k in keys[action]:
-			var ev := InputEventKey.new()
-			ev.physical_keycode = k
-			InputMap.action_add_event(action, ev)
-	for pair in [["use", MOUSE_BUTTON_LEFT], ["pick", MOUSE_BUTTON_MIDDLE]]:
-		if not InputMap.has_action(pair[0]):
-			InputMap.add_action(pair[0])
-		var mb := InputEventMouseButton.new()
-		mb.button_index = pair[1]
-		InputMap.action_add_event(pair[0], mb)
+	controller.setup_input_map()
 
 
 # ---------------------------------------------------------------- session start
@@ -167,22 +174,51 @@ func _begin_world() -> void:
 	hud.show_menu(false)
 	hud.set_loading(true, "Starting...", 0.0)
 	await world.generate(seed_value)
+	session.on_world_generated()  # saved / host terrain first, then buffered live edits
 	for cmd in _pending_cmds:
 		world.apply_command(cmd)
 	_pending_cmds.clear()
 
+	farm = NetFarm.new(VoxelWorld.SEA_MID, VoxelWorld.TIDE_AMP)
+	quests = QuestManager.new()
+	village = SettlementManager.new(Vector3i(world.gen.spawn), "Brine's Hollow")
+	entities = EntityManager.new()
+	entities.name = "EntityManager"
+	add_child(entities)
+	_spawn_initial_entities()
+
+	quests.accept_quest(&"story_first_hearth")
+	quests.accept_quest(&"story_tide_tackle")
+
 	player = Player.new()
 	player.world = world
 	player.rig = rig
+	player.sky = sky
+	player.hud = hud
+	player.farm = farm
+	player.quests = quests
+	player.village = village
+	player.entities = entities
+	player.controller = controller
 	add_child(player)
-	player.position = _find_clear_spawn(Vector3i(world.gen.spawn)) * VS
+	player.bind_quest_signals()
+	var chosen_spawn: Dictionary = {}
+	if _args.has("homestead") or _args.has("bench") or _args.has("boatcheck") or _args.has("shot"):
+		chosen_spawn = world.gen.starter_spawns[0] if world.gen != null and not world.gen.starter_spawns.is_empty() else {"pos": world.gen.spawn, "yaw": world.gen.spawn_yaw, "name": "Homestead Pier"}
+	elif _assigned_spawn_idx >= 0 and world.gen != null:
+		chosen_spawn = world.gen.get_spawn_by_index(_assigned_spawn_idx)
+	elif world.gen != null:
+		chosen_spawn = world.gen.get_random_spawn()
+	else:
+		chosen_spawn = {"pos": Vector3.ZERO, "yaw": 0.0, "name": "Coast"}
+
+	player.position = _find_clear_spawn(Vector3i(chosen_spawn.pos)) * VS
 	player.command_requested.connect(_on_command_requested)
 	rig.target = player
-	# Start looking back at the starter hut, sea behind the camera.
-	rig.yaw = world.gen.spawn_yaw
+	rig.yaw = chosen_spawn.yaw
 	hud.set_loading(false)
 	hud.show_hud(true)
-	hud.show_toast("Welcome to Brine's Hollow")
+	hud.show_toast("Washed ashore: %s" % chosen_spawn.get("name", "Starter Island"))
 	if _args.has("boatcheck"):
 		boats.run_check(_args.boatcheck)
 	elif _args.has("netcheck"):
@@ -195,12 +231,28 @@ func _begin_world() -> void:
 		_run_screenshots(_args.shot)
 
 
+func _spawn_initial_entities() -> void:
+	if world == null or world.gen == null or entities == null:
+		return
+	var sp: Vector3i = Vector3i(world.gen.spawn)
+	entities.spawn_entity(&"workbench", sp + Vector3i(2, 0, 1))
+	entities.spawn_entity(&"campfire", sp + Vector3i(3, 0, -1))
+	entities.spawn_entity(&"hearth_pot", sp + Vector3i(1, 0, 3))
+	entities.spawn_entity(&"driftwood_chest", sp + Vector3i(-2, 0, 1))
+	entities.spawn_entity(&"fisher_bed", sp + Vector3i(-2, 0, -2))
+	entities.spawn_entity(&"barber_mirror", sp + Vector3i(2, 0, -2))
+
+
 # ---------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
 	if player == null:
 		return
 	player.water_level = sky.water_level_m()
+	if farm != null:
+		farm.tick_all(delta, sky.water_level_vox, sky.is_day(), false)
+	if village != null:
+		village.tick_settlement(delta, sky.time_of_day)
 	# Terrain streams around the player (or the free camera in scripted shots).
 	world.focus_points = [player.position if rig.target != null else rig.cam.global_position]
 	var host_like := not is_net or multiplayer.is_server()
@@ -228,14 +280,19 @@ func _peers_text() -> String:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif e is InputEventMouseButton and e.pressed and player != null and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if controller != null:
+		controller.track_input_event(e)
+	if e.is_action_pressed("menu_toggle"):
+		settings_menu.toggle()
+	elif e is InputEventMouseButton and e.pressed and player != null and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED \
+			and not settings_menu.is_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 
 
 func _on_dug(pos: Vector3, mat: int, count: int) -> void:
+	if controller != null:
+		controller.pulse_dig()
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.emitting = false
@@ -260,8 +317,24 @@ func _on_dug(pos: Vector3, mat: int, count: int) -> void:
 	p.emitting = true
 	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
 
+	if _cmd_is_mine and player != null and player.inventory != null:
+		var item: ItemDef = ItemDB.get_by_voxel_mat(mat)
+		if item:
+			var added: int = player.inventory.add_item(item.id, maxi(1, count / 4))
+			if added > 0 and player.quests != null:
+				player.quests.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, item.id, added, player.inventory)
+
 
 # ---------------------------------------------------------------- commands / network
+
+var _cmd_is_mine := false  # true while applying a command this player issued
+
+
+func _apply_cmd(cmd: Dictionary) -> void:
+	_cmd_is_mine = not is_net or int(cmd.get("by", -1)) == multiplayer.get_unique_id()
+	world.apply_command(cmd)
+	_cmd_is_mine = false
+
 
 func _valid(cmd: Dictionary) -> bool:
 	if not cmd.has("t") or not cmd.has("p") or not (cmd.p is Vector3i):
@@ -275,7 +348,7 @@ func _valid(cmd: Dictionary) -> bool:
 
 func _on_command_requested(cmd: Dictionary) -> void:
 	if not is_net:
-		world.apply_command(cmd)
+		_apply_cmd(cmd)
 	elif multiplayer.is_server():
 		_host_apply(cmd)
 	else:
@@ -285,7 +358,9 @@ func _on_command_requested(cmd: Dictionary) -> void:
 func _host_apply(cmd: Dictionary) -> void:
 	if not _valid(cmd):
 		return
-	edit_log.append(cmd)
+	# Tag who issued it so only that player collects the dig rewards.
+	var sender := multiplayer.get_remote_sender_id()
+	cmd["by"] = sender if sender != 0 else multiplayer.get_unique_id()
 	do_command.rpc(cmd)
 
 
@@ -298,15 +373,16 @@ func req_command(cmd: Dictionary) -> void:
 @rpc("authority", "call_local", "reliable")
 func do_command(cmd: Dictionary) -> void:
 	if world.ready_for_play:
-		world.apply_command(cmd)
+		_apply_cmd(cmd)
 	else:
 		_pending_cmds.append(cmd)
 
 
 @rpc("authority", "call_remote", "reliable")
-func welcome(p_seed: int, edits: Array, tod: float) -> void:
+func welcome(p_seed: int, edits: Array, tod: float, assigned_spawn_idx: int = -1) -> void:
 	seed_value = p_seed
 	sky.time_of_day = tod
+	_assigned_spawn_idx = assigned_spawn_idx
 	_pending_cmds = edits + _pending_cmds
 	_begin_world()
 
@@ -330,9 +406,12 @@ func _on_peer_connected(id: int) -> void:
 	add_child(rp)
 	remotes[id] = rp
 	if multiplayer.is_server():
-		welcome.rpc_id(id, seed_value, edit_log, sky.time_of_day)
+		# Distribute joining peers to separate coastal sectors around the starter island
+		var spawn_idx := posmod(id * 3 + 1, world.gen.starter_spawns.size()) if world.gen != null and not world.gen.starter_spawns.is_empty() else 0
+		welcome.rpc_id(id, seed_value, [], sky.time_of_day, spawn_idx)
+		var sp_name: String = world.gen.get_spawn_by_index(spawn_idx).get("name", "distant shore") if world.gen != null else "shore"
 		if hud != null and player != null:
-			hud.show_toast("A friend washed ashore (player %d)" % id)
+			hud.show_toast("A friend washed ashore at %s (player %d)" % [sp_name, id])
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -514,12 +593,35 @@ func _run_bench() -> void:
 	player.input_enabled = false
 	var vp := get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(vp, true)
-	print("[bench] viewport ", get_viewport().get_visible_rect().size, "  near verts ", world.stats_vertices, "  lod verts ", world.stats_lod_vertices)
+	print("[bench] window ", get_window().size, " render scale %.2f" % get_viewport().scaling_3d_scale, "  viewport ", get_viewport().get_visible_rect().size, "  near verts ", world.stats_vertices, "  lod verts ", world.stats_lod_vertices)
 	for i in 16:  # let pipelines finish compiling
 		await RenderingServer.frame_post_draw
 	var modes := ["full", "no_msaa", "no_shadows", "no_water", "no_lod", "no_terrain"]
+	if _args.get("bench", "") == "detail":
+		# Isolated costs (each mode toggles one thing, then restores it).
+		modes = ["full", "no_fade", "no_lamps", "no_glow", "no_fog", "no_fxaa", "scale_0.75", "full"]
 	for mode in modes:
 		match mode:
+			"full":
+				settings.apply(self)
+			"no_fade": world.terrain_mat.set_shader_parameter("fade_enabled", false); rig.foliage_fade = false
+			"no_lamps":
+				settings.apply(self)
+				for l in get_tree().get_nodes_in_group("lamps"):
+					l.visible = false
+			"no_glow":
+				for l in get_tree().get_nodes_in_group("lamps"):
+					l.visible = true
+				sky.glow_mode = 0
+			"no_fog":
+				sky.glow_mode = settings.glow
+				sky.env.fog_enabled = false
+			"no_fxaa":
+				sky.env.fog_enabled = true
+				get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+			"scale_0.75":
+				settings.apply(self)
+				get_viewport().scaling_3d_scale = 0.75
 			"no_msaa": get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 			"no_lod":
 				for n in world._lod_nodes.values():

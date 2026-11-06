@@ -1,0 +1,142 @@
+class_name DrifterDef
+extends Resource
+## Villager definition, profession, routines, and work production logic.
+
+enum Profession {
+	FISHER,       ## Catches fish and stocks town barrels
+	FARMER,       ## Cultivates crops and salt pans
+	CARPENTER,    ## Refines logs into lumber and planks
+	SMOKER_CHEF,  ## Smokes fish and cooks hearty meals
+	LAMPLIGHTER,  ## Lights beacons at dusk, tolls alarm bell
+	TRADER        ## Sells town surplus to visiting merchant boats
+}
+
+enum Routine {
+	SLEEP,        ## Resting in assigned room (night)
+	WORK,         ## Performing profession chores (morning to afternoon)
+	EAT,          ## Eating meals at town tavern / hearth (midday & evening)
+	SOCIALIZE     ## Gathering at harbor / village square (dusk)
+}
+
+@export var id: StringName = &""
+@export var name: String = ""
+@export var profession: Profession = Profession.FISHER
+@export var morale: float = 0.8         ## 0.0 to 1.0; boosts productivity by up to +30%
+@export var assigned_room_id: int = -1  ## Index of assigned validated room, or -1 if homeless
+var current_routine: Routine = Routine.WORK
+var work_progress_sec: float = 0.0
+
+
+func _init(
+	p_id: StringName = &"",
+	p_name: String = "",
+	p_profession: Profession = Profession.FISHER
+) -> void:
+	id = p_id
+	name = p_name
+	profession = p_profession
+
+
+func is_homeless() -> bool:
+	return assigned_room_id < 0
+
+
+## Simulates daily routine transitions based on day/night cycle fraction (0.0=dawn, 0.5=noon, 0.75=dusk, 1.0=night)
+func update_routine(day_fraction: float) -> void:
+	if day_fraction < 0.2:
+		current_routine = Routine.SLEEP
+	elif day_fraction < 0.65:
+		current_routine = Routine.WORK
+	elif day_fraction < 0.8:
+		current_routine = Routine.EAT
+	elif day_fraction < 0.9:
+		current_routine = Routine.SOCIALIZE
+	else:
+		current_routine = Routine.SLEEP
+
+
+## Simulates work shift production. Deposits finished yields into the town depot.
+## Returns dictionary of produced items: {"item_id": count}
+func tick_work(delta_sec: float, town_depot: StorageContainer) -> Dictionary:
+	if current_routine != Routine.WORK:
+		return {}
+
+	# Homelessness reduces work efficiency by 50%
+	var home_mult: float = 1.0 if not is_homeless() else 0.5
+	var morale_mult: float = 0.7 + morale * 0.6 # 0.7x to 1.3x speed
+	work_progress_sec += delta_sec * home_mult * morale_mult
+
+	# Base work cycle completes every 60 seconds of active work
+	if work_progress_sec < 60.0:
+		return {}
+
+	work_progress_sec = 0.0
+	var produced: Dictionary = {}
+
+	match profession:
+		Profession.FISHER:
+			var fish_id: StringName = &"silver_mackerel" if randf() < 0.6 else &"tidepool_flounder"
+			town_depot.deposit(fish_id, 2)
+			produced[fish_id] = 2
+
+		Profession.FARMER:
+			var crop_id: StringName = &"shore_wheat" if randf() < 0.5 else &"tide_kale"
+			town_depot.deposit(crop_id, 3)
+			produced[crop_id] = 3
+
+		Profession.CARPENTER:
+			# Consumes 1 pine wood or driftwood to produce 4 wood planks
+			if town_depot.inventory.has_item(&"driftwood", 1):
+				town_depot.withdraw(&"driftwood", 1)
+				town_depot.deposit(&"wood_plank", 4)
+				produced[&"wood_plank"] = 4
+			elif town_depot.inventory.has_item(&"pine_wood", 1):
+				town_depot.withdraw(&"pine_wood", 1)
+				town_depot.deposit(&"wood_plank", 4)
+				produced[&"wood_plank"] = 4
+
+		Profession.SMOKER_CHEF:
+			# Converts raw fish + sea salt into preserved smoked rations
+			if town_depot.inventory.has_item(&"silver_mackerel", 1) and town_depot.inventory.has_item(&"sea_salt", 1):
+				town_depot.withdraw(&"silver_mackerel", 1)
+				town_depot.withdraw(&"sea_salt", 1)
+				town_depot.deposit(&"smoked_fish_ration", 2)
+				produced[&"smoked_fish_ration"] = 2
+
+		Profession.LAMPLIGHTER:
+			# Generates refined glow fuel from harvested kelp
+			if town_depot.inventory.has_item(&"kelp_frond", 2):
+				town_depot.withdraw(&"kelp_frond", 2)
+				produced[&"kelp_fuel"] = 1
+
+		Profession.TRADER:
+			# Converts surplus cured fish into trade currency
+			if town_depot.inventory.has_item(&"smoked_fish_ration", 2):
+				town_depot.withdraw(&"smoked_fish_ration", 2)
+				town_depot.deposit(&"brass_guilder", 3)
+				produced[&"brass_guilder"] = 3
+
+	return produced
+
+
+func serialize() -> Dictionary:
+	return {
+		"id": String(id),
+		"name": name,
+		"profession": profession,
+		"morale": morale,
+		"room_id": assigned_room_id,
+		"work_progress": work_progress_sec
+	}
+
+
+static func deserialize(d: Dictionary) -> DrifterDef:
+	var drifter := DrifterDef.new(
+		StringName(d.get("id", "")),
+		d.get("name", "Drifter"),
+		int(d.get("profession", 0))
+	)
+	drifter.morale = float(d.get("morale", 0.8))
+	drifter.assigned_room_id = int(d.get("room_id", -1))
+	drifter.work_progress_sec = float(d.get("work_progress", 0.0))
+	return drifter

@@ -11,6 +11,9 @@ var yaw := 0.0
 var pitch := -0.38
 var dist := 5.5
 var sensitivity := 0.0026
+var invert_y := false
+var controller_look_speed := 2.6
+var foliage_fade := true
 var shoulder := 0.65        # metres to the side (positive = right shoulder)
 var _cur_shoulder := 0.65
 var extra_dist := 0.0       # added distance (e.g. pulled back while rowing)
@@ -35,7 +38,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		return
 	if e is InputEventMouseMotion:
 		yaw -= e.relative.x * sensitivity
-		pitch = clampf(pitch - e.relative.y * sensitivity, -1.35, 0.85)
+		pitch = clampf(pitch - e.relative.y * sensitivity * (-1.0 if invert_y else 1.0), -1.35, 0.85)
 	elif e is InputEventMouseButton and e.pressed:
 		if e.button_index == MOUSE_BUTTON_WHEEL_UP:
 			dist = clampf(dist - 0.6, 1.8, 16.0)
@@ -52,6 +55,13 @@ func view_basis() -> Basis:
 func _process(delta: float) -> void:
 	if target == null:
 		return
+
+	# Gamepad Right-Stick Camera Orbit
+	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down", 0.15)
+	if look.length_squared() > 0.001:
+		yaw -= look.x * controller_look_speed * delta
+		pitch = clampf(pitch - look.y * controller_look_speed * delta * (-1.0 if invert_y else 1.0), -1.35, 0.85)
+
 	var want: Vector3 = target.global_position + Vector3(0, 1.55, 0)
 	if not _snapped or _pivot.distance_to(want) > 4.0:
 		_pivot = want
@@ -80,6 +90,10 @@ func _process(delta: float) -> void:
 	else:
 		_cur_dist = lerpf(_cur_dist, d, 1.0 - exp(-delta * 5.0))
 	cam.global_transform = Transform3D(b, origin + back * _cur_dist)
+	if world != null and world.terrain_mat != null:
+		world.terrain_mat.set_shader_parameter("fade_enabled", foliage_fade)
+		world.terrain_mat.set_shader_parameter("fade_eye", cam.global_position)
+		world.terrain_mat.set_shader_parameter("fade_target", _pivot)
 	# Hide the character when the camera is squeezed right up against it.
 	if target is Player:
 		(target as Player).model.visible = _cur_dist > 1.0

@@ -146,6 +146,9 @@ void VoxelStore::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("unload_column", "col"), &VoxelStore::unload_column);
 	ClassDB::bind_method(D_METHOD("get_generated_columns"), &VoxelStore::get_generated_columns);
 	ClassDB::bind_method(D_METHOD("has_chunk", "chunk"), &VoxelStore::has_chunk);
+	ClassDB::bind_method(D_METHOD("get_edited_columns"), &VoxelStore::get_edited_columns);
+	ClassDB::bind_method(D_METHOD("export_column", "column"), &VoxelStore::export_column);
+	ClassDB::bind_method(D_METHOD("import_column", "column", "data"), &VoxelStore::import_column);
 	BIND_CONSTANT(CS);
 }
 
@@ -314,6 +317,79 @@ TypedArray<Vector2i> VoxelStore::get_generated_columns() const {
 		out.push_back(Vector2i(c.x, c.z));
 	}
 	return out;
+}
+
+TypedArray<Vector2i> VoxelStore::get_edited_columns() const {
+	std::shared_lock lock(mtx);
+	TypedArray<Vector2i> out;
+	for (int64_t k : edited_cols) {
+		Vector3i c = unkey(k);
+		out.push_back(Vector2i(c.x, c.z));
+	}
+	return out;
+}
+
+PackedByteArray VoxelStore::export_column(const Vector2i &col) const {
+	std::shared_lock lock(mtx);
+	const int layers = std::min((size.y + CS - 1) / CS, 32);
+	uint32_t mask = 0;
+	for (int cy = 0; cy < layers; cy++) {
+		if (chunk_ptr(col.x, cy, col.y)) mask |= (1u << cy);
+	}
+	PackedByteArray out;
+	int n = 0;
+	for (int cy = 0; cy < layers; cy++) n += (mask >> cy) & 1;
+	out.resize(4 + (int64_t)n * CV);
+	uint8_t *w = out.ptrw();
+	memcpy(w, &mask, 4);
+	size_t o = 4;
+	for (int cy = 0; cy < layers; cy++) {
+		const uint8_t *ch = chunk_ptr(col.x, cy, col.y);
+		if (!ch) continue;
+		memcpy(w + o, ch, CV);
+		o += CV;
+	}
+	return out;
+}
+
+bool VoxelStore::import_column(const Vector2i &col, const PackedByteArray &data) {
+	if (data.size() < 4) {
+		return false;
+	}
+	const int layers = std::min((size.y + CS - 1) / CS, 32);
+	uint32_t mask;
+	memcpy(&mask, data.ptr(), 4);
+	int n = 0;
+	for (int cy = 0; cy < layers; cy++) n += (mask >> cy) & 1;
+	if (data.size() != 4 + (int64_t)n * CV) {
+		ERR_PRINT("import_column: size mismatch");
+		return false;
+	}
+	std::unique_lock lock(mtx);
+	const uint8_t *r = data.ptr() + 4;
+	for (int cy = 0; cy < layers; cy++) {
+		int64_t k = key(col.x, cy, col.y);
+		if ((mask >> cy) & 1) {
+			auto mem = std::make_unique<uint8_t[]>(CV);
+			memcpy(mem.get(), r, CV);
+			r += CV;
+			chunks[k] = std::move(mem);
+		} else {
+			chunks.erase(k);
+		}
+		mark(col.x, cy, col.y);
+	}
+	// neighbours' border faces depend on this column too
+	for (int cy = 0; cy < layers; cy++) {
+		mark(col.x - 1, cy, col.y);
+		mark(col.x + 1, cy, col.y);
+		mark(col.x, cy, col.y - 1);
+		mark(col.x, cy, col.y + 1);
+	}
+	int64_t ck = ckey(col.x, col.y);
+	gen_cols.insert(ck);
+	edited_cols.insert(ck);
+	return true;
 }
 
 bool VoxelStore::has_chunk(const Vector3i &c) const {
@@ -819,6 +895,9 @@ Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, fl
 					MeshBuf &mb = out[emissive ? 1 : 0];
 					Color base = have_pal ? pal_colors[m] : Color(1, 0, 1);
 					float var = have_pal ? pal_variation[m] : 0.f;
+					// Vertex alpha = colour-variation amount; +0.5 flags foliage so the terrain
+					// shader can fade leaves that sit between the camera and the player.
+					if (have_pal && (pal_flags[m] & F_FOLIAGE)) var += 0.5f;
 					int32_t bi = (int32_t)mb.v.size();
 					Vector3 nrm(fd.n[0], fd.n[1], fd.n[2]);
 					for (int k = 0; k < 4; k++) {

@@ -106,6 +106,11 @@ public:
 	bool unload_column(const Vector2i &col);             // drops unedited data; false if kept
 	TypedArray<Vector2i> get_generated_columns() const;
 	bool has_chunk(const Vector3i &c) const;
+
+	// persistence / join sync: whole chunk columns that players have edited
+	TypedArray<Vector2i> get_edited_columns() const;
+	PackedByteArray export_column(const Vector2i &col) const;   // [layer mask u32][CV bytes per present layer]
+	bool import_column(const Vector2i &col, const PackedByteArray &data); // marks generated + edited + dirty
 	static Color palette_color(int m) { return (m >= 0 && m < (int)pal_colors.size()) ? pal_colors[m] : Color(1, 0, 1); }
 
 	// generation helper: fill terrain from per-column heights / kinds / strata

@@ -7,6 +7,7 @@ const DAY_LENGTH := 720.0
 
 var time_of_day := 0.34       # 0..1 (0.25 = sunrise, 0.5 = noon, 0.75 = sunset)
 var time_scale := 1.0
+var glow_mode := 1            # 0 off, 1 night only, 2 always (set by GameSettings)
 var water_level_vox := VoxelWorld.SEA_MID
 
 var sun: DirectionalLight3D
@@ -58,6 +59,10 @@ func _ready() -> void:
 	env.glow_intensity = 0.55
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 1.1
+	# Cheaper glow: stop the blur chain at level 4 (default goes to 5).
+	env.set_glow_level(3, 1.0)
+	env.set_glow_level(4, 0.6)
+	env.set_glow_level(5, 0.0)
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
 	env.fog_density = 0.0042
@@ -106,6 +111,11 @@ func tide_trend() -> int:
 
 func water_level_m() -> float:
 	return water_level_vox * VoxelWorld.VS
+
+
+## True while the sun is meaningfully up (used by farming, fishing, salt pans).
+func is_day() -> bool:
+	return night_factor() < 0.5
 
 
 func night_factor() -> float:
@@ -164,6 +174,12 @@ func _apply() -> void:
 	var lm := lerpf(1.0, 0.35, night)
 	water_mat.set_shader_parameter("light_mult", lm)
 
-	var lamp_e := night * 2.2 + 0.25
+	# Lamps only exist in the lighting pass after dusk; by day they cost ~1.3 ms of GPU
+	# for no visible effect.
+	var lamp_e := night * 2.4
+	var lamps_on := lamp_e > 0.03
 	for l in get_tree().get_nodes_in_group("lamps"):
 		(l as OmniLight3D).light_energy = lamp_e
+		(l as OmniLight3D).visible = lamps_on
+	# Glow mainly makes lanterns and sea-glow bloom; "night only" skips it by day.
+	env.glow_enabled = glow_mode == 2 or (glow_mode == 1 and night > 0.15)

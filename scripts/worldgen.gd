@@ -24,6 +24,9 @@ var sea_high: int
 
 var spawn := Vector3.ZERO     # in voxel units
 var spawn_yaw := 0.0          # camera yaw that looks at the starter hut
+## Validated player spawn points spread around the starter island:
+## [{id: int, name: String, pos: Vector3, yaw: float, is_primary: bool}]
+var starter_spawns: Array = []
 ## Boats to spawn as entities: [{pos: Vector3 (metres, water level), yaw: float}]
 var boat_spawns: Array = []
 ## Lamp light positions (voxel coords) for stamped prefabs; VoxelWorld creates the lights.
@@ -163,6 +166,107 @@ func plan_starter() -> void:
 	spawn = Vector3(sp.x + 0.5, col_h(sp.x, sp.y) + 2, sp.y + 0.5)
 	print("[gen] boat spawn ", boat_spawns[0])
 	print("[gen] %d islands; hut at %s facing %s, shore %d, spawn %s" % [islands.size(), origin, d, s0, spawn])
+
+	starter_spawns.clear()
+	starter_spawns.append({
+		"id": 0,
+		"name": "Homestead Pier",
+		"pos": spawn,
+		"yaw": spawn_yaw,
+		"is_primary": true
+	})
+	_generate_starter_spawns(home)
+
+
+## Finds diverse, scenic, and safe coastal spawn points spread all around the starter island perimeter.
+func _generate_starter_spawns(home: Dictionary) -> void:
+	var hc: Vector2 = home.center
+	var hr: float = home.radius
+	var sector_names := [
+		"East Shingle Beach",
+		"South-East Tide Shallows",
+		"South Sandspit",
+		"South-West Kelp Cove",
+		"West Driftwood Strand",
+		"North-West Dunes",
+		"North Pines Reach",
+		"North-East Shell Bank",
+		"East Meadow Point",
+		"South Pebble Shore",
+		"West Tidepool Terrace",
+		"North Windward Ridge"
+	]
+
+	var total_sectors := 12
+	for i in total_sectors:
+		var ang := float(i) * TAU / float(total_sectors)
+		var dir := Vector2(cos(ang), sin(ang))
+		var best_cand := {}
+		var min_diff := 999.0
+
+		for r in range(int(hr * 0.25), int(hr * 0.75), 4):
+			var x := int(hc.x + dir.x * r)
+			var z := int(hc.y + dir.y * r)
+			var h := col_h(x, z)
+			var k := col_k(x, z)
+			if h >= sea_high + 1 and (is_grassy(k) or k == Kind.BEACH):
+				var diff := absf(h - (sea_high + 2))
+				if diff < min_diff:
+					min_diff = diff
+					# Calculate yaw facing toward island center
+					var to_center := (hc - Vector2(x, z)).normalized()
+					var yaw := atan2(to_center.x, to_center.y)
+					best_cand = {
+						"id": starter_spawns.size(),
+						"name": sector_names[i % sector_names.size()],
+						"pos": Vector3(x + 0.5, h + 1, z + 0.5),
+						"yaw": yaw,
+						"is_primary": false
+					}
+					if diff <= 1.0:
+						break
+		if not best_cand.is_empty():
+			var dist: float = (Vector2(best_cand.pos.x, best_cand.pos.z) - Vector2(spawn.x, spawn.z)).length()
+			if dist > 30.0: # At least ~5.5m away from the primary hut
+				starter_spawns.append(best_cand)
+
+	print("[gen] registered %d diverse coastal starter spawns around home island" % starter_spawns.size())
+
+
+## Returns a random spawn location from the diverse starter island spawns.
+func get_random_spawn(rng_seed: int = -1) -> Dictionary:
+	if starter_spawns.is_empty():
+		return {"id": 0, "name": "Homestead Pier", "pos": spawn, "yaw": spawn_yaw, "is_primary": true}
+	var rng := RandomNumberGenerator.new()
+	if rng_seed >= 0:
+		rng.seed = rng_seed
+	else:
+		rng.randomize()
+	return starter_spawns[rng.randi_range(0, starter_spawns.size() - 1)]
+
+
+## Returns a distinct distributed spawn for a multiplayer peer or local player.
+func get_spawn_for_player(peer_id: int) -> Dictionary:
+	if starter_spawns.is_empty():
+		return {"id": 0, "name": "Homestead Pier", "pos": spawn, "yaw": spawn_yaw, "is_primary": true}
+	if peer_id <= 0:
+		# Single player: randomize around starter island
+		return get_random_spawn()
+	elif peer_id == 1:
+		# Host / Player 1: choose random or primary
+		return starter_spawns[0]
+	else:
+		# Distribute peer IDs across distinct sectors around the starter island
+		var total := starter_spawns.size()
+		var step := maxi(2, total / 4)
+		var idx := posmod(1 + (peer_id - 1) * step, total)
+		return starter_spawns[idx]
+
+
+func get_spawn_by_index(idx: int) -> Dictionary:
+	if starter_spawns.is_empty():
+		return {"id": 0, "name": "Homestead Pier", "pos": spawn, "yaw": spawn_yaw, "is_primary": true}
+	return starter_spawns[posmod(idx, starter_spawns.size())]
 
 
 ## Water deep enough for the hull at mid tide (keel ~0.6 m below the surface, plus margin).

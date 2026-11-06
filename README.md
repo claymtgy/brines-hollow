@@ -25,6 +25,26 @@ godot --path . -- --join=192.168.1.20      # join a host
 
 Or open the folder in the Godot editor and press F5.
 
+## Worlds, saves and the dedicated server
+
+```sh
+godot --path . -- --solo --world=hollow            # solo; loads/creates user://worlds/hollow/
+godot --path . -- --host --world=hollow            # host co-op from your save
+godot --headless --path . -- --server --world=hollow      # dedicated server (UDP 24565)
+godot --headless --path . -- --server=25000 --world=hollow
+godot --path . -- --join=SERVER_IP                 # join; your progress is stored on that server
+```
+
+- Saves live in `user://worlds/<name>/` (on Linux: `~/.local/share/godot/app_userdata/Brine's Hollow/worlds/`).
+  `--new-world` archives the existing save (`<name>.bak-<time>`) and starts fresh.
+- The host / server is the authority: it owns terrain edits, farms, salt pans, the village and
+  boats, and is the only machine that writes saves (autosave every 60 s, 30 s on a dedicated
+  server, and on window close).
+- Joining players receive the edited chunk columns, then live edits. Their inventory, quests and
+  appearance are stored by the server under a stable per-machine player key
+  (`user://profile_<name>.cfg`, choose with `--profile=NAME`).
+- Building costs materials: 1 item per 4 voxels, the same rate digging gives back.
+
 ## Controls
 
 | Key | Action |
@@ -38,7 +58,8 @@ Or open the folder in the Godot editor and press F5.
 | R / G | rotate prefab / toggle 6-voxel grid snap |
 | MMB | pick the material you're looking at |
 | Hold T | fast-forward time (host/solo) — watch the tide move |
-| F1 / F3 / Esc | help / stats / free the mouse |
+| F1 / F3 | help / stats |
+| Esc (Start on a pad) | pause menu: resume, settings (controls, graphics presets incl. Steam Deck, UI scale, key rebinding), save & quit |
 
 ## Layout
 
@@ -63,6 +84,8 @@ Or open the folder in the Godot editor and press F5.
   commands (`dig`, `place`, `prefab`) through the host, which keeps a log for late joiners
 
 ## Dev flags
+
+`--preset=deck|low|medium|high` (this run only), `--bench[=detail]`, `--menushot=DIR`.
 
 `--shot=DIR` (scripted screenshots), `--bench` (GPU timing), `--netcheck` (with `--host`/`--join`,
 verifies edit sync), `--seed=N`, `--time=0.5`.
