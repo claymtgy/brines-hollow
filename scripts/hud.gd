@@ -468,7 +468,7 @@ func _rebuild_help() -> void:
 	else:
 		rows = [["WASD", "move"], ["Mouse", "look"], ["Space", "jump / swim up"], ["Shift", "sprint"],
 			["LMB", "use tool / swing"], ["RMB", "plant / eat / parry"], ["F", "interact (hold: pick up)"],
-			["1-5", "tools"], ["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
+			["1-5", "tools"], ["Tab", "hand crafting"], ["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
 			["C", "dodge"], ["Ctrl", "sneak"], ["V", "swap shoulder"], ["T", "fast-forward time"],
 			["F3", "stats"], ["Esc", "menu"]]
 	for r: Array in rows:

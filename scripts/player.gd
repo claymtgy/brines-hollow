@@ -20,6 +20,7 @@ var sky: SkyCycle
 var hud: Hud
 var farm: FarmManager
 var quests: QuestManager
+var recipes := RecipeBook.new()   # known recipes (saved in the player profile)
 var village: SettlementManager
 var entities: EntityManager
 var placement: PlacementController   # Entities (Agent A): place / use / pick up
@@ -169,6 +170,15 @@ void fragment() {
 	inventory.add_item(&"seed_samphire", 3)
 	inventory.add_item(&"driftwood", 15)
 
+	# Recipe discovery: new ingredients, recipe scrolls -> learned recipes.
+	RecipeBook.register_scroll_items()
+	inventory.item_added.connect(func(item_id: StringName, _count: int) -> void:
+		recipes.on_item_acquired(item_id, inventory))
+	recipes.recipe_learned.connect(func(rid: StringName, _source: String) -> void:
+		var r: RecipeDef = RecipeDB.get_recipe(rid)
+		if hud != null and r != null:
+			hud.show_toast("New recipe learned: %s" % r.name))
+
 	fishing.fish_landed.connect(func(fish: FishDef, weight: float) -> void:
 		inventory.add_item(fish.item_id, 1)
 		if controller:
@@ -197,6 +207,12 @@ void fragment() {
 	)
 
 	bind_quest_signals()
+
+
+## Report progress on quest objectives (tutorial, story, chores).
+func quest_event(type: QuestDef.ObjectiveType, target: StringName = &"", amount: int = 1) -> void:
+	if quests != null:
+		quests.notify_event(type, target, amount, inventory)
 
 
 func bind_quest_signals() -> void:
@@ -427,6 +443,7 @@ func _try_eat_active_food() -> bool:
 		var item_id: StringName = active.item_id
 		if vitality.can_eat_food(item_id):
 			if vitality.eat_food(item_id, inventory):
+				quest_event(QuestDef.ObjectiveType.EAT_FOOD, item_id)
 				if hud:
 					var def: ItemDef = ItemDB.get_item(item_id)
 					var meal_name: String = def.name if def != null else String(item_id)
@@ -612,6 +629,7 @@ func _use_tool() -> void:
 				_use_cd = 0.4
 				return
 			command_requested.emit({"t": "place", "p": c, "r": r, "m": current_material()})
+			quest_event(QuestDef.ObjectiveType.PLACE_VOXELS, &"")
 			if controller:
 				controller.pulse_place()
 			_use_cd = 0.16 + r * 0.03
@@ -620,6 +638,7 @@ func _use_tool() -> void:
 				_use_cd = 0.6
 				return
 			command_requested.emit({"t": "prefab", "p": prefab_origin(), "r": prefab_rot, "id": prefab_id})
+			quest_event(QuestDef.ObjectiveType.PLACE_PREFAB, &"")
 			_use_cd = 0.45
 		4:
 			_use_farm_tool(cell)

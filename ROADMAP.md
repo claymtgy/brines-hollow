@@ -108,6 +108,13 @@ Goal: A rich, relaxing sandbox loop with no combat required.
   - *Architect's Drafting Desk:* Box-select player builds to generate physical Blueprint Scrolls that can be traded in-game or exported to Steam Workshop.
   - *Cozy Home Decor:* Wall-mounted fish taxidermy, placeable live-fish glass aquariums, textile dye vats for banners, and custom pottery.
 
+- **Unlockable Recipes ✅ (built):** Each player keeps a recipe book, saved with their profile. Basic recipes are known from the start; the rest are learned:
+  - *Discovery:* the first time a key ingredient enters your inventory (a Silver Mackerel teaches Charred Sea Mackerel and the Sea Barrel).
+  - *Quests:* Wren's tutorial and story quests teach recipes as rewards.
+  - *Drifters:* recruiting a villager teaches their trade (a Smoker-Chef brings smokehouse and hearth recipes).
+  - *Recipe scrolls:* merchants sell scrolls; reading one (on pickup) adds the recipe to your book.
+  - Stations open a recipe window showing known recipes, ingredients you have/need, and how many are still undiscovered; Tab opens hand crafting.
+  - *Next:* rare scrolls in wrecks and sea caves, legendary-fish "secret recipes", a Recipe Book tab in the Field Logbook, and recipe-scroll trading between players.
 
 ### 4. Vitality Triad: Nourishment (Hunger), Health & Stamina
 - **Nourishment & Satiety (Non-Punitive Hunger):**
@@ -156,7 +163,22 @@ Goal: A rich, relaxing sandbox loop with no combat required.
 - **Driftwood Rowboat / Coracle:** Lightweight, manually rowed; agile in shallow tidal flats and narrow sea caves; can be beached or tied to pier bollards.
 - **Outrigger Canoe / Sea Skiff:** Fast shallow-draft coastal craft with a small lateen sail and a live-well compartment for fresh fish storage. Allows safe crossing between adjacent islets.
 
-### 7. Subterranean World & Cave Networks
+### 7. Wildlife, Livestock & Predators
+Life on the islands beyond the player: some of it ambient, some of it hungry. Predators target **livestock and stores, not players**, and every threat has a non-lethal answer (pillar 3).
+- **Livestock (prerequisite):** pens and coops as placeable entities; animals need feed, water, shelter and space; happiness drives yield (milk, wool, eggs, down). Server-simulated and saved like other entities.
+- **Ambient wildlife:** coastal hares, seals hauled out on the flats at low tide, puffin colonies on sea stacks, otters in kelp beds, herons in salt marshes, migrating whales offshore. Mostly flee; some can be befriended (otters).
+- **Predators that raid the farm:**
+  - *Red foxes:* den in island woods; at dusk and night they scout for unguarded coops and pens, slip through gaps in fences, and carry off chickens and ducklings. They leave tracks and scattered feathers so you can follow them back to the den.
+  - *Stoats:* small and quick; steal eggs from coops.
+  - *Gulls (built):* already steal unattended fish.
+  - *Sea eagles:* swoop on ducklings and lambs left in the open by day.
+  - *Shore rats:* raid unsealed food stores and drying racks after storms.
+- **Defences & answers:** proper fences and latched gates (gaps matter), lanterns that keep foxes at bay, guard dogs and dock cats, live-capture traps (relocate a fox to another island), scarecrows for birds, sealed sea barrels for food, and, optionally, combat.
+- **Behaviour:** predators path toward the weakest pen, retreat from light and noise, remember defended farms for a few days, and return to dens that can be found and moved on.
+- **Difficulty:** *Cozy*: raids only take eggs or feed and never harm animals; *Tidewatch*: occasional losses with clear warnings ("A fox is circling the coop"); *Undertow*: bolder, smarter raids.
+- **Co-op:** host/server simulates wildlife; village bells alert everyone when a raid starts.
+
+### 8. Subterranean World & Cave Networks
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
 - **Karst Limestone Caverns:** Multi-chamber caverns beneath island plateaus featuring stalactites, glowing moss patches, and subterranean freshwater aquifers that supply village wells.
 - **Abandoned Brass Mines & Catacombs:** Ancient pre-deluge extraction tunnels with rickety timber shoring, ore veins (copper, iron, tin), rusted minecarts, and forgotten subterranean workbenches.
@@ -225,6 +247,7 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
   - *Old Man Corin (Blind Lighthouse Keeper):* Folklore, tide anomalies, secrets of ancient bells.
   - *Cartographer Vane:* Island charting, landmark exploration, sea stack beacons.
   - *Town Notice Board:* Dynamic procedural requests from villagers ("Gather 15 Tide Kale for the winter stew").
+- **Starter quest — Wren the Wayfarer ✅ (built):** A travelling fisher walks up to new players when they wash ashore and teaches the basics in seven short missions: dig, build, craft, set a crab pot, fish, eat, and row out. Each mission ends by returning to Wren for rewards and new recipes. Per player (local in co-op), saved with the profile, skippable ("I know my way"). Objectives show in an on-screen quest tracker.
 - **Diegetic Navigation & The Map Equipment Slot:**
   - Standard gameplay maintains immersion with clean HUD framing, using an in-world brass *Mariner's Compass*, visible rotating beams from built *Lighthouses*, and a hand-sketched *Field Logbook*.
   - **Minimap Enablement via Map Slot:** Equipping a crafted nautical chart into the dedicated **Map Equipment Slot** activates a corner parchment minimap on the HUD.
@@ -350,9 +373,18 @@ Goal: Build boats, sail beyond the home atoll, and confront or outsmart the guar
 
 ---
 
-## Immediate Next Steps (Planning & Parallel Tracks)
+## Player Wiki (Markdown in the repo)
 
-1. **Tech Core:** Complete native GDExtension voxel engine and verify streaming budgets.
-2. **Entity & Inventory Model:** Implement data-driven item definitions, inventory grid, and storage containers.
-3. **Farming & Fishing Vertical Prototype:** Implement rod tension loop, tidal mud tiles, and seed planting.
-4. **Village Room Detection:** Port flood-fill interior checker for NPC housing validation.
+A reference players can browse outside the game, kept in `docs/wiki/` as linked Markdown pages (renders on GitHub; can be published to the GitHub Wiki or a static site later).
+- **Pages:** Getting Started (what Wren teaches), Controls (keyboard + controller), Tides & Time, Building & Blueprints, Crafting & Recipes (every recipe and how it is unlocked), Farming & Salt Pans, Fishing & Crab Pots, Food & Vitality, Boats & Sailing, Village & Drifters, Merchants & Trade, Creatures & Wildlife, Weather, Difficulty Modes, Co-op & Dedicated Servers, Settings & Steam Deck, FAQ.
+- **Generated tables:** a small tool exports items, recipes (with unlock sources), fish (tide/time/weather), crops and creatures straight from the game data, so the wiki never drifts from the code.
+- **Upkeep:** update the relevant page with each feature merge; screenshots captured by the existing dev screenshot modes.
+
+---
+
+## Immediate Next Steps
+
+1. **Livestock** (pens, feed, yields): prerequisite for the wildlife and fox raids above.
+2. **Wildlife & predators:** ambient animals first, then foxes and stoats raiding pens with lanterns, fences and traps as answers.
+3. **Player wiki:** set up `docs/wiki/` and the data-export tool.
+4. **Polish from the last merges:** save the bed respawn point in the profile, gamepad mapping for dodge/sneak, merchant stock persistence, eels avoiding placed lantern entities.

@@ -21,6 +21,8 @@ var village: SettlementManager
 var entities: EntityManager
 var session: Session
 var creatures: CreatureNet   # Agent C: creatures & optional combat
+var crafting_ui: CraftingUI   # recipe window (stations + Tab hand crafting)
+var tutorial: Tutorial        # Wren's starter missions
 var settings: GameSettings
 var settings_menu: SettingsMenu
 var village_mgr: VillageManager
@@ -127,6 +129,15 @@ func _ready() -> void:
 	trade = TradeManager.new()
 	trade.main = self
 	add_child(trade)
+	# --- Crafting window + starter tutorial (Wren the Wayfarer)
+	crafting_ui = CraftingUI.new()
+	crafting_ui.name = "CraftingUI"
+	add_child(crafting_ui)
+	crafting_ui.setup(self)
+	tutorial = Tutorial.new()
+	tutorial.name = "Tutorial"
+	add_child(tutorial)
+	tutorial.setup(self)
 	if _args.has("villagecheck"):
 		village_mgr.call_deferred("run_check", String(_args.villagecheck))
 	elif _args.has("tradecheck"):
@@ -145,7 +156,7 @@ func _ready() -> void:
 		start_host()
 	elif _args.has("join"):
 		start_join(_args.join if _args.join != "" else "127.0.0.1")
-	elif _args.has("solo") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck") \
+	elif _args.has("solo") or _args.has("tutorialcheck") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck") \
 			or (_args.has("villagecheck") and not _args.has("join") and not _args.has("host")) or _args.has("tradecheck"):
 		start_solo()
 	else:

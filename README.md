@@ -52,6 +52,7 @@ godot --path . -- --join=SERVER_IP                 # join; your progress is stor
 | WASD / Shift / Space | move / sprint / jump (swim up in water) |
 | Mouse / Wheel / V | orbit camera / zoom / swap shoulder |
 | LMB | use tool |
+| Tab | hand crafting (stations: walk up and press F) |
 | 1 / 2 / 3 | Pickaxe (dig) / Hammer (place voxels) / Blueprints (prefabs) |
 | Q / E | previous / next material or prefab |
 | Z / X | brush size |

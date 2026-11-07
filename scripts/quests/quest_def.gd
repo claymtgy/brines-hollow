@@ -8,7 +8,14 @@ enum ObjectiveType {
 	HARVEST_CROP,       ## Harvest specific crop
 	BUILD_ROOM,         ## Construct and validate a room for a drifter
 	DISCOVER_LANDMARK,  ## Reach geographic coordinates or beacon
-	DEFEAT_ENEMY        ## Pacify enemy outpost or boss
+	DEFEAT_ENEMY,       ## Pacify enemy outpost or boss
+	PLACE_VOXELS,       ## Build with the hammer (one per placement)
+	PLACE_PREFAB,       ## Place a blueprint prefab
+	PLACE_ENTITY,       ## Place furniture / gear (target = entity type)
+	CRAFT_ITEM,         ## Craft anything (target = output item id, "" = any)
+	EAT_FOOD,           ## Eat a meal
+	BOARD_BOAT,         ## Board a rowboat
+	TALK_TO             ## Speak with an NPC (target = npc id)
 }
 
 class QuestStep:

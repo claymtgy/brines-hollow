@@ -56,11 +56,27 @@ func get_interaction_prompt(player: Player) -> String:
 		var sec_rem: int = int(ceil(maxf(0.0, station.total_cook_time - station.cook_timer)))
 		return "E/F  %s: Cooking %s (%ds left)" % [entity_name, station.active_recipe.name, sec_rem]
 
-	var craftable: Array[RecipeDef] = RecipeDB.get_craftable_recipes(player.inventory, station_tag)
-	if craftable.is_empty():
-		return "F  Inspect %s (Missing ingredients)" % entity_name
-	var first_recipe: RecipeDef = craftable[0]
-	return "F  Use %s: Craft %s" % [entity_name, first_recipe.name]
+	for r: RecipeDef in RecipeDB.get_craftable_recipes(player.inventory, station_tag):
+		if player.recipes == null or player.recipes.knows(r.id):
+			return "F  Use %s: Craft %s" % [entity_name, r.name]
+	var known: int = player.recipes.recipes_for(station_tag).known.size() if player.recipes != null else 0
+	return "F  Use %s  (%d recipe%s known)" % [entity_name, known, "" if known == 1 else "s"]
+
+
+## In-game use: refuel if it's cold and you carry fuel, otherwise open the recipe window.
+func client_interact(player: Player) -> void:
+	if not station.is_active and station.requires_fuel and station.fuel_remaining_sec <= 0.0:
+		for fuel: StringName in CraftingStation.FUEL_BURN_TIMES.keys():
+			if player.inventory.has_item(fuel, 1):
+				interact(player)      # legacy path refuels and returns
+				if manager != null:
+					manager.push_state(self)
+				return
+	var m := player.get_parent()
+	if m != null and "crafting_ui" in m and m.crafting_ui != null:
+		m.crafting_ui.open(self)
+	else:
+		super.client_interact(player)
 
 
 func interact(player: Player) -> void:

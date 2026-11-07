@@ -54,8 +54,14 @@ func _init_default_wares() -> void:
 		&"sea_brass_ingot": 25,
 		&"backpack_driftwood": 80,
 		&"diving_rebreather": 150,
-		&"blueprint_dry_dock": 100
+		&"blueprint_dry_dock": 100,
+		# Recipe scrolls (read on pickup -> learned; see RecipeBook)
+		&"recipe_scroll_cook_glazed_crab": 30,
+		&"recipe_scroll_place_barber_mirror": 24,
+		&"recipe_scroll_cook_bouillabaisse": 36,
+		&"recipe_scroll_brew_chicory_coffee": 28,
 	}
+	RecipeBook.register_scroll_items()
 
 	# Stock initial merchandise
 	match type:
@@ -63,11 +69,15 @@ func _init_default_wares() -> void:
 			stock.add_item(&"seed_shore_wheat", 10)
 			stock.add_item(&"seed_samphire", 5)
 			stock.add_item(&"iron_ingot", 4)
+			stock.add_item(&"recipe_scroll_cook_glazed_crab", 1)
+			stock.add_item(&"recipe_scroll_place_barber_mirror", 1)
 		MerchantType.TRADE_GALLEON:
 			stock.add_item(&"sea_brass_ingot", 10)
 			stock.add_item(&"backpack_driftwood", 1)
 			stock.add_item(&"diving_rebreather", 1)
 			stock.add_item(&"blueprint_dry_dock", 1)
+			stock.add_item(&"recipe_scroll_cook_bouillabaisse", 1)
+			stock.add_item(&"recipe_scroll_brew_chicory_coffee", 1)
 			# Add shipping manifests
 			active_contracts.append(TradeContract.new(
 				&"manifest_cured_fish", "Export: 10 Smoked Fish",

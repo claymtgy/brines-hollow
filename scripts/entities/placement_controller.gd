@@ -215,6 +215,8 @@ func try_use() -> bool:
 	if not player.entities.request_place(t, _place_coord, player.prefab_rot):
 		_refund(t)
 		_toast("Can't place that there")
+	else:
+		player.quest_event(QuestDef.ObjectiveType.PLACE_ENTITY, t)
 	return true
 
 

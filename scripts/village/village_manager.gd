@@ -529,6 +529,8 @@ func _try_recruit(npc_idx: int, peer: int) -> void:
 
 func _set_recruited(npc_idx: int) -> void:
 	var npc := npcs[npc_idx]
+	if not npc.recruited and main.player != null and main.player.recipes != null:
+		main.player.recipes.on_drifter_recruited(int(npc.def.profession))   # they teach their trade
 	npc.recruited = true
 	npc.refresh_label()
 	var wreck := npc.get_node_or_null("Wreck")

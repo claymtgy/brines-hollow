@@ -260,6 +260,7 @@ func capture_profile() -> Dictionary:
 		return d
 	d["inv"] = p.inventory.serialize()
 	d["cust"] = p.customizer.serialize()
+	d["recipes"] = p.recipes.serialize()
 	d["pos"] = p.position
 	d["yaw"] = main.rig.yaw
 	if main.quests != null:
@@ -275,6 +276,8 @@ func apply_profile(d: Dictionary) -> void:
 		p.inventory.deserialize(d.inv)
 	if d.has("cust"):
 		p.customizer.deserialize(d.cust)
+	if d.has("recipes"):
+		p.recipes.deserialize(d.recipes)
 	if d.has("quests") and main.quests != null:
 		main.quests.deserialize(d.quests)
 	if d.has("pos"):
