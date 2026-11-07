@@ -5,7 +5,7 @@ extends RefCounted
 ## else gets a sprite chosen from its id / tags / category, tinted per item.
 ##   ItemIcons.for_item(&"wood_plank")   ItemIcons.for_tool(ItemIcons.Tool.PICKAXE)
 
-enum Tool { PICKAXE, HAMMER, BLUEPRINT, ROD, HOE, CUTLASS, HARPOON }
+enum Tool { PICKAXE, HAMMER, BLUEPRINT, ROD, HOE, CUTLASS, HARPOON, AXE, SHOVEL }
 
 const N := 16
 const OUTLINE := Color8(30, 20, 15)
@@ -175,7 +175,40 @@ static func _draw_tool(t: int) -> Image:
 			_line(i, Vector2i(12, 4), Vector2i(14, 2), METAL, 2)
 			_px(i, 11, 3, METAL)
 			_px(i, 13, 5, METAL)
+		Tool.AXE:
+			_line(i, Vector2i(3, 13), Vector2i(11, 5), HANDLE, 2)
+			_rect(i, 8, 2, 5, 5, METAL)
+			_line(i, Vector2i(12, 2), Vector2i(14, 6), METAL, 2)
+			_line(i, Vector2i(13, 3), Vector2i(14, 7), METAL_LO)
+		Tool.SHOVEL:
+			_line(i, Vector2i(3, 13), Vector2i(9, 7), HANDLE, 2)
+			_ellipse(i, 11.5, 4.5, 3.2, 3.2, METAL)
+			_line(i, Vector2i(9, 6), Vector2i(13, 2), METAL_LO)
 	return i
+
+
+static func _tool_tier_img(base_img: Image, s: String) -> Image:
+	var head_hi := METAL
+	var head_lo := METAL_LO
+	if "driftwood" in s or "wood" in s:
+		head_hi = Color8(184, 152, 114)
+		head_lo = Color8(136, 106, 76)
+	elif "stone" in s:
+		head_hi = Color8(146, 138, 134)
+		head_lo = Color8(102, 94, 92)
+	elif "copper" in s or "brass" in s:
+		head_hi = Color8(224, 144, 82)
+		head_lo = Color8(168, 96, 48)
+	else:
+		return base_img
+	for y in N:
+		for x in N:
+			var c := base_img.get_pixel(x, y)
+			if c.is_equal_approx(METAL):
+				base_img.set_pixel(x, y, head_hi)
+			elif c.is_equal_approx(METAL_LO):
+				base_img.set_pixel(x, y, head_lo)
+	return base_img
 
 
 static func _draw_item(def: ItemDef, id: StringName) -> Image:
@@ -185,13 +218,16 @@ static func _draw_item(def: ItemDef, id: StringName) -> Image:
 		return _cube(Palette.COLORS[def.voxel_mat])
 	var s := String(id)
 	var tint := _hue(id)
-	if "pickaxe" in s: return _draw_tool(Tool.PICKAXE)
+	if "pickaxe" in s: return _tool_tier_img(_draw_tool(Tool.PICKAXE), s)
+	if "axe" in s or "hatchet" in s: return _tool_tier_img(_draw_tool(Tool.AXE), s)
+	if "shovel" in s: return _tool_tier_img(_draw_tool(Tool.SHOVEL), s)
 	if "hammer" in s or "mallet" in s or "maul" in s: return _draw_tool(Tool.HAMMER)
 	if "rod" in s: return _draw_tool(Tool.ROD)
-	if "hoe" in s: return _draw_tool(Tool.HOE)
+	if "hoe" in s: return _tool_tier_img(_draw_tool(Tool.HOE), s)
 	if "cutlass" in s or "sword" in s or "knife" in s: return _draw_tool(Tool.CUTLASS)
 	if "harpoon" in s or "spear" in s: return _draw_tool(Tool.HARPOON)
 	if "seed" in s: return _seed_pouch(tint)
+	if "sapling" in s: return _sapling()
 	if "chart" in s or "map" in s or def.category == ItemDef.Category.BLUEPRINT: return _chart()
 	if def.has_tag("fish") or "fish" in s or "mackerel" in s or "cod" in s or "salmon" in s or "flounder" in s: return _fish(tint)
 	if "crab" in s or "oyster" in s or "clam" in s or "mussel" in s: return _shell(tint)
@@ -382,3 +418,18 @@ static func _finish_cache(key: String, i: Image) -> Texture2D:
 	var t := _finish(i)
 	_cache[key] = t
 	return t
+
+
+static func _sapling() -> Image:
+	var i := _img()
+	var dirt := Color8(116, 82, 54)
+	var trunk := Color8(138, 96, 58)
+	var needle_dk := Color8(48, 118, 66)
+	var needle_hi := Color8(86, 168, 88)
+	_rect(i, 5, 13, 6, 2, dirt)
+	_rect(i, 7, 8, 2, 5, trunk)
+	_rect(i, 4, 8, 8, 2, needle_dk)
+	_rect(i, 5, 5, 6, 3, needle_hi)
+	_rect(i, 6, 3, 4, 2, needle_dk)
+	_rect(i, 7, 1, 2, 2, needle_hi)
+	return i

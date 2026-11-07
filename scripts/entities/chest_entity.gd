@@ -90,7 +90,8 @@ func get_interaction_prompt(player: Player) -> String:
 	var dep := ""
 	if active != null and not active.is_empty() and container.can_accept_item(active.item_id):
 		dep = "    Shift+F  Store %s" % _item_name(active.item_id)
-	return "F  Take from %s (%d stored)%s" % [entity_name, _stored_count(), dep]
+	var verb := "Open" if player.inventory_ui != null else "Take from"
+	return "F  %s %s (%d stored)%s" % [verb, entity_name, _stored_count(), dep]
 
 
 static func _item_name(id: StringName) -> String:
@@ -112,6 +113,9 @@ func client_interact(player: Player) -> void:
 		var n := player.inventory.remove_item(id, active.count)
 		if n > 0:
 			manager.request_action(self, &"deposit", {"item": id, "n": n})
+		return
+	if player.inventory_ui != null and (not is_inside_tree() or multiplayer.is_server()):
+		player.inventory_ui.open(self)
 		return
 	if _stored_count() == 0:
 		_toast(player, "%s is empty. Hold Shift and press F to store your active stack." % entity_name)

@@ -25,6 +25,8 @@ var village: SettlementManager
 var entities: EntityManager
 var placement: PlacementController   # Entities (Agent A): place / use / pick up
 var controller: ControllerManager
+var inventory_ui: InventoryUI
+var build_menu_ui: BuildMenuUI
 
 var inventory: Inventory = Inventory.new(24)
 var customizer: CharacterCustomizer = CharacterCustomizer.new()
@@ -43,6 +45,7 @@ var horizontal_speed := 0.0
 var swing_count := 0
 
 var tool := 0
+var hammer_build_mode := 0  # 0 = Fabricated Pieces (Prefabs), 1 = Individual Blocks, 2 = Furniture
 var brush := 1
 var mat_index := 0
 var prefab_id := 5
@@ -58,6 +61,17 @@ var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ghost_key := -1
 var _ghost_cache := {}
+var hovered_entity: WorldEntity = null
+var _last_ray_origin := Vector3.ZERO
+var _last_ray_dir := Vector3.FORWARD
+var _last_ray_hit := {}
+var _bobber: Node3D
+var _fishing_line: MeshInstance3D
+var _fishing_line_mesh: ImmediateMesh
+var _bobber_start := Vector3.ZERO
+var _bobber_target := Vector3.ZERO
+var _bobber_flight_t := 1.0
+var _bobber_phase := 0.0
 
 ## Rowboat the player is seated in (null when on foot) and which seat.
 var boat: Boat = null
@@ -160,15 +174,37 @@ void fragment() {
 	_ghost.top_level = true
 	_ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ghost)
+	_setup_fishing_visuals()
 
-	# Starter inventory setup
+	# Starter inventory setup (Hotbar slots 0..5 + Backpack slots 8..9)
 	ItemDB.init_db()
 	inventory.add_item(&"driftwood_pickaxe", 1)
-	inventory.add_item(&"rusty_cutlass", 1)   # Agent C: optional combat starter
+	inventory.add_item(&"builders_hammer", 1)
 	inventory.add_item(&"whittle_rod", 1)
-	inventory.add_item(&"seed_shore_wheat", 5)
-	inventory.add_item(&"seed_samphire", 3)
-	inventory.add_item(&"driftwood", 15)
+	inventory.add_item(&"driftwood_hoe", 1)
+	inventory.add_item(&"rusty_cutlass", 1)   # Agent C: optional combat starter
+	inventory.add_item(&"driftwood_axe", 1)
+	if inventory.capacity > 10:
+		inventory.slots[10] = ItemSlot.new(&"driftwood", 15)
+		if inventory.capacity > 11:
+			inventory.slots[11] = ItemSlot.new(&"pine_sapling", 4)
+	else:
+		inventory.add_item(&"driftwood", 15)
+	if inventory.capacity > 9:
+		inventory.slots[8] = ItemSlot.new(&"seed_shore_wheat", 5)
+		inventory.slots[9] = ItemSlot.new(&"seed_samphire", 3)
+	else:
+		inventory.add_item(&"seed_shore_wheat", 5)
+		inventory.add_item(&"seed_samphire", 3)
+
+	inventory.slot_changed.connect(func(slot_idx: int, _slot: ItemSlot) -> void:
+		if slot_idx == inventory.active_hotbar_index:
+			_sync_tool_from_hotbar()
+	)
+	inventory.active_hotbar_changed.connect(func(_idx: int) -> void:
+		_sync_tool_from_hotbar()
+	)
+	_sync_tool_from_hotbar()
 
 	# Recipe discovery: new ingredients, recipe scrolls -> learned recipes.
 	RecipeBook.register_scroll_items()
@@ -312,8 +348,9 @@ func _physics_process(delta: float) -> void:
 	if wish.length() > 1.0:
 		wish = wish.normalized()
 
-	swimming = position.y + 0.75 < water_level
-	var is_submerged: bool = position.y + 1.2 < water_level
+	var in_water: bool = (position.y + 0.75 < water_level) and (world == null or world.is_water_at(position + Vector3(0.0, 0.75, 0.0), water_level))
+	swimming = in_water
+	var is_submerged: bool = (position.y + 1.2 < water_level) and (world == null or world.is_water_at(position + Vector3(0.0, 1.2, 0.0), water_level))
 	var sprint := input_enabled and Input.is_action_pressed("sprint")
 	var is_sprinting: bool = sprint and wish.length_squared() > 0.01 and not vitality.is_exhausted and vitality.current_stamina > 0.0
 
@@ -385,7 +422,9 @@ func _physics_process(delta: float) -> void:
 		position.y = 30.0
 
 	horizontal_speed = Vector2(vel.x, vel.z).length()
-	if wish.length() > 0.1:
+	if rig != null and rig.first_person:
+		facing = rig.yaw + PI
+	elif wish.length() > 0.1:
 		facing = lerp_angle(facing, atan2(wish.x, wish.z), 1.0 - exp(-12.0 * delta))
 
 
@@ -395,13 +434,148 @@ func current_material() -> int:
 	return Palette.BUILDABLE[mat_index]
 
 
+func is_hammer_equipped() -> bool:
+	return inventory != null and inventory.is_hammer_active()
+
+
+func select_hotbar_slot(idx: int) -> void:
+	inventory.set_active_hotbar_index(idx)
+	_sync_tool_from_hotbar()
+
+
+func set_hammer_build_mode(mode: int) -> void:
+	hammer_build_mode = clampi(mode, 0, 2)
+	if is_hammer_equipped():
+		_sync_tool_from_hotbar()
+
+
+func select_hammer_prefab(id: int) -> void:
+	hammer_build_mode = 0
+	prefab_id = clampi(id, 0, Prefabs.count() - 1)
+	if placement != null:
+		placement.entity_blueprint = &""
+	_sync_tool_from_hotbar()
+
+
+func select_hammer_block(block_mat_idx: int) -> void:
+	hammer_build_mode = 1
+	mat_index = clampi(block_mat_idx, 0, Palette.BUILDABLE.size() - 1)
+	if placement != null:
+		placement.entity_blueprint = &""
+	_sync_tool_from_hotbar()
+
+
+func select_hammer_furniture(type: StringName) -> void:
+	hammer_build_mode = 2
+	if placement != null:
+		placement.entity_blueprint = type
+	_sync_tool_from_hotbar()
+
+
+func get_active_item_def() -> ItemDef:
+	if inventory == null:
+		return null
+	var slot := inventory.get_active_item()
+	if slot == null or slot.is_empty():
+		return null
+	return ItemDB.get_item(slot.item_id)
+
+
+func has_pickaxe_equipped() -> bool:
+	var def := get_active_item_def()
+	return def != null and (def.has_tag("pickaxe") or def.has_tag("chisel") or bool(def.tool_data.get("breaks_rock", false)))
+
+
+func has_axe_equipped() -> bool:
+	var def := get_active_item_def()
+	return def != null and (def.has_tag("axe") or def.has_tag("hammer") or has_pickaxe_equipped())
+
+
+func can_harvest_voxel(mat: int) -> bool:
+	if mat <= 0:
+		return false
+	if VoxelWorld.is_stone_mat(mat):
+		return has_pickaxe_equipped()
+	if mat == Palette.TRUNK:
+		var def := get_active_item_def()
+		return def != null and (def.has_tag("axe") or def.has_tag("pickaxe"))
+	return true
+
+
+func _sync_tool_from_hotbar() -> void:
+	if inventory == null:
+		return
+	var slot := inventory.get_active_item()
+	if slot == null or slot.is_empty():
+		_set_tool(-1)
+		return
+	var def: ItemDef = ItemDB.get_item(slot.item_id)
+	if def == null:
+		_set_tool(-1)
+		return
+
+	if def.has_tag("hammer") or def.id == &"builders_hammer":
+		match hammer_build_mode:
+			0: # Fabricated Pieces (Prefabs)
+				if placement != null:
+					placement.entity_blueprint = &""
+				_set_tool(2)
+			1: # Individual Blocks
+				if placement != null:
+					placement.entity_blueprint = &""
+				_set_tool(1)
+			2: # Furniture & Workstations
+				if placement != null and placement.entity_blueprint == &"":
+					var types := Placeables.blueprint_types()
+					if not types.is_empty():
+						placement.entity_blueprint = types[0]
+				_set_tool(2)
+		if model != null:
+			model.set_tool(1) # Hold 3D Hammer mesh in hand
+	elif def.has_tag("pickaxe") or def.has_tag("chisel"):
+		_set_tool(0)
+	elif def.has_tag("axe"):
+		_set_tool(0)
+		if model != null:
+			model.set_tool(9)
+	elif def.has_tag("shovel"):
+		_set_tool(0)
+		if model != null:
+			model.set_tool(10)
+	elif def.has_tag("fishing_rod"):
+		_set_tool(3)
+	elif def.has_tag("hoe") or def.has_tag("seed"):
+		_set_tool(4)
+	elif def.has_tag("weapon") or not def.weapon_data.is_empty():
+		_set_tool(5)
+	elif def.category == ItemDef.Category.BLUEPRINT or def.has_tag("blueprint"):
+		_set_tool(2)
+	elif EntityManager.type_for_item(def.id) != &"":
+		_set_tool(4)
+		if model != null:
+			model.set_tool(2)
+	elif def.is_voxel():
+		var b_idx := Palette.BUILDABLE.find(def.voxel_mat)
+		if b_idx >= 0:
+			mat_index = b_idx
+		brush = 0 # Single block placement by default when holding blocks directly
+		_set_tool(1)
+	elif def.category == ItemDef.Category.FOOD:
+		_set_tool(4)
+		if model != null:
+			model.set_tool(-1)
+	else:
+		_set_tool(-1)
+
+
 func _set_tool(new_tool: int) -> void:
 	if tool == 3 and new_tool != 3 and fishing != null:
 		fishing.reset()
 	if controller:
 		controller.reset_triggers()
 	tool = new_tool
-	model.set_tool(tool)
+	if model != null:
+		model.set_tool(tool)
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -410,13 +584,27 @@ func _unhandled_input(e: InputEvent) -> void:
 	# Entities (Agent A): tap F = use nearest entity, hold F = pick it up.
 	if placement != null and placement.handle_input(e):
 		return
-	if e.is_action_pressed("tool_1"): _set_tool(0)
-	elif e.is_action_pressed("tool_2"): _set_tool(1)
-	elif e.is_action_pressed("tool_3"): _set_tool(2)
-	elif e.is_action_pressed("tool_4"): _set_tool(3)
-	elif e.is_action_pressed("tool_5"): _set_tool(4)
-	elif e.is_action_pressed("cycle_tool_next"): _set_tool(posmod(tool + 1, 5))
-	elif e.is_action_pressed("cycle_tool_prev"): _set_tool(posmod(tool - 1, 5))
+	if e.is_action_pressed("tool_1"): select_hotbar_slot(0)
+	elif e.is_action_pressed("tool_2"): select_hotbar_slot(1)
+	elif e.is_action_pressed("tool_3"): select_hotbar_slot(2)
+	elif e.is_action_pressed("tool_4"): select_hotbar_slot(3)
+	elif e.is_action_pressed("tool_5"): select_hotbar_slot(4)
+	elif e.is_action_pressed("tool_6"): select_hotbar_slot(5)
+	elif e.is_action_pressed("tool_7"): select_hotbar_slot(6)
+	elif e.is_action_pressed("tool_8"): select_hotbar_slot(7)
+	elif not (e is InputEventMouseButton) and e.is_action_pressed("cycle_tool_next"): select_hotbar_slot(posmod(inventory.active_hotbar_index + 1, Inventory.MAX_HOTBAR_SLOTS))
+	elif not (e is InputEventMouseButton) and e.is_action_pressed("cycle_tool_prev"): select_hotbar_slot(posmod(inventory.active_hotbar_index - 1, Inventory.MAX_HOTBAR_SLOTS))
+	elif e.is_action_pressed("build_menu_toggle"):
+		if is_hammer_equipped():
+			if build_menu_ui != null:
+				build_menu_ui.toggle_catalogue()
+			else:
+				set_hammer_build_mode((hammer_build_mode + 1) % 3)
+	elif is_hammer_equipped() and e.is_action_pressed("alt_use"):
+		if build_menu_ui != null:
+			build_menu_ui.toggle_catalogue()
+		else:
+			set_hammer_build_mode((hammer_build_mode + 1) % 3)
 	elif e.is_action_pressed("next_item"): _cycle(1)
 	elif e.is_action_pressed("prev_item"): _cycle(-1)
 	elif e.is_action_pressed("brush_up"): brush = mini(brush + 1, BRUSHES.size() - 1)
@@ -429,10 +617,17 @@ func _unhandled_input(e: InputEvent) -> void:
 		var idx := Palette.BUILDABLE.find(m)
 		if idx >= 0:
 			mat_index = idx
-			_set_tool(1)
+			if is_hammer_equipped():
+				select_hammer_block(idx)
+			else:
+				_set_tool(1)
 	elif tool == 4 and e.is_action_pressed("alt_use"):
 		if not _try_eat_active_food():
-			_plant_seed_at_target()
+			if placement != null and placement.active_type() != &"" and placement.try_use():
+				_use_cd = 0.35
+				model.swing()
+			else:
+				_plant_seed_at_target()
 	elif tool == 3:
 		_handle_fishing_input(e)
 
@@ -453,19 +648,32 @@ func _try_eat_active_food() -> bool:
 
 
 func _cycle(d: int) -> void:
+	if is_hammer_equipped():
+		match hammer_build_mode:
+			0: # Prefabs
+				prefab_id = posmod(prefab_id + d, Prefabs.count())
+			1: # Blocks
+				mat_index = posmod(mat_index + d, Palette.BUILDABLE.size())
+			2: # Furniture
+				var types := Placeables.blueprint_types()
+				if not types.is_empty() and placement != null:
+					var cur := types.find(placement.entity_blueprint)
+					placement.entity_blueprint = types[posmod(cur + d, types.size())]
+		return
 	if tool == 2 and placement != null:
 		placement.cycle_blueprint(d)  # Entities (Agent A): prefabs, then placeable furniture
-	elif tool == 2:
+		return
+	if tool == 2:
 		prefab_id = posmod(prefab_id + d, Prefabs.count())
-	elif tool == 4:
-		inventory.active_hotbar_index = posmod(inventory.active_hotbar_index + d, 8)
+	elif tool == 1:
+		mat_index = posmod(mat_index + d, Palette.BUILDABLE.size())
+	else:
+		select_hotbar_slot(posmod(inventory.active_hotbar_index + d, Inventory.MAX_HOTBAR_SLOTS))
 		var active := inventory.get_active_item()
 		if active and not active.is_empty():
 			var item := ItemDB.get_item(active.item_id)
 			if hud and item:
 				hud.show_toast("Selected: %s (x%d)" % [item.name, active.count])
-	else:
-		mat_index = posmod(mat_index + d, Palette.BUILDABLE.size())
 
 
 func _handle_fishing_input(e: InputEvent) -> void:
@@ -495,6 +703,11 @@ func _handle_fishing_input(e: InputEvent) -> void:
 				tide_frac = (sky.water_level_vox - (VoxelWorld.SEA_MID - VoxelWorld.TIDE_AMP)) / (2.0 * VoxelWorld.TIDE_AMP)
 				daylight = sky.is_day()
 			fishing.release_cast(fishing_cast_power, tide_frac, daylight, false, false)
+			if rig != null:
+				facing = rig.yaw + PI
+			if model != null:
+				model.cast_line()
+			_launch_bobber(fishing_cast_power)
 			if controller:
 				controller.reset_triggers()
 			if hud:
@@ -518,9 +731,14 @@ func _process(delta: float) -> void:
 		return
 	_step_offset = lerpf(_step_offset, 0.0, 1.0 - exp(-delta * 16.0))
 	model.position = Vector3(0, _step_offset, 0)
+	if rig != null and rig.first_person:
+		facing = rig.yaw + PI
 	model.rotation = Vector3(0, facing, 0)
+	model.set_fishing_state(fishing.current_state if tool == 3 and fishing != null else 0, fishing_cast_power)
 	model.animate(delta, horizontal_speed, on_ground, swimming)
+	_update_fishing_bobber(delta)
 	_update_target()
+	_update_cursor_highlight(_last_ray_origin, _last_ray_dir, _last_ray_hit)
 	if placement != null:
 		placement.update_ghost()  # Entities (Agent A)
 	_use_cd -= delta
@@ -550,11 +768,14 @@ func _process(delta: float) -> void:
 
 func _update_target() -> void:
 	var vp := get_viewport()
-	var center := vp.get_visible_rect().size * 0.5
+	var center := vp.get_visible_rect().size * 0.5 if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else vp.get_mouse_position()
 	var origin := rig.cam.project_ray_origin(center)
 	var dir := rig.cam.project_ray_normal(center)
 	target = {}
 	var hit := world.raycast(origin, dir, 40.0)
+	_last_ray_origin = origin
+	_last_ray_dir = dir
+	_last_ray_hit = hit
 	var head := position + Vector3(0, 1.4, 0)
 	if not hit.is_empty():
 		var hp := (Vector3(hit.cell) + Vector3.ONE * 0.5) * VS
@@ -565,23 +786,28 @@ func _update_target() -> void:
 	if target.is_empty():
 		return
 	var cell: Vector3i = target.cell
-	if tool == 0 or tool == 1:
-		var c := cell if tool == 0 else cell + (target.normal as Vector3i)
-		var r: int = BRUSHES[brush]
+	if false:
+		var c := cell if tool <= 0 else cell + (target.normal as Vector3i)
+		var r: int = mini(BRUSHES[brush], 1) if tool == -1 else int(BRUSHES[brush])
 		var sz := Vector3.ONE * (2 * r + 1) * VS * 1.02
+		pass
+		if false:
+			pass
+		pass
+		pass
 		(_highlight.mesh as BoxMesh).size = sz
 		_hl_mat.set_shader_parameter("size", sz)
 		_hl_mat.set_shader_parameter("color", Color(1, 0.55, 0.4, 0.95) if tool == 0 else Color(0.6, 1, 0.75, 0.95))
 		_highlight.global_position = (Vector3(c) + Vector3.ONE * 0.5) * VS
 		_highlight.visible = true
-	elif tool == 4:
-		var sz := Vector3.ONE * VS * 1.02
+	elif false:
+		var sz := Vector3(2.85 * VS, VS * 1.15, 2.85 * VS)
 		(_highlight.mesh as BoxMesh).size = sz
 		_hl_mat.set_shader_parameter("size", sz)
 		_hl_mat.set_shader_parameter("color", Color(0.4, 0.85, 0.3, 0.95))
-		_highlight.global_position = (Vector3(cell) + Vector3.ONE * 0.5) * VS
+		_highlight.global_position = (Vector3(_resolve_farm_plot_cell(cell)) + Vector3.ONE * 0.5) * VS
 		_highlight.visible = true
-	elif tool == 2:
+	if tool == 2:
 		var o := prefab_origin()
 		var key := prefab_id * 4 + prefab_rot
 		if key != _ghost_key:
@@ -594,6 +820,54 @@ func _update_target() -> void:
 		var pf2 := Prefabs.rotated(prefab_id, prefab_rot)
 		_ghost.global_position = Vector3(o - (pf2.anchor as Vector3i)) * VS
 		_ghost.visible = true
+
+
+func _update_cursor_highlight(origin: Vector3, dir: Vector3, hit: Dictionary) -> void:
+	hovered_entity = null
+	var vox_dist: float = float(hit.get("dist", 999.0)) if not hit.is_empty() else 999.0
+	if entities != null:
+		var ent_hit := entities.raycast_entity(origin, dir, 40.0)
+		if not ent_hit.is_empty() and float(ent_hit.get("dist", 999.0)) <= vox_dist + 0.05:
+			hovered_entity = ent_hit.get("entity", null)
+	if hovered_entity != null and is_instance_valid(hovered_entity):
+		var ebox := hovered_entity.get_aabb().grow(0.03)
+		var in_ent_reach := position.distance_to(hovered_entity.position) <= maxf(3.2, hovered_entity.interaction_radius)
+		(_highlight.mesh as BoxMesh).size = ebox.size
+		_hl_mat.set_shader_parameter("size", ebox.size)
+		_hl_mat.set_shader_parameter("color", Color(1.0, 0.85, 0.32, 0.95) if in_ent_reach else Color(1.0, 0.85, 0.32, 0.55))
+		_highlight.global_position = ebox.get_center()
+		_highlight.visible = true
+	elif not hit.is_empty():
+		var hcell: Vector3i = hit.cell
+		var hnorm: Vector3i = hit.normal
+		var in_reach := not target.is_empty()
+		var alpha_mult := 0.95 if in_reach else 0.52
+		var active_def := get_active_item_def()
+		var is_farm_item := active_def != null and (active_def.has_tag("hoe") or active_def.has_tag("seed"))
+		if tool == 0 or tool == 1 or tool == -1:
+			var hc := hcell if tool <= 0 else hcell + hnorm
+			var hr: int = mini(BRUSHES[brush], 1) if tool == -1 else int(BRUSHES[brush])
+			var hsz := Vector3.ONE * (2 * hr + 1) * VS * 1.02
+			(_highlight.mesh as BoxMesh).size = hsz
+			_hl_mat.set_shader_parameter("size", hsz)
+			var base_col := Color(1.0, 0.55, 0.4, alpha_mult) if tool == 0 else (Color(0.6, 1.0, 0.75, alpha_mult) if tool == 1 else Color(0.9, 0.95, 1.0, alpha_mult))
+			_hl_mat.set_shader_parameter("color", base_col)
+			_highlight.global_position = (Vector3(hc) + Vector3.ONE * 0.5) * VS
+			_highlight.visible = true
+		elif tool == 4 and is_farm_item:
+			var fsz := Vector3(2.85 * VS, VS * 1.15, 2.85 * VS)
+			(_highlight.mesh as BoxMesh).size = fsz
+			_hl_mat.set_shader_parameter("size", fsz)
+			_hl_mat.set_shader_parameter("color", Color(0.4, 0.85, 0.3, alpha_mult))
+			_highlight.global_position = (Vector3(_resolve_farm_plot_cell(hcell)) + Vector3.ONE * 0.5) * VS
+			_highlight.visible = true
+		else:
+			var bsz := Vector3.ONE * VS * 1.03
+			(_highlight.mesh as BoxMesh).size = bsz
+			_hl_mat.set_shader_parameter("size", bsz)
+			_hl_mat.set_shader_parameter("color", Color(0.85, 0.95, 1.0, alpha_mult))
+			_highlight.global_position = (Vector3(hcell) + Vector3.ONE * 0.5) * VS
+			_highlight.visible = true
 
 
 func prefab_origin() -> Vector3i:
@@ -611,15 +885,39 @@ func _use_tool() -> void:
 		_use_cd = 0.35
 		return
 	var cell: Vector3i = target.cell
-	match tool:
+	match (0 if tool == -1 else tool):
 		0:
 			var mat := world.get_voxel(cell.x, cell.y, cell.z)
 			if controller:
 				controller.apply_mining(mat)
-			command_requested.emit({"t": "dig", "p": cell, "r": BRUSHES[brush]})
-			_use_cd = 0.16 + BRUSHES[brush] * 0.03
+			if not can_harvest_voxel(mat):
+				if hud != null:
+					if VoxelWorld.is_stone_mat(mat):
+						hud.show_toast("Requires a Pickaxe to mine stone!")
+					elif mat == Palette.TRUNK:
+						hud.show_toast("Equip a Hatchet or Pickaxe to chop trees!")
+					else:
+						hud.show_toast("Cannot harvest this material with current tool.")
+				_use_cd = 0.35
+				model.swing()
+				swing_count += 1
+				facing = rig.yaw + PI
+				return
+			var active_def := get_active_item_def()
+			var tier: int = int(active_def.tool_data.get("tier", 1)) if active_def != null else 1
+			var dig_r: int = mini(BRUSHES[brush], 1) if tool == -1 else int(BRUSHES[brush])
+			command_requested.emit({
+				"t": "dig",
+				"p": cell,
+				"r": dig_r,
+				"allow_stone": has_pickaxe_equipped(),
+				"allow_wood": has_axe_equipped()
+			})
+			_use_cd = maxf(0.08, (0.16 + dig_r * 0.03) / sqrt(float(maxi(1, tier))))
+
 		1:
 			var c: Vector3i = cell + (target.normal as Vector3i)
+
 			var r: int = BRUSHES[brush]
 			if _brush_hits_self(c, r):
 				return
@@ -648,7 +946,34 @@ func _use_tool() -> void:
 	facing = rig.yaw + PI
 
 
-func _use_farm_tool(cell: Vector3i) -> void:
+func _resolve_farm_plot_cell(cell: Vector3i) -> Vector3i:
+	if farm == null:
+		return cell
+	if farm.plots.has(cell):
+		return cell
+	for dz in range(-1, 2):
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var near := Vector3i(cell.x + dx, cell.y + dy, cell.z + dz)
+				if farm.plots.has(near):
+					return near
+	return cell
+
+
+func _convert_surface_to_tilled_dirt(cell: Vector3i) -> void:
+	if world == null:
+		return
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var vx := cell.x + dx
+			var vz := cell.z + dz
+			var m := world.get_voxel(vx, cell.y, vz)
+			if m == Palette.GRASS or m == Palette.GRASS_DRY:
+				world.set_voxel(vx, cell.y, vz, Palette.DIRT)
+
+
+func _use_farm_tool(p_cell: Vector3i) -> void:
+	var cell := _resolve_farm_plot_cell(p_cell)
 	if farm == null:
 		return
 	# 1. Salt pan harvest
@@ -687,6 +1012,7 @@ func _use_farm_tool(cell: Vector3i) -> void:
 
 	# 3. Till untilled soil
 	var new_plot := farm.till_plot(cell)
+	_convert_surface_to_tilled_dirt(cell)
 	if controller:
 		controller.apply_farming_till()
 	if hud:
@@ -699,7 +1025,10 @@ func _plant_seed_at_target() -> void:
 		return
 	var cell: Vector3i = target.cell
 	if not farm.plots.has(cell):
-		farm.till_plot(cell)
+		cell = _resolve_farm_plot_cell(cell)
+		if not farm.plots.has(cell):
+			farm.till_plot(cell)
+			_convert_surface_to_tilled_dirt(cell)
 	var planted := farm.plant_from_inventory(cell, inventory)
 	if planted:
 		if controller:
@@ -730,3 +1059,122 @@ func _brush_hits_self(c: Vector3i, r: int) -> bool:
 	var plo := position - Vector3(HW, 0, HW)
 	var phi := position + Vector3(HW, H, HW)
 	return lo.x < phi.x and hi.x > plo.x and lo.y < phi.y and hi.y > plo.y and lo.z < phi.z and hi.z > plo.z
+
+
+func _setup_fishing_visuals() -> void:
+	_bobber = Node3D.new()
+	_bobber.top_level = true
+	_bobber.visible = false
+	add_child(_bobber)
+
+	var top_mesh := MeshInstance3D.new()
+	var top_box := BoxMesh.new()
+	top_box.size = Vector3(0.11, 0.08, 0.11)
+	var red_mat := StandardMaterial3D.new()
+	red_mat.albedo_color = Color(0.92, 0.22, 0.18)
+	red_mat.roughness = 0.4
+	top_box.material = red_mat
+	top_mesh.mesh = top_box
+	top_mesh.position = Vector3(0, 0.04, 0)
+	_bobber.add_child(top_mesh)
+
+	var bot_mesh := MeshInstance3D.new()
+	var bot_box := BoxMesh.new()
+	bot_box.size = Vector3(0.11, 0.08, 0.11)
+	var white_mat := StandardMaterial3D.new()
+	white_mat.albedo_color = Color(0.95, 0.94, 0.90)
+	white_mat.roughness = 0.4
+	bot_box.material = white_mat
+	bot_mesh.mesh = bot_box
+	bot_mesh.position = Vector3(0, -0.04, 0)
+	_bobber.add_child(bot_mesh)
+
+	_fishing_line = MeshInstance3D.new()
+	_fishing_line.top_level = true
+	_fishing_line.visible = false
+	_fishing_line_mesh = ImmediateMesh.new()
+	_fishing_line.mesh = _fishing_line_mesh
+	var line_mat := StandardMaterial3D.new()
+	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	line_mat.albedo_color = Color(0.90, 0.93, 0.96, 0.85)
+	_fishing_line.material_override = line_mat
+	add_child(_fishing_line)
+
+
+func _launch_bobber(power: float) -> void:
+	var dir := Vector3(sin(facing), 0.0, cos(facing)).normalized()
+	var dist := 4.5 + clampf(power, 0.1, 1.0) * 9.5
+	_bobber_start = position + Vector3(0, 1.38, 0) + dir * 0.65
+	_bobber_target = position + dir * dist
+	_bobber_target.y = water_level + 0.02
+	if world != null and not world.is_water_at(_bobber_target, water_level):
+		if hud != null:
+			hud.show_toast("No water there to fish!")
+		if fishing != null:
+			fishing.reset()
+		if _bobber != null:
+			_bobber.visible = false
+		if _fishing_line != null:
+			_fishing_line.visible = false
+		return
+	_bobber_flight_t = 0.0
+	_bobber_phase = 0.0
+	if _bobber != null:
+		_bobber.global_position = _bobber_start
+		_bobber.visible = true
+	if _fishing_line != null:
+		_fishing_line.visible = true
+
+
+func _update_fishing_bobber(delta: float) -> void:
+	if _bobber == null or _fishing_line == null:
+		return
+	var active_cast: bool = tool == 3 and fishing != null and fishing.current_state in [
+		FishingController.State.WAITING_FOR_BITE,
+		FishingController.State.NIBBLING,
+		FishingController.State.HOOK_WINDOW,
+		FishingController.State.REELING,
+	]
+	if not active_cast:
+		_bobber.visible = false
+		_fishing_line.visible = false
+		return
+
+	_bobber.visible = true
+	_fishing_line.visible = true
+	_bobber_phase += delta * 4.5
+	var dir := Vector3(sin(facing), 0.0, cos(facing)).normalized()
+	var rod_tip := position + Vector3(0, 1.42, 0) + dir * 0.82
+
+	if _bobber_flight_t < 1.0:
+		_bobber_flight_t = minf(1.0, _bobber_flight_t + delta * 2.6)
+		var p := _bobber_start.lerp(_bobber_target, _bobber_flight_t)
+		p.y += sin(_bobber_flight_t * PI) * 2.6
+		_bobber.global_position = p
+	else:
+		var base_pos := _bobber_target
+		base_pos.y = water_level + sin(_bobber_phase) * 0.035
+		if fishing.current_state == FishingController.State.NIBBLING:
+			base_pos.y -= absf(sin(_bobber_phase * 3.5)) * 0.10
+		elif fishing.current_state == FishingController.State.HOOK_WINDOW:
+			base_pos.y -= 0.18 + sin(_bobber_phase * 5.0) * 0.05
+		elif fishing.current_state == FishingController.State.REELING:
+			var reel_frac := clampf(fishing.reel_progress, 0.0, 1.0)
+			var shore_pos := position + dir * 1.4
+			shore_pos.y = water_level
+			base_pos = _bobber_target.lerp(shore_pos, reel_frac)
+			base_pos.x += sin(_bobber_phase * 3.2) * 0.25 * (1.0 - reel_frac)
+			base_pos.z += cos(_bobber_phase * 2.7) * 0.25 * (1.0 - reel_frac)
+			base_pos.y = water_level - 0.04 + sin(_bobber_phase * 4.0) * 0.04
+		_bobber.global_position = base_pos
+
+	_fishing_line_mesh.clear_surfaces()
+	_fishing_line_mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	var end_pos := _bobber.global_position + Vector3(0, 0.06, 0)
+	var sag := 0.35 if fishing.current_state != FishingController.State.REELING else 0.06
+	for i in range(9):
+		var t := float(i) / 8.0
+		var pt := rod_tip.lerp(end_pos, t)
+		pt.y -= sin(t * PI) * sag
+		_fishing_line_mesh.surface_add_vertex(pt)
+	_fishing_line_mesh.surface_end()

@@ -18,10 +18,12 @@ var _building := false
 const REBINDABLE := [
 	["move_forward", "Move forward"], ["move_back", "Move back"], ["move_left", "Move left"],
 	["move_right", "Move right"], ["jump", "Jump / swim up"], ["sprint", "Sprint / pull hard"],
-	["interact", "Interact / board"], ["tool_1", "Tool 1"], ["tool_2", "Tool 2"], ["tool_3", "Tool 3"],
-	["tool_4", "Tool 4"], ["tool_5", "Tool 5"], ["prev_item", "Previous item"], ["next_item", "Next item"],
+	["interact", "Interact / board"], ["inventory_toggle", "Inventory"], ["build_menu_toggle", "Build menu (hammer)"],
+	["tool_1", "Hotbar 1"], ["tool_2", "Hotbar 2"], ["tool_3", "Hotbar 3"], ["tool_4", "Hotbar 4"],
+	["tool_5", "Hotbar 5"], ["tool_6", "Hotbar 6"], ["tool_7", "Hotbar 7"], ["tool_8", "Hotbar 8"],
+	["prev_item", "Previous item"], ["next_item", "Next item"],
 	["brush_down", "Brush smaller"], ["brush_up", "Brush bigger"], ["rotate", "Rotate prefab"],
-	["snap", "Grid snap"], ["swap_shoulder", "Swap shoulder"], ["fast_time", "Fast-forward time"],
+	["snap", "Grid snap"], ["swap_shoulder", "Swap shoulder"], ["toggle_first_person", "First-person toggle"], ["fast_time", "Fast-forward time"],
 ]
 
 
@@ -168,7 +170,8 @@ func _build() -> void:
 	_button(pv, "Settings", func() -> void:
 		_pause.visible = false
 		_settings_panel.visible = true)
-	_button(pv, "Save & Quit", _save_and_quit)
+	_button(pv, "Quit to Menu", _quit_to_menu)
+	_button(pv, "Exit to Desktop", _save_and_quit)
 
 	# --- settings panel
 	_settings_panel = PanelContainer.new()
@@ -191,7 +194,10 @@ func _build() -> void:
 	_button(bottom, "Back", func() -> void:
 		_cancel_rebind()
 		_settings_panel.visible = false
-		_pause.visible = true)
+		if main == null or main.player == null:
+			_root.visible = false
+		else:
+			_pause.visible = true)
 	_building = false
 
 
@@ -279,6 +285,7 @@ func _header(parent: Control, text: String) -> void:
 
 func _build_controls(v: VBoxContainer) -> void:
 	_header(v, "Camera")
+	_check(v, "First-person camera (F5 / P toggles)", "first_person")
 	_slider(v, "Mouse sensitivity", "mouse_sensitivity", 0.2, 3.0, 0.05, "%.2fx")
 	_check(v, "Invert vertical look", "invert_y")
 	_slider(v, "Controller look speed", "controller_look_speed", 1.0, 5.0, 0.1, "%.1f")
@@ -388,7 +395,38 @@ func _rebuild_settings(tab: int) -> void:
 	tabs.current_tab = tab
 
 
+var _quitting := false
+
+
+func _quit_to_menu() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	if main != null and main.has_method("return_to_main_menu"):
+		await main.return_to_main_menu()
+		return
+	if main != null and "session" in main and main.session != null:
+		if main.session.is_authority():
+			main.session.save_all()
+		elif main.player != null and main.multiplayer != null and main.multiplayer.multiplayer_peer != null:
+			main.session.profile_upload.rpc_id(1, main.session.player_key, main.session.capture_profile())
+			await get_tree().create_timer(0.3).timeout
+	if main != null and main.multiplayer != null and main.multiplayer.multiplayer_peer != null:
+		main.multiplayer.multiplayer_peer = null
+		if "is_net" in main:
+			main.is_net = false
+	Main.force_menu = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://main.tscn")
+
+
 func _save_and_quit() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	if main != null and main.has_method("save_and_quit"):
+		await main.save_and_quit()
+		return
 	if main.session != null and main.session.is_authority():
 		main.session.save_all()
 	elif main.session != null and main.player != null and main.multiplayer.multiplayer_peer != null:

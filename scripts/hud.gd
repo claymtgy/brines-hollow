@@ -22,6 +22,15 @@ var ip_edit: LineEdit
 var loading: Control
 var loading_label: Label
 var loading_bar: ProgressBar
+var save_select: OptionButton
+var world_name_edit: LineEdit
+var seed_edit: LineEdit
+var save_info_label: Label
+var menu_customizer: CharacterCustomizer = CharacterCustomizer.new()
+var skin_preset_select: OptionButton
+var _skin_labels: Dictionary = {}
+var _saved_worlds: Array[Dictionary] = []
+var _preview_model: CharacterModel = null
 
 # hud
 var hud_root: Control
@@ -44,6 +53,8 @@ var minimap: Minimap
 var chart_frame: PanelContainer
 var bottom_bar: VBoxContainer
 var slots: Array = []
+var slot_icons: Array = []
+var slot_counts: Array = []
 var slot_keys: Array = []
 var info_label: Label
 var info_icon: TextureRect
@@ -184,7 +195,53 @@ func _build_menu() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sign.add_child(sub)
 
-	var board := _panel(col, &"Parchment")
+	var menu_cols := HBoxContainer.new()
+	menu_cols.add_theme_constant_override("separation", 14)
+	menu_cols.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(menu_cols)
+
+	# --- 1. Left Card: World & Save Selection
+	var world_card := _panel(menu_cols, &"Parchment")
+	world_card.add_theme_constant_override("separation", 8)
+	world_card.custom_minimum_size = Vector2(290, 0)
+	var w_title := _label("World & Save", &"InkLabel", 20)
+	w_title.add_theme_font_override("font", UiTheme.font(800))
+	world_card.add_child(w_title)
+
+	var save_lbl := _label("Select Save or New World:", &"InkLabel", 14)
+	world_card.add_child(save_lbl)
+	save_select = OptionButton.new()
+	save_select.item_selected.connect(_on_save_selected)
+	world_card.add_child(save_select)
+
+	var name_lbl := _label("World Name:", &"InkLabel", 14)
+	world_card.add_child(name_lbl)
+	world_name_edit = LineEdit.new()
+	world_name_edit.text = "hollow"
+	world_name_edit.placeholder_text = "world save name"
+	world_card.add_child(world_name_edit)
+
+	var seed_lbl := _label("Archipelago Seed:", &"InkLabel", 14)
+	world_card.add_child(seed_lbl)
+	var seed_row := _row(world_card, 6)
+	seed_edit = LineEdit.new()
+	seed_edit.text = "1106"
+	seed_edit.placeholder_text = "seed number"
+	seed_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	seed_row.add_child(seed_edit)
+	var rand_seed_btn := Button.new()
+	rand_seed_btn.text = "Random"
+	rand_seed_btn.pressed.connect(func() -> void:
+		seed_edit.text = str(randi_range(1000, 999999))
+	)
+	seed_row.add_child(rand_seed_btn)
+
+	save_info_label = _label("", &"InkLabel", 13)
+	save_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	world_card.add_child(save_info_label)
+
+	# --- 2. Center Card: Play / Co-op
+	var board := _panel(menu_cols, &"Parchment")
 	board.add_theme_constant_override("separation", 12)
 	board.custom_minimum_size = Vector2(430, 0)
 	for spec in [["Play Solo", func() -> void: solo_pressed.emit()],
@@ -217,6 +274,199 @@ func _build_menu() -> void:
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	board.add_child(status_label)
+
+	# --- 3. Right Card: Mariner Skin & Wardrobe
+	var skin_card := _panel(menu_cols, &"Parchment")
+	skin_card.add_theme_constant_override("separation", 6)
+	skin_card.custom_minimum_size = Vector2(315, 0)
+	var s_title := _label("Mariner Skin & Wardrobe", &"InkLabel", 20)
+	s_title.add_theme_font_override("font", UiTheme.font(800))
+	skin_card.add_child(s_title)
+
+	# Live 3D Character Preview + Preset Row
+	var top_skin_row := _row(skin_card, 8)
+	var vpc := SubViewportContainer.new()
+	vpc.custom_minimum_size = Vector2(104, 128)
+	vpc.stretch = true
+	top_skin_row.add_child(vpc)
+	var vp := SubViewport.new()
+	vp.size = Vector2i(104, 128)
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vpc.add_child(vp)
+	var p_cam := Camera3D.new()
+	p_cam.position = Vector3(0.0, 0.95, 2.25)
+	p_cam.rotation = Vector3(-0.08, 0.0, 0.0)
+	p_cam.fov = 45.0
+	vp.add_child(p_cam)
+	var p_light := DirectionalLight3D.new()
+	p_light.rotation = Vector3(-0.7, 0.5, 0.0)
+	p_light.light_energy = 1.35
+	vp.add_child(p_light)
+	_preview_model = CharacterModel.new()
+	_preview_model.rotation.y = 0.35
+	vp.add_child(_preview_model)
+	_preview_model.setup(Palette.COAT_A, Palette.HAT_A, menu_customizer)
+
+	var preset_col := VBoxContainer.new()
+	preset_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	preset_col.add_theme_constant_override("separation", 6)
+	top_skin_row.add_child(preset_col)
+	preset_col.add_child(_label("Skin Preset:", &"InkLabel", 14))
+	skin_preset_select = OptionButton.new()
+	for p_item: Array in [
+		["Default Mariner", "default"],
+		["North Sea Veteran", "north_sea_veteran"],
+		["Young Deckhand", "young_deckhand"],
+		["Brine Hermit", "brine_hermit"],
+		["Island Botanist", "island_botanist"],
+	]:
+		skin_preset_select.add_item(p_item[0])
+		skin_preset_select.set_item_metadata(skin_preset_select.item_count - 1, p_item[1])
+	skin_preset_select.item_selected.connect(func(idx: int) -> void:
+		var p_key := String(skin_preset_select.get_item_metadata(idx))
+		menu_customizer.apply_preset(p_key)
+		_refresh_skin_ui()
+	)
+	preset_col.add_child(skin_preset_select)
+
+	var rand_skin_btn := Button.new()
+	rand_skin_btn.text = "Randomize Skin"
+	rand_skin_btn.pressed.connect(func() -> void:
+		menu_customizer.randomize_appearance()
+		_refresh_skin_ui()
+	)
+	preset_col.add_child(rand_skin_btn)
+
+	# Cycle rows for Coat, Hat, Skin Tone, Hair Style, Hair Color, Beard Style
+	_add_skin_cycle_row(skin_card, &"coat", "Coat", func(d: int) -> void:
+		menu_customizer.set_coat(posmod(int(menu_customizer.coat_color) + d, CharacterPalette.CoatColor.size()) as CharacterPalette.CoatColor)
+		_refresh_skin_ui()
+	)
+	_add_skin_cycle_row(skin_card, &"hat", "Hat", func(d: int) -> void:
+		menu_customizer.set_hat(posmod(int(menu_customizer.hat_style) + d, CharacterPalette.HatStyle.size()) as CharacterPalette.HatStyle)
+		_refresh_skin_ui()
+	)
+	_add_skin_cycle_row(skin_card, &"skin", "Skin", func(d: int) -> void:
+		menu_customizer.set_skin_tone(posmod(int(menu_customizer.skin_tone) + d, CharacterPalette.SkinTone.size()) as CharacterPalette.SkinTone)
+		_refresh_skin_ui()
+	)
+	_add_skin_cycle_row(skin_card, &"hair", "Hair", func(d: int) -> void:
+		menu_customizer.set_hair(posmod(int(menu_customizer.hair_style) + d, CharacterPalette.HairStyle.size()) as CharacterPalette.HairStyle, menu_customizer.hair_color)
+		_refresh_skin_ui()
+	)
+	_add_skin_cycle_row(skin_card, &"hair_col", "Dye", func(d: int) -> void:
+		var nc := posmod(int(menu_customizer.hair_color) + d, CharacterPalette.HairColor.size()) as CharacterPalette.HairColor
+		menu_customizer.set_hair(menu_customizer.hair_style, nc)
+		menu_customizer.set_beard(menu_customizer.beard_style, nc)
+		_refresh_skin_ui()
+	)
+	_add_skin_cycle_row(skin_card, &"beard", "Beard", func(d: int) -> void:
+		menu_customizer.set_beard(posmod(int(menu_customizer.beard_style) + d, CharacterPalette.BeardStyle.size()) as CharacterPalette.BeardStyle, menu_customizer.beard_color)
+		_refresh_skin_ui()
+	)
+
+	refresh_menu_saves_and_skin()
+
+
+func _add_skin_cycle_row(parent: Control, key: StringName, title_txt: String, on_step: Callable) -> void:
+	var r := _row(parent, 4)
+	var lbl := _label(title_txt + ":", &"InkLabel", 13)
+	lbl.custom_minimum_size = Vector2(46, 0)
+	r.add_child(lbl)
+	var prev_b := Button.new()
+	prev_b.text = "<"
+	prev_b.custom_minimum_size = Vector2(28, 26)
+	prev_b.pressed.connect(func() -> void: on_step.call(-1))
+	r.add_child(prev_b)
+	var val_lbl := _label("", &"InkLabel", 13)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r.add_child(val_lbl)
+	_skin_labels[key] = val_lbl
+	var next_b := Button.new()
+	next_b.text = ">"
+	next_b.custom_minimum_size = Vector2(28, 26)
+	next_b.pressed.connect(func() -> void: on_step.call(1))
+	r.add_child(next_b)
+
+
+func _refresh_skin_ui() -> void:
+	var coats := ["Oilskin Yellow", "Navy Blue", "Storm Grey", "Kelp Green", "Coral Rust", "Pitch Black"]
+	var hats := ["Bareheaded", "Sou'wester", "Watch Cap", "Fisher Cap", "Bandana"]
+	var skins := ["Pale Salt", "Weathered Tan", "Rustic Ochre", "Deep Umber", "Abyssal Dusky"]
+	var hairs := ["Bald", "Cropped", "Windswept", "Sailor Bun", "Braided Tides", "Wild Curls"]
+	var dyes := ["Raven Black", "Driftwood Grey", "Salt White", "Rust Auburn", "Straw Blonde", "Kelp Green"]
+	var beards := ["Clean Shaven", "Stubble", "Mutton Chops", "Full Salt Bush", "Braided Beard", "Anchor Goatee"]
+	if _skin_labels.has(&"coat"):
+		(_skin_labels[&"coat"] as Label).text = coats[clampi(int(menu_customizer.coat_color), 0, coats.size() - 1)]
+	if _skin_labels.has(&"hat"):
+		(_skin_labels[&"hat"] as Label).text = hats[clampi(int(menu_customizer.hat_style), 0, hats.size() - 1)]
+	if _skin_labels.has(&"skin"):
+		(_skin_labels[&"skin"] as Label).text = skins[clampi(int(menu_customizer.skin_tone), 0, skins.size() - 1)]
+	if _skin_labels.has(&"hair"):
+		(_skin_labels[&"hair"] as Label).text = hairs[clampi(int(menu_customizer.hair_style), 0, hairs.size() - 1)]
+	if _skin_labels.has(&"hair_col"):
+		(_skin_labels[&"hair_col"] as Label).text = dyes[clampi(int(menu_customizer.hair_color), 0, dyes.size() - 1)]
+	if _skin_labels.has(&"beard"):
+		(_skin_labels[&"beard"] as Label).text = beards[clampi(int(menu_customizer.beard_style), 0, beards.size() - 1)]
+	if _preview_model != null:
+		_preview_model.apply_customizer(menu_customizer)
+
+
+func refresh_menu_saves_and_skin() -> void:
+	if save_select == null:
+		return
+	var m := get_parent()
+	if m != null and "session" in m and m.session != null:
+		var saved_skin: Dictionary = m.session.load_skin_preference()
+		if not saved_skin.is_empty():
+			menu_customizer.deserialize(saved_skin)
+	_refresh_skin_ui()
+
+	save_select.clear()
+	_saved_worlds = Session.list_saved_worlds()
+	for w: Dictionary in _saved_worlds:
+		save_select.add_item("%s  (Seed %d)" % [w.get("name", "world"), int(w.get("seed", 1106))])
+	save_select.add_item("+ Create New World...")
+	save_select.select(0)
+	_on_save_selected(0)
+
+
+func _on_save_selected(idx: int) -> void:
+	if world_name_edit == null or seed_edit == null:
+		return
+	if idx >= 0 and idx < _saved_worlds.size():
+		var w: Dictionary = _saved_worlds[idx]
+		world_name_edit.text = String(w.get("id", "hollow"))
+		world_name_edit.editable = false
+		seed_edit.text = str(int(w.get("seed", 1106)))
+		seed_edit.editable = false
+		var saved_at := String(w.get("saved_at", ""))
+		save_info_label.text = ("Existing save  ·  Last played: %s" % saved_at) if saved_at != "" else "Existing saved world"
+	else:
+		var next_num := _saved_worlds.size() + 1
+		world_name_edit.text = "island_%d" % next_num if next_num > 1 else "hollow"
+		world_name_edit.editable = true
+		seed_edit.text = str(randi_range(1000, 999999))
+		seed_edit.editable = true
+		save_info_label.text = "New world: customize name & seed above!"
+
+
+func apply_menu_selections_to_main(main_node: Node) -> void:
+	if main_node == null:
+		return
+	var is_new := save_select == null or save_select.selected >= _saved_worlds.size()
+	var w_name := world_name_edit.text.strip_edges().validate_filename() if world_name_edit != null else "hollow"
+	if w_name == "":
+		w_name = "hollow"
+	var s_val: int = int(seed_edit.text) if (seed_edit != null and seed_edit.text.strip_edges().is_valid_int()) else abs(hash(seed_edit.text if seed_edit != null else "1106")) % 1000000
+	if "seed_value" in main_node:
+		main_node.seed_value = s_val
+	if "session" in main_node and main_node.session != null:
+		main_node.session.save_skin_preference(menu_customizer.serialize())
+		main_node.session.configure_world(w_name, s_val, is_new)
 
 
 func _open_settings() -> void:
@@ -412,7 +662,7 @@ func _build_hud() -> void:
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 4)
 	bottom_bar.add_child(bar)
-	for i in TOOL_ICONS.size():
+	for i in Inventory.MAX_HOTBAR_SLOTS:
 		var slot := PanelContainer.new()
 		slot.theme_type_variation = &"Slot"
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -421,12 +671,18 @@ func _build_hud() -> void:
 		stack.custom_minimum_size = Vector2(52, 52)
 		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(stack)
-		var ic := UiTheme.icon(ItemIcons.for_tool(TOOL_ICONS[i]), 52)
+		var ic := UiTheme.icon(null, 52)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stack.add_child(ic)
+		var cnt := _label("", &"KeyLabel", 13)
+		cnt.position = Vector2(26, 30)
+		stack.add_child(cnt)
 		var key := _label(str(i + 1), &"KeyLabel", 14)
 		key.position = Vector2(-4, -8)
 		stack.add_child(key)
 		slots.append(slot)
+		slot_icons.append(ic)
+		slot_counts.append(cnt)
 		slot_keys.append(key)
 
 	# --- help sheet (F1), rebuilt when the input device changes
@@ -462,13 +718,15 @@ func _rebuild_help() -> void:
 	var rows: Array
 	if _pad():
 		rows = [["L Stick", "move"], ["R Stick", "look"], [_glyph(&"jump", "Space"), "jump / swim up"],
-			[_glyph(&"use", "LMB"), "use tool / swing"], [_glyph(&"alt_use", "RMB"), "plant / eat / parry"],
-			[_glyph(&"interact", "F"), "interact (hold: pick up)"], ["LB / RB", "change tool"],
-			["D-Pad", "cycle item / brush"], [_glyph(&"rotate", "R"), "rotate"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
+			[_glyph(&"use", "LMB"), "use tool / swing"], [_glyph(&"alt_use", "RMB"), "build menu / eat / parry"],
+			[_glyph(&"interact", "F"), "interact (hold: pick up)"], ["LB / RB", "hotbar slot"],
+			[_glyph(&"inventory_toggle", "I"), "inventory"], ["D-Pad", "cycle item / brush"],
+			[_glyph(&"rotate", "R"), "rotate"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
 	else:
 		rows = [["WASD", "move"], ["Mouse", "look"], ["Space", "jump / swim up"], ["Shift", "sprint"],
-			["LMB", "use tool / swing"], ["RMB", "plant / eat / parry"], ["F", "interact (hold: pick up)"],
-			["1-5", "tools"], ["Tab", "hand crafting"], ["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
+			["LMB", "use tool / swing"], ["RMB", "build menu / eat / parry"], ["F", "interact (hold: pick up)"],
+			["1-8", "hotbar slots"], ["I / Tab", "inventory"], ["B", "build menu (hammer)"],
+			["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
 			["C", "dodge"], ["Ctrl", "sneak"], ["V", "swap shoulder"], ["T", "fast-forward time"],
 			["F3", "stats"], ["Esc", "menu"]]
 	for r: Array in rows:
@@ -519,6 +777,8 @@ func show_toast(text: String) -> void:
 func show_menu(on: bool, status := "") -> void:
 	menu.visible = on
 	status_label.text = status
+	if on:
+		refresh_menu_saves_and_skin()
 
 
 func set_loading(on: bool, text := "", frac := 0.0) -> void:
@@ -626,35 +886,68 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 			sky.water_level_vox * VoxelWorld.VS, lm_list, boat_pos_list)
 
 	# --- hotbar + tool context
+	var active_idx: int = player.inventory.active_hotbar_index if player.inventory != null else 0
 	for i in slots.size():
-		(slots[i] as PanelContainer).theme_type_variation = &"SlotSelected" if i == player.tool else &"Slot"
+		(slots[i] as PanelContainer).theme_type_variation = &"SlotSelected" if i == active_idx else &"Slot"
+		if player.inventory != null and i < player.inventory.slots.size():
+			var s: ItemSlot = player.inventory.slots[i]
+			var ic_rect := slot_icons[i] as TextureRect
+			var cnt_lbl := slot_counts[i] as Label
+			if not s.is_empty():
+				ic_rect.texture = ItemIcons.for_item(s.item_id)
+				ic_rect.visible = true
+				cnt_lbl.text = str(s.count) if s.count > 1 else ""
+			else:
+				ic_rect.texture = null
+				ic_rect.visible = false
+				cnt_lbl.text = ""
+
 	var size_btn := "D-Pad U/D" if _pad() else "Z/X"
 	var cycle_btn := "D-Pad L/R" if _pad() else "Q/E"
 	var use_btn := _glyph(&"use", "LMB")
 	var alt_btn := _glyph(&"alt_use", "RMB")
+	var inv_btn := _glyph(&"inventory_toggle", "I")
 	var r: int = Player.BRUSHES[player.brush]
-	var icon: Texture2D = ItemIcons.for_tool(TOOL_ICONS[clampi(player.tool, 0, TOOL_ICONS.size() - 1)])
+	var active_slot: ItemSlot = player.inventory.get_active_item() if player.inventory != null else null
+	var active_def: ItemDef = ItemDB.get_item(active_slot.item_id) if (active_slot != null and not active_slot.is_empty()) else null
+	var icon: Texture2D = ItemIcons.for_item(active_slot.item_id) if active_def != null else null
 	var text := ""
 	match player.tool:
 		0:
-			text = "Dig  ·  brush %d   (%s size)" % [r * 2 + 1, size_btn]
+			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.PICKAXE)
+			text = "%s  ·  Dig brush %d   (%s size, %s inventory)" % [
+				active_def.name if active_def else "Pickaxe", r * 2 + 1, size_btn, inv_btn]
 		1:
 			icon = ItemIcons.for_material(player.current_material())
-			text = "%s  ·  brush %d   (%s material, %s size, %s pick)" % [
-				Palette.NAMES[player.current_material()], r * 2 + 1, cycle_btn, size_btn, _glyph(&"pick", "MMB")]
+			text = "%s  ·  brush %d   (%s block, %s size, %s build menu)" % [
+				Palette.NAMES[player.current_material()], r * 2 + 1, cycle_btn, size_btn, alt_btn]
 		2:
 			var pf: Dictionary = Prefabs.all()[player.prefab_id]
-			text = "%s   (%s change, %s rotate, snap %s)" % [pf.name, cycle_btn, _glyph(&"rotate", "R"), "on" if player.snap else "off"]
+			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.HAMMER)
+			text = "%s   (%s change, %s rotate, snap %s, %s build menu)" % [
+				pf.name, cycle_btn, _glyph(&"rotate", "R"), "on" if player.snap else "off", alt_btn]
 		3:
+			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.ROD)
 			text = _fishing_text(player, use_btn)
 		4:
-			text = "Farm  ·  %s till / harvest   %s plant / eat   %s seed" % [use_btn, alt_btn, cycle_btn]
+			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.HOE)
+			text = "%s  ·  %s till / harvest   %s plant / eat   (%s inventory)" % [
+				active_def.name if active_def else "Farm", use_btn, alt_btn, inv_btn]
+		5:
+			text = "%s  ·  %s swing   %s parry   (%s inventory)" % [
+				active_def.name if active_def else "Weapon", use_btn, alt_btn, inv_btn]
+		_:
+			if active_def != null:
+				text = "%s (x%d)   (%s inventory)" % [active_def.name, active_slot.count, inv_btn]
+			else:
+				text = "Empty Slot %d   (Press %s to open Inventory & configure Hotbar)" % [active_idx + 1, inv_btn]
 	var place_text: String = player.placement.hud_text() if player.placement != null else ""
 	if place_text != "":
 		text = place_text
 		icon = ItemIcons.for_tool(ItemIcons.Tool.BLUEPRINT)
 	info_label.text = text
 	info_icon.texture = icon
+	info_icon.visible = (icon != null)
 
 	if fps_label.visible:
 		var p := player.position / VoxelWorld.VS

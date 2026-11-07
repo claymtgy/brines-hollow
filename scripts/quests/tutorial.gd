@@ -23,28 +23,28 @@ const MISSIONS := [
 	},
 	{
 		"id": &"tut_2_mark", "title": "Make Your Mark",
-		"intro": "Now put some of it back where you want it. Take the hammer [2], pick a material with Q and E, and lay a few blocks. Building costs what digging gives.",
+		"intro": "Now put some of it back where you want it. Take the hammer [2], press B to choose blocks, and lay a few. Building costs what digging gives.",
 		"objectives": [["Place 5 blocks with the hammer", QuestDef.ObjectiveType.PLACE_VOXELS, &"", 5]],
-		"done": "There. The coast is yours to shape. Bigger pieces like walls and huts live on the Blueprints [3].",
+		"done": "There. The coast is yours to shape. Walls, huts and furniture are all in the hammer's build menu (B).",
 		"rewards": {"items": [["wood_plank", 12]], "recipes": [&"place_storage_crate"]},
 	},
 	{
 		"id": &"tut_3_tools", "title": "Tools of the Trade",
-		"intro": "Let's make something. Press Tab to hand-craft, or use a workbench if you find one. Planks from driftwood is a fine start.",
-		"objectives": [["Craft anything (Tab, or a workbench)", QuestDef.ObjectiveType.CRAFT_ITEM, &"", 1]],
+		"intro": "Let's make something. Open your pack (Tab or I) to hand-craft, or use a workbench if you find one. Planks from driftwood is a fine start.",
+		"objectives": [["Craft anything (inventory or a workbench)", QuestDef.ObjectiveType.CRAFT_ITEM, &"", 1]],
 		"done": "Recipes are worth more than gold out here. You'll learn new ones from ingredients you find, from folk who join your village, and from scrolls the merchants carry. Here, the crab pot is an old friend of mine.",
 		"rewards": {"items": [["crab_pot", 1], ["kelp_frond", 4]], "recipes": [&"place_crab_pot"]},
 	},
 	{
 		"id": &"tut_4_tide", "title": "Let the Tide Work",
-		"intro": "Take that crab pot down to the wet sand between the tide lines and set it with the Blueprints [3], or by holding it on your hotbar. Bait it with kelp. When the tide comes in, it fishes for you.",
+		"intro": "Take that crab pot down to the wet sand between the tide lines and set it from your hotbar or the hammer's build menu (B). Bait it with kelp. When the tide comes in, it fishes for you.",
 		"objectives": [["Set a crab pot between the tide lines", QuestDef.ObjectiveType.PLACE_ENTITY, &"crab_pot", 1]],
 		"done": "The sea does half the work if you let it. Salt pans are the same: flood at high tide, dry in the sun.",
 		"rewards": {"items": [["salt_pan", 1]], "recipes": [&"place_salt_pan"]},
 	},
 	{
 		"id": &"tut_5_line", "title": "A Line in the Water",
-		"intro": "Time to eat. Take your rod [4], hold the button to cast into deep water, then strike when it bites.",
+		"intro": "Time to eat. Take your rod [3], hold the button to cast into deep water, then strike when it bites.",
 		"objectives": [["Catch a fish", QuestDef.ObjectiveType.CATCH_FISH, &"", 1]],
 		"done": "Fine catch! Fish keep longer in a sea barrel, and better still smoked.",
 		"rewards": {"items": [["silver_mackerel", 2]], "recipes": [&"cook_roasted_mackerel", &"place_sea_barrel"]},
@@ -99,6 +99,8 @@ func setup(p_main: Node) -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--tutorialcheck"):
 			_check = a.trim_prefix("--tutorialcheck").trim_prefix("=")
+			if _check == "":
+				_check = "run"
 
 
 # ---------------------------------------------------------------- state
@@ -456,7 +458,7 @@ func _run_check() -> void:
 		p.inventory.add_item(&"silver_mackerel", 1)
 		await get_tree().create_timer(0.5).timeout
 		await _grab(dir + "/tut_3_tracker.png")
-		main.crafting_ui.open(null)
+		main.inventory_ui.open()
 		await _grab(dir + "/tut_4_crafting.png")
 		get_tree().quit()
 		return

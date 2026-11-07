@@ -29,6 +29,8 @@ var tool_cutlass: Node3D
 var tool_harpoon: Node3D
 var tool_maul: Node3D
 var tool_lantern: Node3D
+var tool_axe: Node3D
+var tool_shovel: Node3D
 
 # Paperdoll equipment attachments
 var backpack_node: Node3D
@@ -39,6 +41,9 @@ var _phase := 0.0
 var _swing := 0.0
 var _mat: StandardMaterial3D
 var _current_tool_idx := 0
+var _cast_anim := 0.0
+var _fishing_state := 0
+var _fishing_power := 0.0
 
 
 static func _grid(sx: int, sy: int, sz: int) -> Prefabs.Grid:
@@ -196,6 +201,9 @@ func rebuild() -> void:
 	# ---------------------------------------------------------------- Tools & Weapons
 	_build_tool_arsenal()
 	set_tool(_current_tool_idx)
+	if _first_person_view:
+		_first_person_view = false
+		set_first_person_view(true)
 
 
 func _build_hair(h: Prefabs.Grid, style: CharacterPalette.HairStyle, hair_mat: int) -> void:
@@ -365,6 +373,19 @@ func _build_tool_arsenal() -> void:
 	lt.setv(1, 8, 1, Palette.LANTERN)                # Glowing core
 	tool_lantern = _tool(lt)
 
+	# 9. Hatchet / Axe
+	var ax := _grid(4, 9, 1)
+	ax.box(1, 0, 0, 1, 7, 0, Palette.HANDLE)
+	ax.box(1, 5, 0, 3, 7, 0, Palette.METAL)
+	ax.setv(3, 4, 0, Palette.METAL)
+	tool_axe = _tool(ax)
+
+	# 10. Shovel
+	var sv := _grid(3, 9, 1)
+	sv.box(1, 0, 0, 1, 6, 0, Palette.HANDLE)
+	sv.box(0, 6, 0, 2, 8, 0, Palette.METAL)
+	tool_shovel = _tool(sv)
+
 
 func _part(parent: Node3D, g: Prefabs.Grid, offset_u: Vector3) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -408,6 +429,8 @@ func set_tool(i: int) -> void:
 	if tool_harpoon: tool_harpoon.visible = (i == 6)
 	if tool_maul: tool_maul.visible = (i == 7)
 	if tool_lantern: tool_lantern.visible = (i == 8)
+	if tool_axe: tool_axe.visible = (i == 9)
+	if tool_shovel: tool_shovel.visible = (i == 10)
 
 
 func set_backpack_visible(is_visible: bool) -> void:
@@ -422,6 +445,36 @@ func set_diving_helmet_visible(is_visible: bool) -> void:
 
 func swing() -> void:
 	_swing = 1.0
+
+
+func cast_line() -> void:
+	_cast_anim = 1.0
+
+
+func set_fishing_state(state: int, power: float) -> void:
+	_fishing_state = state
+	_fishing_power = clampf(power, 0.0, 1.0)
+
+
+var _first_person_view := false
+
+
+func set_first_person_view(fp: bool) -> void:
+	if _first_person_view == fp:
+		return
+	_first_person_view = fp
+	if head != null:
+		head.visible = not fp
+	if body != null and body.get_child_count() > 0 and body.get_child(0) is MeshInstance3D:
+		(body.get_child(0) as MeshInstance3D).visible = not fp
+	if arm_l != null:
+		arm_l.visible = not fp
+	if leg_l != null:
+		leg_l.visible = not fp
+	if leg_r != null:
+		leg_r.visible = not fp
+	if arm_r != null:
+		arm_r.position = (Vector3(3.4, 15.6, 2.6) if fp else Vector3(4.0, 10.5, 0.0)) * U
 
 
 ## speed: horizontal m/s. Call every frame.
@@ -452,6 +505,32 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 		_swing = maxf(0.0, _swing - delta * 4.0)
 		var k := _swing
 		arm_r_x = -0.3 - 2.2 * sin(k * PI) * (0.6 + 0.4 * k)
+	var body_lean := 0.9 if swimming else 0.06 * moving
+	if _current_tool_idx == 3:
+		if _cast_anim > 0.0:
+			_cast_anim = maxf(0.0, _cast_anim - delta * 2.4)
+			var p := 1.0 - _cast_anim
+			if p < 0.35:
+				var wt := p / 0.35
+				arm_r_x = lerpf(0.85, -1.55, sin(wt * PI * 0.5))
+				body_lean = lerpf(-0.16, 0.22, wt)
+			else:
+				var ft := (p - 0.35) / 0.65
+				arm_r_x = lerpf(-1.55, -0.78, smoothstep(0.0, 1.0, ft))
+				body_lean = lerpf(0.22, 0.04, ft)
+			arm_l_x = -0.45
+		elif _fishing_state == 1: # CASTING (winding up)
+			arm_r_x = lerpf(-0.35, 0.95, _fishing_power)
+			arm_l_x = lerpf(-0.15, -0.55, _fishing_power)
+			body_lean = lerpf(0.0, -0.16, _fishing_power)
+		elif _fishing_state == 2 or _fishing_state == 3 or _fishing_state == 4: # WAITING / NIBBLING / HOOK_WINDOW
+			var twitch := sin(_phase * 6.0) * 0.12 if _fishing_state >= 3 else sin(_phase * 0.8) * 0.03
+			arm_r_x = -0.78 + twitch
+			arm_l_x = -0.45
+		elif _fishing_state == 5: # REELING
+			arm_r_x = -0.95 + sin(_phase * 2.4) * 0.32
+			arm_l_x = -0.82 + cos(_phase * 5.0) * 0.24
+			body_lean = -0.08 + sin(_phase * 2.4) * 0.06
 	var f := 1.0 - exp(-delta * 14.0)
 	leg_l.rotation.x = lerpf(leg_l.rotation.x, target_leg, f)
 	leg_r.rotation.x = lerpf(leg_r.rotation.x, -target_leg, f)
@@ -461,7 +540,7 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 	arm_r.rotation.z = lerpf(arm_r.rotation.z, arm_spread, f)
 	body.position.y = bob
 	head.rotation.x = lerpf(head.rotation.x, 0.15 if swimming else 0.0, f)
-	body.rotation.x = lerpf(body.rotation.x, 0.9 if swimming else 0.06 * moving, f)
+	body.rotation.x = lerpf(body.rotation.x, body_lean, f)
 
 
 ## Seated pose for boats: thighs forward, arms reaching for the oars.

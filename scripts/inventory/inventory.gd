@@ -7,6 +7,7 @@ signal equipment_changed(slot_name: StringName, slot: ItemSlot)
 signal inventory_resized(new_capacity: int)
 signal item_added(item_id: StringName, count: int)
 signal item_removed(item_id: StringName, count: int)
+signal active_hotbar_changed(index: int)
 
 const DEFAULT_BASE_CAPACITY := 24
 const MAX_HOTBAR_SLOTS := 8
@@ -113,6 +114,34 @@ func remove_item(p_id: StringName, p_count: int) -> int:
 ## Checks whether inventory contains at least p_count of p_id.
 func has_item(p_id: StringName, p_count: int = 1) -> bool:
 	return get_item_count(p_id) >= p_count
+
+
+## Checks whether inventory has room to fit at least p_count of p_id.
+func has_space_for(p_id: StringName, p_count: int = 1, p_custom_data: Dictionary = {}) -> bool:
+	if p_count <= 0 or p_id == &"":
+		return true
+	var def: ItemDef = ItemDB.get_item(p_id)
+	var max_stk: int = def.max_stack if def else 999
+	var remaining: int = p_count
+
+	# 1. Existing non-full matching slots
+	if max_stk > 1:
+		for i in capacity:
+			var slot: ItemSlot = slots[i]
+			if not slot.is_empty() and slot.can_stack_with(p_id, p_custom_data):
+				remaining -= (max_stk - slot.count)
+				if remaining <= 0:
+					return true
+
+	# 2. Empty slots
+	for i in capacity:
+		var slot: ItemSlot = slots[i]
+		if slot.is_empty():
+			remaining -= max_stk
+			if remaining <= 0:
+				return true
+
+	return remaining <= 0
 
 
 ## Returns total quantity of p_id across all slots.
@@ -254,7 +283,88 @@ func get_active_item() -> ItemSlot:
 
 
 func set_active_hotbar_index(index: int) -> void:
-	active_hotbar_index = clamp(index, 0, MAX_HOTBAR_SLOTS - 1)
+	var clamped := clampi(index, 0, MAX_HOTBAR_SLOTS - 1)
+	if active_hotbar_index != clamped:
+		active_hotbar_index = clamped
+		active_hotbar_changed.emit(active_hotbar_index)
+	else:
+		active_hotbar_index = clamped
+
+
+## Returns true if the active hotbar slot holds a building hammer.
+func is_hammer_active() -> bool:
+	var active := get_active_item()
+	if active == null or active.is_empty():
+		return false
+	if active.item_id == &"builders_hammer":
+		return true
+	var def: ItemDef = ItemDB.get_item(active.item_id)
+	return def != null and def.has_tag("hammer")
+
+
+## Moves or swaps a slot from anywhere in the inventory into a hotbar slot (0..7).
+## If hotbar_idx < 0, picks the first empty hotbar slot, or active_hotbar_index if full.
+func move_to_hotbar(from_idx: int, hotbar_idx: int = -1) -> bool:
+	if from_idx < 0 or from_idx >= capacity:
+		return false
+	var target_hb := hotbar_idx
+	if target_hb < 0 or target_hb >= MAX_HOTBAR_SLOTS:
+		target_hb = -1
+		for i in MAX_HOTBAR_SLOTS:
+			if slots[i].is_empty():
+				target_hb = i
+				break
+		if target_hb < 0:
+			target_hb = active_hotbar_index
+	return swap_or_merge_slots(from_idx, target_hb)
+
+
+## Shift-click quick transfer between hotbar (0..7) and backpack (8..capacity-1).
+func quick_transfer_slot(slot_idx: int) -> bool:
+	if slot_idx < 0 or slot_idx >= capacity:
+		return false
+	var src: ItemSlot = slots[slot_idx]
+	if src.is_empty():
+		return false
+	var range_start: int = MAX_HOTBAR_SLOTS if slot_idx < MAX_HOTBAR_SLOTS else 0
+	var range_end: int = capacity if slot_idx < MAX_HOTBAR_SLOTS else MAX_HOTBAR_SLOTS
+	var def: ItemDef = ItemDB.get_item(src.item_id)
+	var max_stk: int = def.max_stack if def else 999
+	var moved := false
+
+	# 1. Try stacking into existing matching slots in target range
+	if max_stk > 1:
+		for i in range(range_start, range_end):
+			var dst: ItemSlot = slots[i]
+			if not dst.is_empty() and dst.can_stack_with(src.item_id, src.custom_data):
+				var space: int = max_stk - dst.count
+				if space > 0:
+					var amt: int = mini(src.count, space)
+					dst.count += amt
+					src.count -= amt
+					moved = true
+					slot_changed.emit(i, dst)
+					if src.count <= 0:
+						src.clear()
+						slot_changed.emit(slot_idx, src)
+						return true
+
+	# 2. Move remainder into first empty slot in target range
+	if src.count > 0:
+		for i in range(range_start, range_end):
+			var dst: ItemSlot = slots[i]
+			if dst.is_empty():
+				dst.item_id = src.item_id
+				dst.count = src.count
+				dst.custom_data = src.custom_data.duplicate(true)
+				src.clear()
+				slot_changed.emit(slot_idx, src)
+				slot_changed.emit(i, dst)
+				return true
+
+	if moved:
+		slot_changed.emit(slot_idx, src)
+	return moved
 
 
 ## Equips an item from inventory slot into the appropriate equipment slot.

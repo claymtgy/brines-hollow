@@ -16,3 +16,4 @@ shots/
 
 # Claude Code agent worktrees
 .claude/
+bin/~*

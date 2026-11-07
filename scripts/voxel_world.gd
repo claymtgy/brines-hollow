@@ -9,6 +9,7 @@ extends Node3D
 ## touches, so replaying commands anywhere in the world gives the same result on every peer.
 
 signal dug(pos: Vector3, mat: int, count: int)
+signal tree_felled(base_pos: Vector3, height_m: float, canopy_radius_m: float, is_pine: bool, trunk_voxels: int)
 signal loading_progress(text: String, frac: float)
 
 const VS := 0.18           # voxel size in metres (~1/10 of player height)
@@ -38,6 +39,15 @@ var lod_steps := [[110.0, 4], [300.0, 8], [INF, 16]]   # [max distance m, voxel 
 var store := VoxelStore.new()
 var gen: WorldGen
 var ready_for_play := false
+var sky: SkyCycle = null
+
+var _water_conn_cache: Dictionary = {}
+var _water_mask_image: Image = null
+var _water_mask_tex: ImageTexture = null
+var _water_mask_rect: Vector4 = Vector4.ZERO
+var _water_mask_center: Vector2 = Vector2(-99999, -99999)
+var _water_mask_t: float = 0.0
+var _dirty_water_mask: bool = true
 ## Positions (metres) that keep terrain loaded. Main sets this every frame.
 var focus_points: Array = []
 
@@ -140,9 +150,21 @@ void fragment() {
 		}
 	}
 	ivec3 cell = ivec3(floor(wpos / voxel - wnrm * 0.5));
-	float b = 1.0 + (float(hash3(cell)) / 65535.0 - 0.5) * 2.0 * variation;
-	ALBEDO = min(lin_col * pow(b, 2.2), vec3(1.0));   // == to_linear(rgb * b) for b ~ 1
-	ROUGHNESS = 0.92;
+	ivec3 med_cell = ivec3(floor(wpos / (voxel * 0.5) - wnrm * 0.5));
+	ivec3 sub_cell = ivec3(floor(wpos / (voxel * 0.25) - wnrm * 0.5));
+	float h_block = float(hash3(cell)) / 65535.0 - 0.5;
+	float h_med = float(hash3(med_cell + ivec3(19, 47, 73))) / 65535.0 - 0.5;
+	float h_sub = float(hash3(sub_cell + ivec3(101, 211, 307))) / 65535.0 - 0.5;
+	float h_tint = float(hash3(sub_cell + ivec3(53, 89, 137))) / 65535.0 - 0.5;
+	float var_amt = max(variation, 0.045);
+	float b = 1.0 + (h_block * 0.95 + h_med * 0.65 + h_sub * 0.85) * var_amt;
+	vec3 tint_shift = vec3(1.0 + h_tint * var_amt * 0.55, 1.0 + h_tint * var_amt * 0.15, 1.0 - h_tint * var_amt * 0.55);
+	vec3 uv3 = fract(wpos / voxel - wnrm * 0.02);
+	vec3 edge3 = min(uv3, 1.0 - uv3);
+	float face_edge = min(min(edge3.x + abs(wnrm.x), edge3.y + abs(wnrm.y)), edge3.z + abs(wnrm.z));
+	float bevel = mix(0.955, 1.0, smoothstep(0.0, 0.09, face_edge));
+	ALBEDO = clamp(lin_col * tint_shift * pow(max(b, 0.2), 2.2) * bevel, vec3(0.0), vec3(1.0));
+	ROUGHNESS = clamp(0.91 - h_sub * 0.12, 0.72, 0.98);
 	SPECULAR = 0.25;
 }
 """
@@ -195,10 +217,153 @@ func get_voxel(x: int, y: int, z: int) -> int:
 ## `mark` is kept for API compatibility; the store tracks dirty chunks itself.
 func set_voxel(x: int, y: int, z: int, m: int, _mark := true) -> void:
 	store.set_voxel(x, y, z, m)
+	invalidate_water()
 
 
 func is_solid_at(p: Vector3) -> bool:
 	return store.get_voxel(floori(p.x / VS), floori(p.y / VS), floori(p.z / VS)) != 0
+
+
+func invalidate_water() -> void:
+	_dirty_water_mask = true
+	_water_conn_cache.clear()
+
+
+func is_water_at(world_pos: Vector3, water_level_m: float = -1.0) -> bool:
+	if water_level_m < 0.0:
+		water_level_m = sky.water_level_m() if sky != null else SEA_MID * VS
+	if world_pos.y >= water_level_m:
+		return false
+	var vx := floori(world_pos.x / VS)
+	var vy := floori(world_pos.y / VS)
+	var vz := floori(world_pos.z / VS)
+	if vx < 0 or vx >= WX or vz < 0 or vz >= WZ or vy < 0 or vy >= WY:
+		return false
+	if store.get_voxel(vx, vy, vz) != 0:
+		return false
+	var sea_vox := floori(water_level_m / VS)
+	if gen != null:
+		var nat_h: int = gen.col_h(vx, vz)
+		if nat_h < sea_vox - 1:
+			var has_roof := false
+			for ty in range(vy + 1, min(vy + 10, WY)):
+				if store.get_voxel(vx, ty, vz) != 0:
+					has_roof = true
+					break
+			if not has_roof:
+				return true
+	return _is_cell_connected_to_sea(Vector3i(vx, vy, vz), sea_vox)
+
+
+func _is_cell_connected_to_sea(cell: Vector3i, sea_vox: int) -> bool:
+	var key: int = (cell.x & 0x3FFF) | ((cell.z & 0x3FFF) << 14) | ((cell.y & 0xFF) << 28)
+	if _water_conn_cache.has(key):
+		return _water_conn_cache[key]
+
+	if _water_conn_cache.size() > 8000:
+		_water_conn_cache.clear()
+
+	var visited := {}
+	var visited_keys: Array[int] = []
+	var queue: Array[Vector3i] = [cell]
+	visited[cell] = true
+	visited_keys.append(key)
+	var is_connected := false
+	var steps := 0
+	const MAX_STEPS := 256
+
+	while not queue.is_empty() and steps < MAX_STEPS:
+		steps += 1
+		var curr: Vector3i = queue.pop_front()
+
+		# Check if curr reaches open ocean
+		if gen != null and gen.col_h(curr.x, curr.z) < sea_vox - 1:
+			var roof := false
+			for ty in range(curr.y + 1, min(curr.y + 8, WY)):
+				if store.get_voxel(curr.x, ty, curr.z) != 0:
+					roof = true
+					break
+			if not roof:
+				is_connected = true
+				break
+
+		# Explore adjacent air voxels
+		for offset in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1), Vector3i(0, 1, 0), Vector3i(0, -1, 0)]:
+			var n: Vector3i = curr + offset
+			# Water cannot flow over a rim/lip higher than sea level
+			if n.y > sea_vox or n.y < 0:
+				continue
+			if n.x < 0 or n.x >= WX or n.z < 0 or n.z >= WZ:
+				continue
+			if visited.has(n):
+				continue
+			visited[n] = true
+			if store.get_voxel(n.x, n.y, n.z) == 0:
+				var k: int = (n.x & 0x3FFF) | ((n.z & 0x3FFF) << 14) | ((n.y & 0xFF) << 28)
+				visited_keys.append(k)
+				queue.append(n)
+
+	for k in visited_keys:
+		_water_conn_cache[k] = is_connected
+
+	return is_connected
+
+
+func update_water_mask(center_m: Vector3, force := false) -> void:
+	if gen == null or sky == null or sky.water_mat == null:
+		return
+	var c_xz := Vector2(center_m.x, center_m.z)
+	if not force and not _dirty_water_mask and (_water_mask_center.distance_squared_to(c_xz) < 36.0):
+		return
+	_water_mask_center = c_xz
+	_dirty_water_mask = false
+
+	var size_m := 160.0
+	var origin_x := center_m.x - size_m * 0.5
+	var origin_z := center_m.z - size_m * 0.5
+	_water_mask_rect = Vector4(origin_x, origin_z, size_m, size_m)
+
+	var N := 192
+	var step_m := size_m / float(N)
+	var sea_vox: int = floori(sky.water_level_vox)
+
+	var bytes := PackedByteArray()
+	bytes.resize(N * N)
+
+	for pz in N:
+		var wz := origin_z + (float(pz) + 0.5) * step_m
+		var vz := floori(wz / VS)
+		var row_start := pz * N
+		for px in N:
+			var wx := origin_x + (float(px) + 0.5) * step_m
+			var vx := floori(wx / VS)
+
+			if vx < 0 or vx >= WX or vz < 0 or vz >= WZ:
+				bytes[row_start + px] = 255
+				continue
+
+			var nat_h: int = gen.col_h(vx, vz)
+			if nat_h < sea_vox - 1:
+				if store.get_voxel(vx, sea_vox, vz) != 0:
+					bytes[row_start + px] = 0
+				else:
+					bytes[row_start + px] = 255
+			else:
+				# Island landmass: dry unless excavated air cell connects to the sea
+				if store.get_voxel(vx, sea_vox, vz) == 0 and _is_cell_connected_to_sea(Vector3i(vx, sea_vox, vz), sea_vox):
+					bytes[row_start + px] = 255
+				else:
+					bytes[row_start + px] = 0
+
+	if _water_mask_image == null or _water_mask_image.get_width() != N:
+		_water_mask_image = Image.create_from_data(N, N, false, Image.FORMAT_R8, bytes)
+		_water_mask_tex = ImageTexture.create_from_image(_water_mask_image)
+	else:
+		_water_mask_image.set_data(N, N, false, Image.FORMAT_R8, bytes)
+		_water_mask_tex.update(_water_mask_image)
+
+	sky.water_mat.set_shader_parameter("water_mask", _water_mask_tex)
+	sky.water_mat.set_shader_parameter("water_mask_rect", _water_mask_rect)
 
 
 ## True if the terrain column under `p` (metres) has been generated.
@@ -336,6 +501,12 @@ func _process(delta: float) -> void:
 			prof[k] += dt
 			prof_max[k] = maxi(prof_max[k], dt)
 	_update_lod_holes()
+	if ready_for_play and sky != null:
+		_water_mask_t -= delta
+		if _water_mask_t <= 0.0 or _dirty_water_mask:
+			_water_mask_t = 0.35
+			var c_m: Vector3 = focus_points[0] if not focus_points.is_empty() else Vector3(WX * 0.5 * VS, 0.0, WZ * 0.5 * VS)
+			update_water_mask(c_m)
 
 
 func _stream_step(max_gen: int, max_mesh: int, max_upload: int) -> void:
@@ -608,15 +779,198 @@ func _update_lod_holes() -> void:
 func apply_command(cmd: Dictionary) -> void:
 	match cmd.get("t", ""):
 		"dig":
-			_dig(cmd.p, cmd.r)
+			_dig(cmd.p, cmd.r, bool(cmd.get("allow_stone", true)), bool(cmd.get("allow_wood", true)))
 		"place":
 			_place(cmd.p, cmd.r, cmd.m)
 		"prefab":
 			apply_prefab(cmd.id, cmd.p, cmd.r, true)
+		"grow_tree":
+			grow_tree_at(cmd.p, int(cmd.get("s", 1)))
 
 
-func _dig(c: Vector3i, r: int) -> void:
-	var res: Dictionary = store.dig_sphere(c, r)
+const STONE_MATS := [Palette.STONE, Palette.SANDSTONE_A, Palette.SANDSTONE_B, Palette.SANDSTONE_C, Palette.COBBLE]
+const WOOD_MATS := [Palette.TRUNK, Palette.PLANK, Palette.DARK_WOOD, Palette.ROOF_RED, Palette.ROOF_BLUE, Palette.SHUTTER]
+
+
+static func is_stone_mat(m: int) -> bool:
+	return m in STONE_MATS
+
+
+static func is_wood_mat(m: int) -> bool:
+	return m in WOOD_MATS
+
+
+func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true) -> void:
+	var center_mat := store.get_voxel(c.x, c.y, c.z)
+	var removed_count := 0
+	var primary_mat := center_mat
+	var felled_trunk_count := 0
+
+	# Detect if any tree trunk voxel is touched by this cut BEFORE removing the sphere
+	var hit_trunk := false
+	var trunk_seed := c
+	if allow_wood:
+		if center_mat == Palette.TRUNK:
+			hit_trunk = true
+			trunk_seed = c
+		else:
+			var scan_r := maxi(r, 1)
+			for dy in range(-scan_r, scan_r + 1):
+				if hit_trunk:
+					break
+				for dz in range(-scan_r, scan_r + 1):
+					if hit_trunk:
+						break
+					for dx in range(-scan_r, scan_r + 1):
+						if store.get_voxel(c.x + dx, c.y + dy, c.z + dz) == Palette.TRUNK:
+							hit_trunk = true
+							trunk_seed = Vector3i(c.x + dx, c.y + dy, c.z + dz)
+							break
+
+	# Locate the true horizontal center and bottom-most root of the trunk before digging
+	var tree_cx := trunk_seed.x
+	var tree_cz := trunk_seed.z
+	var tree_base_y := trunk_seed.y
+	if hit_trunk:
+		var sum_x := 0
+		var sum_z := 0
+		var sample_n := 0
+		for dy in range(-2, 4):
+			for dz in range(-3, 4):
+				for dx in range(-3, 4):
+					if store.get_voxel(trunk_seed.x + dx, trunk_seed.y + dy, trunk_seed.z + dz) == Palette.TRUNK:
+						sum_x += trunk_seed.x + dx
+						sum_z += trunk_seed.z + dz
+						sample_n += 1
+		if sample_n > 0:
+			tree_cx = roundi(float(sum_x) / float(sample_n))
+			tree_cz = roundi(float(sum_z) / float(sample_n))
+		# Walk downward to the very bottom of the trunk
+		for dy in range(1, 20):
+			var check_y := trunk_seed.y - dy
+			if check_y <= 1:
+				break
+			var has_trunk_layer := false
+			for dz in range(-2, 3):
+				for dx in range(-2, 3):
+					if store.get_voxel(tree_cx + dx, check_y, tree_cz + dz) == Palette.TRUNK:
+						has_trunk_layer = true
+						break
+				if has_trunk_layer:
+					break
+			if has_trunk_layer:
+				tree_base_y = check_y
+			else:
+				break
+
+	if allow_stone and allow_wood:
+		var res_all: Dictionary = store.dig_sphere(c, r)
+		removed_count = int(res_all.count)
+		primary_mat = int(res_all.mat)
+	else:
+		var min_col := Vector2i(maxi(0, (c.x - r) >> 5), maxi(0, (c.z - r) >> 5))
+		var max_col := Vector2i(mini(NCX - 1, (c.x + r) >> 5), mini(NCZ - 1, (c.z + r) >> 5))
+		for cz in range(min_col.y, max_col.y + 1):
+			for cx in range(min_col.x, max_col.x + 1):
+				var col := Vector2i(cx, cz)
+				if not store.is_column_generated(col):
+					store.generate_column(col)
+		var r2 := r * r
+		var mat_counts := {}
+		for dz in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if dx * dx + dy * dy + dz * dz > r2:
+						continue
+					var vx := c.x + dx
+					var vy := c.y + dy
+					var vz := c.z + dz
+					if vx < 0 or vx >= WX or vy <= 1 or vy >= WY or vz < 0 or vz >= WZ:
+						continue
+					var m := store.get_voxel(vx, vy, vz)
+					if m == 0:
+						continue
+					if not allow_stone and is_stone_mat(m):
+						continue
+					if not allow_wood and is_wood_mat(m):
+						continue
+					store.set_voxel(vx, vy, vz, 0)
+					removed_count += 1
+					mat_counts[m] = int(mat_counts.get(m, 0)) + 1
+		if primary_mat == 0 or (not allow_stone and is_stone_mat(primary_mat)) or (not allow_wood and is_wood_mat(primary_mat)):
+			var best_m := 0
+			var best_n := 0
+			for m_key in mat_counts.keys():
+				if int(mat_counts[m_key]) > best_n:
+					best_n = int(mat_counts[m_key])
+					best_m = int(m_key)
+			primary_mat = best_m
+
+	# If chopping a tree trunk, fell the ENTIRE tree (base stump, full trunk, branches, and full canopy)!
+	if allow_wood and (hit_trunk or center_mat == Palette.TRUNK or primary_mat == Palette.TRUNK):
+		var canopy_rad := 14
+		var t_min_col := Vector2i(maxi(0, (tree_cx - canopy_rad) >> 5), maxi(0, (tree_cz - canopy_rad) >> 5))
+		var t_max_col := Vector2i(mini(NCX - 1, (tree_cx + canopy_rad) >> 5), mini(NCZ - 1, (tree_cz + canopy_rad) >> 5))
+		for cz in range(t_min_col.y, t_max_col.y + 1):
+			for cx in range(t_min_col.x, t_max_col.x + 1):
+				var col := Vector2i(cx, cz)
+				if not store.is_column_generated(col):
+					store.generate_column(col)
+
+		var top_y := tree_base_y
+		var max_leaf_r2 := 9
+		var dark_leaves := 0
+		var light_leaves := 0
+		var empty_layers := 0
+
+		for vy in range(maxi(2, tree_base_y - 1), mini(WY - 1, tree_base_y + 44)):
+			var found_layer := false
+			var dy := vy - tree_base_y
+			var scan_rad := 4 if dy < 3 else canopy_rad
+			for dz in range(-scan_rad, scan_rad + 1):
+				for dx in range(-scan_rad, scan_rad + 1):
+					var d2 := dx * dx + dz * dz
+					if d2 > scan_rad * scan_rad:
+						continue
+					var vx := tree_cx + dx
+					var vz := tree_cz + dz
+					if vx < 0 or vx >= WX or vz < 0 or vz >= WZ:
+						continue
+					var m := store.get_voxel(vx, vy, vz)
+					if m == Palette.TRUNK and abs(dx) <= 4 and abs(dz) <= 4:
+						store.set_voxel(vx, vy, vz, 0)
+						felled_trunk_count += 1
+						found_layer = true
+						top_y = maxi(top_y, vy)
+					elif (m == Palette.LEAVES or m == Palette.LEAVES_DARK) and dy >= 2:
+						store.set_voxel(vx, vy, vz, 0)
+						found_layer = true
+						top_y = maxi(top_y, vy)
+						max_leaf_r2 = maxi(max_leaf_r2, d2)
+						if m == Palette.LEAVES_DARK:
+							dark_leaves += 1
+						else:
+							light_leaves += 1
+			if dy > 6:
+				if not found_layer:
+					empty_layers += 1
+					if empty_layers >= 3:
+						break
+				else:
+					empty_layers = 0
+
+		if felled_trunk_count > 0 or dark_leaves + light_leaves > 0:
+			primary_mat = Palette.TRUNK
+			removed_count += maxi(12, felled_trunk_count * 4)
+			var base_world_pos := Vector3(float(tree_cx) + 0.5, float(tree_base_y), float(tree_cz) + 0.5) * VS
+			var height_m := clampf(float(top_y - tree_base_y + 1) * VS, 2.5, 7.5)
+			var canopy_r_m := clampf(sqrt(float(max_leaf_r2)) * VS, 0.9, 2.4)
+			var is_pine := dark_leaves > light_leaves
+			tree_felled.emit(base_world_pos, height_m, canopy_r_m, is_pine, felled_trunk_count)
+
+	var res := {"count": removed_count, "mat": primary_mat}
+	if false:
+		pass
 	if res.count <= 0:
 		return
 	# Remove lamp lights whose voxel was dug away.
@@ -625,10 +979,12 @@ func _dig(c: Vector3i, r: int) -> void:
 			_lights[p].queue_free()
 			_lights.erase(p)
 	dug.emit((Vector3(c) + Vector3.ONE * 0.5) * VS, res.mat, res.count)
+	invalidate_water()
 
 
 func _place(c: Vector3i, r: int, m: int) -> void:
 	store.place_sphere(c, r, m)
+	invalidate_water()
 	if Palette.is_emissive(m) and r == 0:
 		_add_light(c, m)
 
@@ -641,6 +997,7 @@ func apply_prefab(id: int, origin: Vector3i, rot: int, _mark := true) -> void:
 	var base: Vector3i = origin - (pf.anchor as Vector3i)
 	var data: PackedByteArray = pf.data
 	store.stamp(data, s, base)
+	invalidate_water()
 	# Foundations so prefabs sit nicely on uneven ground.
 	match pf.foundation:
 		"solid":
@@ -655,6 +1012,50 @@ func apply_prefab(id: int, origin: Vector3i, rot: int, _mark := true) -> void:
 				store.fill_down(base.x + c.x, base.y - 1, base.z + c.y, Palette.DARK_WOOD, 24)
 	for l: Vector3i in pf.lights:
 		_add_light(base + l, Palette.LANTERN)
+
+
+func grow_tree_at(origin: Vector3i, tree_seed: int = 1) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = tree_seed
+	var trunk_h := rng.randi_range(17, 23)
+	var total_h := trunk_h + 5
+	var rad := 6
+	var sx := rad * 2 + 1
+	var sz := rad * 2 + 1
+	var g := Prefabs.Grid.new(sx, total_h, sz)
+	var cx := rad
+	var cz := rad
+
+	# Tiered conical pine canopy
+	for y in range(5, total_h):
+		var frac := float(y - 5) / float(maxi(1, total_h - 6))
+		var tier_wave := 0.85 + 0.30 * (1.0 - fmod(float(y - 5), 4.0) / 3.5)
+		var max_r := lerpf(5.2, 0.8, frac) * tier_wave
+		var r_int := int(ceil(max_r))
+		for dz in range(-r_int, r_int + 1):
+			for dx in range(-r_int, r_int + 1):
+				var dist := sqrt(float(dx * dx + dz * dz))
+				if dist <= max_r:
+					var is_outer := dist >= max_r - 0.85 or y >= total_h - 2
+					var leaf_mat := Palette.LEAVES if (is_outer and ((dx + y + dz) & 1) == 0) else Palette.LEAVES_DARK
+					g.setv(cx + dx, y, cz + dz, leaf_mat)
+
+	# Root flare and main trunk (overwrites inner leaves so the trunk core is solid)
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			if abs(dx) + abs(dz) <= 1:
+				g.setv(cx + dx, 0, cz + dz, Palette.TRUNK)
+				g.setv(cx + dx, 1, cz + dz, Palette.TRUNK)
+	for y in range(0, trunk_h):
+		g.setv(cx, y, cz, Palette.TRUNK)
+		if y < trunk_h - 3:
+			g.setv(cx + 1, y, cz, Palette.TRUNK)
+			g.setv(cx, y, cz + 1, Palette.TRUNK)
+			if y < trunk_h / 2:
+				g.setv(cx + 1, y, cz + 1, Palette.TRUNK)
+
+	var base := Vector3i(origin.x - cx, origin.y, origin.z - cz)
+	store.stamp(g.data, Vector3i(sx, total_h, sz), base)
 
 
 func _add_light(p: Vector3i, m: int) -> void:

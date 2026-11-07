@@ -37,6 +37,45 @@ static var _item_types: Dictionary = {} # item id -> entity type id
 var entities: Dictionary = {}
 var main: Node = null
 var starter_done := false
+var sleeping_peers: Dictionary = {}  # peer_id (int) -> bed grid_coord (Vector3i)
+
+
+func count_beds() -> int:
+	var n := 0
+	for ent: WorldEntity in entities.values():
+		if ent is BedEntity or ent.entity_type == WorldEntity.EntityType.BED:
+			n += 1
+	return n
+
+
+func try_sleep_in_bed(bed: BedEntity, peer: int) -> Dictionary:
+	# Ensure two players cannot claim the same single bed to bypass the all-players-have-a-bed rule
+	for existing_peer in sleeping_peers.keys():
+		if sleeping_peers[existing_peer] == bed.grid_coord and int(existing_peer) != peer:
+			sleeping_peers.erase(existing_peer)
+	# Prune any disconnected peers
+	if main != null and main.is_net:
+		for existing_peer in sleeping_peers.keys():
+			var pid := int(existing_peer)
+			if pid != _local_peer() and not main.remotes.has(pid):
+				sleeping_peers.erase(existing_peer)
+	sleeping_peers[peer] = bed.grid_coord
+
+	var total_players: int = 1 + (main.remotes.size() if main != null and main.is_net else 0)
+	var total_beds := maxi(1, count_beds())
+	var sleeping_count := sleeping_peers.size()
+
+	if total_beds < total_players:
+		return {"toast": "Need a bed for every player (%d/%d beds placed) to sleep through to morning!" % [total_beds, total_players]}
+	if sleeping_count < total_players:
+		return {"toast": "Resting in bed (%d/%d players sleeping) — waiting for others..." % [sleeping_count, total_players]}
+
+	sleeping_peers.clear()
+	if main != null and main.sky != null:
+		main.sky.time_of_day = 0.28
+		if _net() and is_authority():
+			main.time_sync.rpc(main.sky.time_of_day)
+	return {"toast": "All players asleep — slept through to the morning!"}
 
 var _dirty := {}                 # authority: Vector3i -> true (state to broadcast)
 var _broadcast_t := 0.0
@@ -143,6 +182,12 @@ func has_entity_at(coord: Vector3i) -> bool:
 
 
 func get_closest_interactable(player_pos: Vector3, max_reach: float = 3.2) -> WorldEntity:
+	if main != null and main.get("player") != null:
+		var p: Player = main.player
+		if p != null and is_instance_valid(p) and p.get("hovered_entity") != null:
+			var hent: WorldEntity = p.hovered_entity
+			if is_instance_valid(hent) and player_pos.distance_to(hent.position) <= maxf(max_reach, hent.interaction_radius):
+				return hent
 	var closest: WorldEntity = null
 	var closest_dist: float = max_reach
 	for ent: WorldEntity in entities.values():
@@ -151,6 +196,26 @@ func get_closest_interactable(player_pos: Vector3, max_reach: float = 3.2) -> Wo
 			closest_dist = d
 			closest = ent
 	return closest
+
+
+func raycast_entity(origin: Vector3, dir: Vector3, max_dist: float = 40.0) -> Dictionary:
+	var best_ent: WorldEntity = null
+	var best_t: float = max_dist
+	var norm_dir := dir.normalized()
+	var seg_to := origin + norm_dir * max_dist
+	for ent: WorldEntity in entities.values():
+		if not is_instance_valid(ent):
+			continue
+		var box := ent.get_aabb().grow(0.06)
+		var hit_pt = box.intersects_segment(origin, seg_to)
+		if hit_pt is Vector3:
+			var d := origin.distance_to(hit_pt as Vector3)
+			if d < best_t:
+				best_t = d
+				best_ent = ent
+	if best_ent != null:
+		return {"entity": best_ent, "dist": best_t}
+	return {}
 
 
 func get_count() -> int:

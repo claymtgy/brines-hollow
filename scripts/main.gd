@@ -1,3 +1,4 @@
+class_name Main
 extends Node3D
 ## Brine's Hollow prototype entry point.
 ## Co-op model: host-authoritative. Everyone generates the same world from the seed;
@@ -16,19 +17,22 @@ var rig: CameraRig
 var hud: Hud
 var boats: BoatManager
 var farm: FarmManager
+var farm_visuals: FarmVisuals
 var quests: QuestManager
 var village: SettlementManager
 var entities: EntityManager
 var session: Session
 var creatures: CreatureNet   # Agent C: creatures & optional combat
-var crafting_ui: CraftingUI   # recipe window (stations + Tab hand crafting)
 var tutorial: Tutorial        # Wren's starter missions
 var settings: GameSettings
 var settings_menu: SettingsMenu
+var inventory_ui: InventoryUI
+var build_menu_ui: BuildMenuUI
 var village_mgr: VillageManager
 var trade: TradeManager
 var controller: ControllerManager = ControllerManager.new()
 
+static var force_menu := false
 var is_net := false
 var edit_log: Array = []
 var remotes := {}
@@ -36,6 +40,8 @@ var _pending_cmds: Array = []
 var _send_t := 0.0
 var _time_sync_t := 0.0
 var _started := false
+var _menu_launch := false   # true when the player starts from the main menu (not CLI)
+var _quitting := false
 var _args := {}
 var _assigned_spawn_idx: int = -1
 
@@ -57,13 +63,20 @@ func _ready() -> void:
 	if _args.has("time"):
 		sky.time_of_day = float(_args.time)
 	world = VoxelWorld.new()
+	world.sky = sky
 	add_child(world)
 	world.loading_progress.connect(func(t: String, f: float) -> void: hud.set_loading(true, t, f))
 	world.dug.connect(_on_dug)
+	world.tree_felled.connect(_on_tree_felled)
 
 	rig = CameraRig.new()
 	add_child(rig)
 	rig.world = world
+	rig.first_person_changed.connect(func(fp: bool) -> void:
+		if settings != null:
+			settings.first_person = fp
+			settings.save()
+	)
 	rig.cam.far = 1500.0  # archipelago: distant islands stay visible through the fog
 	# Menu backdrop: look out over the sea.
 	rig.cam.global_transform = Transform3D(Basis.from_euler(Vector3(-0.08, 0.6, 0)),
@@ -121,6 +134,16 @@ func _ready() -> void:
 	add_child(settings_menu)
 	settings_menu.setup(self, settings)
 
+	inventory_ui = InventoryUI.new()
+	inventory_ui.name = "InventoryUI"
+	add_child(inventory_ui)
+	inventory_ui.setup(self)
+
+	build_menu_ui = BuildMenuUI.new()
+	build_menu_ui.name = "BuildMenuUI"
+	add_child(build_menu_ui)
+	build_menu_ui.setup(self)
+
 	# --- Village & trade (agent B): drifters, homes, routines, merchant ships. Their RPC
 	# nodes (/root/Main/Village, /root/Main/Trade) must exist on every peer.
 	village_mgr = VillageManager.new()
@@ -129,11 +152,7 @@ func _ready() -> void:
 	trade = TradeManager.new()
 	trade.main = self
 	add_child(trade)
-	# --- Crafting window + starter tutorial (Wren the Wayfarer)
-	crafting_ui = CraftingUI.new()
-	crafting_ui.name = "CraftingUI"
-	add_child(crafting_ui)
-	crafting_ui.setup(self)
+	# --- Starter tutorial (Wren the Wayfarer). Crafting lives in InventoryUI.
 	tutorial = Tutorial.new()
 	tutorial.name = "Tutorial"
 	add_child(tutorial)
@@ -150,7 +169,10 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
-	if _args.has("server"):
+	if force_menu:
+		force_menu = false
+		hud.show_menu(true)
+	elif _args.has("server"):
 		session.start_dedicated(int(_args.server) if String(_args.server).is_valid_int() else PORT)
 	elif _args.has("host"):
 		start_host()
@@ -160,6 +182,7 @@ func _ready() -> void:
 			or (_args.has("villagecheck") and not _args.has("join") and not _args.has("host")) or _args.has("tradecheck"):
 		start_solo()
 	else:
+		_menu_launch = true
 		hud.show_menu(true)
 
 
@@ -193,7 +216,38 @@ func start_join(ip: String) -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	is_net = true
+	if hud != null and session != null:
+		session.save_skin_preference(hud.menu_customizer.serialize())
 	hud.show_menu(true, "Connecting to %s..." % ip)
+
+
+func return_to_main_menu() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	if session != null and session.is_authority():
+		session.save_all()
+	elif session != null and player != null and multiplayer != null and multiplayer.multiplayer_peer != null:
+		session.profile_upload.rpc_id(1, session.player_key, session.capture_profile())
+		await get_tree().create_timer(0.3).timeout
+	if multiplayer != null and multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer = null
+	is_net = false
+	Main.force_menu = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://main.tscn")
+
+
+func save_and_quit() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	if session != null and session.is_authority():
+		session.save_all()
+	elif session != null and player != null and multiplayer != null and multiplayer.multiplayer_peer != null:
+		session.profile_upload.rpc_id(1, session.player_key, session.capture_profile())
+		await get_tree().create_timer(0.3).timeout
+	get_tree().quit()
 
 
 ## Nearest column to `sp` whose top voxel is natural ground with open air above it.
@@ -218,6 +272,10 @@ func _begin_world() -> void:
 	if _started:
 		return
 	_started = true
+	# Only a game started from the main menu takes its world/seed fields; command-line
+	# launches (--world, --seed, --host, dev checks) keep what they asked for.
+	if _menu_launch and hud != null and hud.menu != null and (not is_net or multiplayer.is_server()):
+		hud.apply_menu_selections_to_main(self)
 	hud.show_menu(false)
 	hud.set_loading(true, "Starting...", 0.0)
 	await world.generate(seed_value)
@@ -227,6 +285,10 @@ func _begin_world() -> void:
 	_pending_cmds.clear()
 
 	farm = NetFarm.new(VoxelWorld.SEA_MID, VoxelWorld.TIDE_AMP)
+	farm_visuals = FarmVisuals.new()
+	farm_visuals.name = "FarmVisuals"
+	farm_visuals.setup(farm, world)
+	add_child(farm_visuals)
 	quests = QuestManager.new()
 	village = SettlementManager.new(Vector3i(world.gen.spawn), "Brine's Hollow")
 
@@ -243,7 +305,11 @@ func _begin_world() -> void:
 	player.village = village
 	player.entities = entities
 	player.controller = controller
+	player.inventory_ui = inventory_ui
+	player.build_menu_ui = build_menu_ui
 	add_child(player)
+	if session != null and not session.selected_customizer_data.is_empty():
+		player.customizer.deserialize(session.selected_customizer_data)
 	player.bind_quest_signals()
 	var chosen_spawn: Dictionary = {}
 	if _args.has("homestead") or _args.has("bench") or _args.has("boatcheck") or _args.has("shot"):
@@ -288,8 +354,10 @@ func _process(delta: float) -> void:
 	world.focus_points = [player.position if rig.target != null else rig.cam.global_position]
 	var host_like := not is_net or multiplayer.is_server()
 	sky.time_scale = 40.0 if (host_like and Input.is_action_pressed("fast_time")) else 1.0
-	var cam_under := rig.cam.global_position.y < sky.water_level_m() - 0.03
+	var cam_under := world != null and world.is_water_at(rig.cam.global_position, sky.water_level_m() - 0.03)
 	hud.update_hud(player, sky, _peers_text(), world, cam_under)
+	if build_menu_ui != null:
+		build_menu_ui.update_for_player(player)
 	if is_net and multiplayer.multiplayer_peer != null:
 		_send_t -= delta
 		if _send_t <= 0.0:
@@ -313,10 +381,24 @@ func _peers_text() -> String:
 func _unhandled_input(e: InputEvent) -> void:
 	if controller != null:
 		controller.track_input_event(e)
+	if e.is_action_pressed("inventory_toggle") and player != null and not settings_menu.is_open():
+		if build_menu_ui != null and build_menu_ui.is_expanded():
+			build_menu_ui.close_catalogue()
+		inventory_ui.toggle()
+		get_viewport().set_input_as_handled()
+		return
 	if e.is_action_pressed("menu_toggle"):
+		if inventory_ui != null and inventory_ui.is_open():
+			inventory_ui.close()
+			return
+		if build_menu_ui != null and build_menu_ui.is_expanded():
+			build_menu_ui.close_catalogue()
+			return
 		settings_menu.toggle()
 	elif e is InputEventMouseButton and e.pressed and player != null and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED \
-			and not settings_menu.is_open():
+			and not settings_menu.is_open() \
+			and (inventory_ui == null or not inventory_ui.is_open()) \
+			and (build_menu_ui == null or not build_menu_ui.is_expanded()):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 
@@ -351,9 +433,129 @@ func _on_dug(pos: Vector3, mat: int, count: int) -> void:
 	if _cmd_is_mine and player != null and player.inventory != null:
 		var item: ItemDef = ItemDB.get_by_voxel_mat(mat)
 		if item:
-			var added: int = player.inventory.add_item(item.id, maxi(1, count / 4))
-			if added > 0 and player.quests != null:
-				player.quests.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, item.id, added, player.inventory)
+			spawn_item_drop(pos, item.id, maxi(1, count / 4))
+		if false:
+			pass
+		if mat == Palette.TRUNK:
+			spawn_item_drop(pos, &"driftwood", maxi(1, count / 10))
+		elif mat == Palette.LEAVES or mat == Palette.LEAVES_DARK:
+			if count >= 4 or randf() < 0.45:
+				spawn_item_drop(pos, &"pine_sapling", 1)
+		elif VoxelWorld.is_stone_mat(mat):
+			var tool_tier := 1
+			var active_def := player.get_active_item_def()
+			if active_def != null:
+				tool_tier = int(active_def.tool_data.get("tier", 1))
+			if count >= 6 or randf() < 0.45:
+				spawn_item_drop(pos, &"copper_ore", 1)
+			if tool_tier >= 2 and (count >= 10 or randf() < 0.35):
+				spawn_item_drop(pos, &"sea_iron_ore", 1)
+
+
+func spawn_item_drop(drop_pos: Vector3, item_id: StringName, drop_count: int) -> DroppedItem:
+	if drop_count <= 0 or item_id == &"":
+		return null
+	var chunks := mini(drop_count, 3)
+	var per_chunk := drop_count / chunks
+	var remainder := drop_count % chunks
+	var first_drop: DroppedItem = null
+	for i in chunks:
+		var c := per_chunk + (1 if i < remainder else 0)
+		if c > 0:
+			var d := DroppedItem.spawn_drop(self, world, player, drop_pos, item_id, c)
+			if first_drop == null:
+				first_drop = d
+	return first_drop
+
+
+func _on_tree_felled(base_pos: Vector3, height_m: float, canopy_radius_m: float, is_pine: bool, trunk_voxels: int) -> void:
+	var is_mine := _cmd_is_mine
+	var fall_dir := Vector3(1.0, 0.0, 0.0)
+	if player != null:
+		var away := Vector3(base_pos.x - player.global_position.x, 0.0, base_pos.z - player.global_position.z)
+		if away.length_squared() > 0.01:
+			fall_dir = away.normalized()
+
+	var pivot := Node3D.new()
+	pivot.name = "FallingTree"
+	add_child(pivot)
+	pivot.global_position = base_pos
+	pivot.rotation.y = atan2(-fall_dir.x, -fall_dir.z)
+
+	var trunk_w := 3.0 * VS
+	var trunk_h := maxf(1.8, height_m * 0.72)
+	var trunk_mi := MeshInstance3D.new()
+	var trunk_bm := BoxMesh.new()
+	trunk_bm.size = Vector3(trunk_w, trunk_h, trunk_w)
+	var trunk_mat := StandardMaterial3D.new()
+	trunk_mat.albedo_color = Palette.COLORS[Palette.TRUNK]
+	trunk_mat.roughness = 0.9
+	trunk_bm.material = trunk_mat
+	trunk_mi.mesh = trunk_bm
+	trunk_mi.position = Vector3(0.0, trunk_h * 0.5, 0.0)
+	pivot.add_child(trunk_mi)
+
+	var leaf_mat := StandardMaterial3D.new()
+	leaf_mat.albedo_color = Palette.COLORS[Palette.LEAVES_DARK if is_pine else Palette.LEAVES]
+	leaf_mat.roughness = 0.88
+	if is_pine:
+		for tier in 3:
+			var tier_r := canopy_radius_m * (1.0 - float(tier) * 0.24)
+			var tier_h := height_m * 0.24
+			var tier_mi := MeshInstance3D.new()
+			var tier_bm := BoxMesh.new()
+			tier_bm.size = Vector3(tier_r * 1.65, tier_h, tier_r * 1.65)
+			tier_bm.material = leaf_mat
+			tier_mi.mesh = tier_bm
+			tier_mi.position = Vector3(0.0, trunk_h * 0.45 + float(tier) * (tier_h * 0.82), 0.0)
+			pivot.add_child(tier_mi)
+	else:
+		var crown_mi := MeshInstance3D.new()
+		var crown_bm := BoxMesh.new()
+		crown_bm.size = Vector3(canopy_radius_m * 1.85, canopy_radius_m * 1.35, canopy_radius_m * 1.85)
+		crown_bm.material = leaf_mat
+		crown_mi.mesh = crown_bm
+		crown_mi.position = Vector3(0.0, trunk_h + canopy_radius_m * 0.35, 0.0)
+		pivot.add_child(crown_mi)
+
+	var tw := create_tween()
+	tw.tween_property(pivot, "rotation:x", -1.48, 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void:
+		if not is_instance_valid(pivot):
+			return
+		# Spawn leaf/bark burst particles along the fallen tree
+		var burst := CPUParticles3D.new()
+		burst.one_shot = true
+		burst.emitting = false
+		burst.amount = 28
+		burst.lifetime = 1.0
+		burst.explosiveness = 0.92
+		var lbm := BoxMesh.new()
+		lbm.size = Vector3.ONE * VS * 0.65
+		lbm.material = leaf_mat
+		burst.mesh = lbm
+		burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		burst.emission_box_extents = Vector3(0.6, 0.3, height_m * 0.45)
+		burst.direction = Vector3.UP
+		burst.spread = 65.0
+		burst.initial_velocity_min = 1.8
+		burst.initial_velocity_max = 4.2
+		burst.gravity = Vector3(0.0, -12.0, 0.0)
+		add_child(burst)
+		burst.global_position = base_pos + fall_dir * (height_m * 0.5) + Vector3(0.0, 0.4, 0.0)
+		burst.emitting = true
+		get_tree().create_timer(1.4).timeout.connect(burst.queue_free)
+
+		# Drop logs spaced along the fallen trunk
+		if is_mine and player != null:
+			var log_total := clampi(trunk_voxels / 14, 2, 6)
+			for i in log_total:
+				var d := 0.8 + float(i) * ((height_m * 0.75) / float(maxi(1, log_total)))
+				var log_pos := base_pos + fall_dir * d + Vector3(0.0, 0.45, 0.0)
+				DroppedItem.spawn_drop(self, world, player, log_pos, &"pine_wood", 1)
+			DroppedItem.spawn_drop(self, world, player, base_pos + fall_dir * (height_m * 0.65) + Vector3(0.0, 0.55, 0.0), &"pine_sapling", 2)
+		pivot.queue_free()
+	)
 
 
 # ---------------------------------------------------------------- commands / network
@@ -376,6 +578,7 @@ func _valid(cmd: Dictionary) -> bool:
 		"dig": return cmd.get("r", 0) is int and cmd.r >= 0 and cmd.r <= 5
 		"place": return cmd.get("r", 0) is int and cmd.r >= 0 and cmd.r <= 5 and Palette.BUILDABLE.has(cmd.get("m", -1))
 		"prefab": return cmd.get("id", -1) is int and cmd.id >= 0 and cmd.id < Prefabs.count() and cmd.get("r", 0) is int
+		"grow_tree": return true
 	return false
 
 

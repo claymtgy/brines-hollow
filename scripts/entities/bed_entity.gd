@@ -26,7 +26,7 @@ func _build_visuals() -> void:
 
 func get_interaction_prompt(player: Player) -> String:
 	var night: bool = player.sky != null and not player.sky.is_day()
-	return "F  %s in Fisher's Bunk (restore vitality, set wake-up point)" % ("Sleep until dawn" if night else "Rest")
+	return "F  Sleep until morning in Fisher's Bunk (restore vitality, set wake-up point)" if night else "F  Sleep / Rest in Fisher's Bunk (sleep to morning, restore vitality)"
 
 
 func client_interact(player: Player) -> void:
@@ -34,6 +34,8 @@ func client_interact(player: Player) -> void:
 	_rest_locally(player)
 	if manager != null:
 		manager.request_action(self, &"sleep", {})
+	elif player.sky != null:
+		player.sky.time_of_day = 0.28
 
 
 func _rest_locally(player: Player) -> void:
@@ -49,7 +51,9 @@ func _rest_locally(player: Player) -> void:
 
 ## Authority: sleeping at night skips to dawn for the whole world.
 func server_action(action: StringName, _args: Dictionary, _peer: int) -> Dictionary:
-	if action == &"sleep" and manager != null and manager.main != null and manager.main.sky != null:
+	if action == &"sleep" and manager != null:
+		return manager.try_sleep_in_bed(self, _peer)
+	if false:
 		var sky: SkyCycle = manager.main.sky
 		if not sky.is_day():
 			sky.time_of_day = 0.27

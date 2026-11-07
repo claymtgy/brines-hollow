@@ -38,6 +38,17 @@ static func has_item(p_id: StringName) -> bool:
 static func get_by_voxel_mat(voxel_mat: int) -> ItemDef:
 	if not _initialized:
 		init_db()
+	match voxel_mat:
+		Palette.GRASS, Palette.GRASS_DRY:
+			return _voxel_to_item.get(Palette.DIRT, null)
+		Palette.WET_SAND:
+			return _voxel_to_item.get(Palette.SAND, null)
+		Palette.GRAVEL:
+			return _voxel_to_item.get(Palette.STONE, null)
+		Palette.SANDSTONE_B, Palette.SANDSTONE_C:
+			return _voxel_to_item.get(Palette.SANDSTONE_A, null)
+		Palette.LEAVES_DARK:
+			return _voxel_to_item.get(Palette.LEAVES, null)
 	return _voxel_to_item.get(voxel_mat, null)
 
 
@@ -201,6 +212,19 @@ static func _register_tools_and_weapons() -> void:
 		ItemDef.new(&"weighted_trapper_net", "Weighted Throwing Net", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"trapper", &"net"]),
 		ItemDef.new(&"phosphor_lantern_staff", "Phosphor Lantern Staff", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"occult", &"light"]),
 		ItemDef.new(&"net_launcher", "Net Launcher", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"trapper"]),
+		ItemDef.new(&"builders_hammer", "Builder's Hammer", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hammer"]),
+		ItemDef.new(&"driftwood_hoe", "Driftwood Hoe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hoe"]),
+		ItemDef.new(&"stone_pickaxe", "Stone Pickaxe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"pickaxe"]),
+		ItemDef.new(&"copper_pickaxe", "Copper Pickaxe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"pickaxe"]),
+		ItemDef.new(&"driftwood_axe", "Wooden Hatchet", ItemDef.Category.TOOL, 1, -1, [&"tool", &"axe"]),
+		ItemDef.new(&"stone_axe", "Stone Hatchet", ItemDef.Category.TOOL, 1, -1, [&"tool", &"axe"]),
+		ItemDef.new(&"copper_axe", "Copper Hatchet", ItemDef.Category.TOOL, 1, -1, [&"tool", &"axe"]),
+		ItemDef.new(&"iron_axe", "Iron Hatchet", ItemDef.Category.TOOL, 1, -1, [&"tool", &"axe"]),
+		ItemDef.new(&"driftwood_shovel", "Wooden Shovel", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shovel"]),
+		ItemDef.new(&"stone_shovel", "Stone Shovel", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shovel"]),
+		ItemDef.new(&"iron_shovel", "Iron Shovel", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shovel"]),
+		ItemDef.new(&"stone_hoe", "Stone Hoe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hoe"]),
+		ItemDef.new(&"iron_hoe", "Iron Hoe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hoe"]),
 	]
 
 	# Tool properties
@@ -234,6 +258,20 @@ static func _register_tools_and_weapons() -> void:
 	tools[12].weapon_data = {"weapon_type": WeaponDef.WeaponType.TIDAL_LANTERN, "damage": 20, "reach_m": 3.0}
 
 	tools[13].tool_data = {"weapon_type": "trapper", "durability": 40}
+	tools[14].tool_data = {"tier": 1, "build_power": 1.0, "durability": 120}
+	tools[15].tool_data = {"tier": 1, "till_power": 1.0, "durability": 80}
+	tools[16].tool_data = {"tier": 2, "power": 1.6, "durability": 120}
+	tools[17].tool_data = {"tier": 3, "power": 2.1, "durability": 180}
+	tools[18].tool_data = {"tier": 1, "power": 1.0, "durability": 60}
+	tools[19].tool_data = {"tier": 2, "power": 1.6, "durability": 120}
+	tools[20].tool_data = {"tier": 3, "power": 2.2, "durability": 180}
+	tools[21].tool_data = {"tier": 4, "power": 3.0, "durability": 280}
+	tools[22].tool_data = {"tier": 1, "power": 1.2, "durability": 60}
+	tools[23].tool_data = {"tier": 2, "power": 1.8, "durability": 120}
+	tools[24].tool_data = {"tier": 4, "power": 2.6, "durability": 240}
+	tools[25].tool_data = {"tier": 2, "till_power": 1.6, "durability": 140}
+	tools[26].tool_data = {"tier": 4, "till_power": 2.5, "durability": 240}
+	tools[1].tool_data = {"tier": 4, "power": 2.8, "durability": 280}
 
 	for t in tools:
 		register_item(t)
@@ -330,6 +368,7 @@ static func _register_special_and_currencies() -> void:
 		ItemDef.new(&"gilded_ship_wheel", "Gilded Ship Wheel", ItemDef.Category.SPECIAL, 1, -1, [&"trophy", &"boss_drop"]),
 		ItemDef.new(&"blueprint_tide_mill", "Blueprint: Tide Mill", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"engineering"]),
 		ItemDef.new(&"blueprint_dry_dock", "Blueprint: Dry Dock", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"maritime"]),
+		ItemDef.new(&"pine_sapling", "Pine Sapling", ItemDef.Category.SPECIAL, 20, -1, [&"placeable", &"sapling", &"forestry"]),
 	]
 	for s in specials:
 		register_item(s)

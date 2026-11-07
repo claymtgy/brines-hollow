@@ -163,7 +163,7 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 
 	n_warp.init(hcomb(seed, 1), 0.006f, 2);
 	n_shape.init(hcomb(seed, 2), 0.009f, 3);
-	n_hill.init(hcomb(seed, 3), 0.011f, 4);
+	n_hill.init(hcomb(seed, 3), 0.0055f, 3);
 	n_cliff.init(hcomb(seed, 4), 0.005f, 2);
 	n_detail.init(hcomb(seed, 5), 0.05f, 2);
 
@@ -174,7 +174,7 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 	const float W = (float)size.x, D = (float)size.z;
 
 	// Home island in the middle; R is the outer extent of the island profile (land ~0.6 R).
-	islands.push_back({ W * 0.5f, D * 0.5f, 1150.f, T_HOME, 1.0f, 0.0f, 0.0f, 0.0f, 0, 0.f });
+	islands.push_back({ W * 0.5f, D * 0.5f, 1150.f, T_HOME, STYLE_FLAT_MEADOW, 0.0f, 0.28f, -0.35f, 0.0f, 0.12f, 0, 0.f });
 
 	auto try_place = [&](int type, float rmin, float rmax, int count, int tries) {
 		int placed = 0;
@@ -190,11 +190,13 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 			if (!ok) continue;
 			Island is;
 			is.cx = x; is.cz = z; is.R = R; is.type = type;
-			is.hill = type == T_ISLET ? rng.range(0.35f, 0.7f) : rng.range(0.6f, 1.15f);
-			is.cliff_bias = type == T_ISLET ? rng.range(0.0f, 0.35f) : rng.range(-0.25f, 0.25f);
+			is.style = (placed < 5 && type == T_STANDARD) ? placed : rng.irange(0, 4);
+			is.rock_bias = (is.style == STYLE_ROCKY_CRAGS) ? 0.55f : (is.style == STYLE_CLIFF_MESA ? 0.25f : (is.style == STYLE_ROLLING_HILLS ? 0.05f : -0.25f));
+			is.hill = (is.style == STYLE_SANDY_ATOLL) ? rng.range(0.08f, 0.16f) : ((is.style == STYLE_FLAT_MEADOW) ? rng.range(0.16f, 0.26f) : ((is.style == STYLE_ROLLING_HILLS) ? rng.range(0.40f, 0.58f) : ((is.style == STYLE_ROCKY_CRAGS) ? rng.range(0.55f, 0.78f) : rng.range(0.42f, 0.62f))));
+			is.cliff_bias = (is.style == STYLE_SANDY_ATOLL) ? -0.95f : ((is.style == STYLE_FLAT_MEADOW) ? rng.range(-0.75f, -0.45f) : ((is.style == STYLE_ROLLING_HILLS) ? rng.range(-0.35f, -0.10f) : ((is.style == STYLE_ROCKY_CRAGS) ? rng.range(0.18f, 0.38f) : rng.range(0.25f, 0.42f))));
 			is.dry_bias = rng.range(-0.25f, 0.35f);
-			is.tree_bias = type == T_ISLET ? rng.range(-0.4f, 0.0f) : rng.range(-0.2f, 0.25f);
-			is.strata = rng.irange(0, 3);
+			is.tree_bias = (is.style == STYLE_ROCKY_CRAGS || is.style == STYLE_SANDY_ATOLL) ? rng.range(-0.40f, -0.10f) : rng.range(0.05f, 0.28f);
+			is.strata = (is.style == STYLE_ROCKY_CRAGS) ? 3 : ((is.style == STYLE_SANDY_ATOLL) ? 1 : rng.irange(0, 3));
 			is.salt = rng.range(0.f, 5000.f);
 			islands.push_back(is);
 			placed++;
@@ -260,9 +262,10 @@ float ArchipelagoGen::height_f(int x, int z, int *island_out) const {
 			float hills = n_hill.fbm(sx, sz) * 0.5f + 0.5f;
 			float seafloor = 9.f + floor_n * 2.5f + isl * 6.f;
 			float s = smoothstep(0.f, 1.f, isl);
-			float gentle = lerpf(seafloor, sea_mid + 8.f + hills * 24.f * hs + isl * isl * hills * 26.f * hs, s);
+			float gentle = lerpf(seafloor, sea_mid + 8.f + hills * 14.f * hs + isl * isl * hills * 12.f * hs, s);
 			float cliff_mask = smoothstep(0.02f, 0.30f, n_cliff.fbm(sx, sz) + is.cliff_bias);
-			float cliff_h = sea_mid + 22.f * std::min(1.f, hs + 0.3f) + hills * 30.f * hs + isl * isl * 14.f * hs;
+			float cliff_h = sea_mid + 18.f * std::min(1.f, hs + 0.35f) + hills * 18.f * hs + isl * isl * 10.f * hs;
+			if (is.style == STYLE_CLIFF_MESA) cliff_h = std::min(cliff_h, sea_mid + 22.f + hills * 3.f);
 			float cl = lerpf(seafloor + 5.f, cliff_h, smoothstep(0.28f, 0.34f, isl));
 			float t = cl / 7.f;
 			cl = (std::floor(t) + smoothstep(0.3f, 0.7f, t - std::floor(t))) * 7.f;
@@ -305,7 +308,7 @@ int ArchipelagoGen::kind_at(int x, int z, int h, int island, const int *nb) cons
 	for (int i = 0; i < 4; i++) slope = std::max(slope, std::abs(nb[i] - h));
 	int k = K_GRASS;
 	if (h < sea_low - 5) k = K_SEABED;
-	else if (slope >= 5) k = K_ROCK;
+	else if (slope >= 4 || (island >= 0 && islands[island].rock_bias > 0.3f && h > sea_high + 2 && n_detail.fbm(x * 0.25f, z * 0.25f) > 0.12f)) k = K_ROCK;
 	else if (h <= sea_high + 3) k = K_BEACH;
 	if (k == K_GRASS) {
 		float dry_bias = island >= 0 ? islands[island].dry_bias : 0.f;
@@ -345,6 +348,9 @@ Array ArchipelagoGen::get_islands() const {
 		d["center"] = Vector2(is.cx, is.cz);
 		d["radius"] = is.R;
 		d["type"] = is.type;
+		d["style"] = is.style;
+		static const char *snames[5] = { "Flat Meadow", "Sandy Atoll", "Rolling Hills", "Rocky Crags", "Cliff Mesa" };
+		d["style_name"] = snames[std::clamp(is.style, 0, 4)];
 		out.push_back(d);
 	}
 	return out;
@@ -388,7 +394,7 @@ void ArchipelagoGen::plan_sea_cave() {
 		for (float s = home.R * 0.95f; s > home.R * 0.15f; s -= 1.f) {
 			float px = home.cx + dx * s, pz = home.cz + dz * s;
 			int h = column_height((int)px, (int)pz);
-			if (h > sea_mid + 25) { hx = px; hz = pz; break; }
+			if (h > sea_mid + 14) { hx = px; hz = pz; break; }
 			if (h > sea_high + 2) break; // gentle shore, not a cliff
 		}
 		if (std::isnan(hx)) continue;
@@ -548,7 +554,7 @@ void ArchipelagoGen::generate_column(int cx, int cz, std::vector<std::unique_ptr
 				bool stone = r.f() < 0.7f;
 				if (bx < size.x && bz < size.z && bx + 8 >= x0 && bx - 8 < x0 + CS && bz + 8 >= z0 && bz - 8 < z0 + CS) {
 					int k = column_kind(bx, bz);
-					if (k == K_BEACH || k == K_ROCK) {
+					if (k == K_BEACH || k == K_ROCK || ((k == K_GRASS || k == K_GRASS_DRY) && r.f() < 0.28f)) {
 						int bh = column_height(bx, bz);
 						float cy = bh + br * 0.4f;
 						int ir = (int)std::ceil(br);

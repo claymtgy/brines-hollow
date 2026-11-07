@@ -16,6 +16,8 @@ uniform float roughness = 0.2;   // wind 0..1: ripple strength
 uniform float storm = 0.0;       // 0..1: darker sea, whitecaps
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear_mipmap;
 uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
+uniform sampler2D water_mask : hint_default_white, filter_linear;
+uniform vec4 water_mask_rect = vec4(0.0, 0.0, 0.0, 0.0);
 
 varying vec3 wpos;
 varying float crest;
@@ -36,6 +38,15 @@ void vertex() {
 }
 
 void fragment() {
+	if (water_mask_rect.z > 0.0 && water_mask_rect.w > 0.0) {
+		vec2 mask_uv = (wpos.xz - water_mask_rect.xy) / water_mask_rect.zw;
+		if (mask_uv.x >= 0.0 && mask_uv.x <= 1.0 && mask_uv.y >= 0.0 && mask_uv.y <= 1.0) {
+			float m = texture(water_mask, mask_uv).r;
+			if (m < 0.5) {
+				discard;
+			}
+		}
+	}
 	float depth = texture(depth_texture, SCREEN_UV).r;
 	vec4 v = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 	v.xyz /= v.w;
