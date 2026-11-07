@@ -145,6 +145,113 @@ func _run() -> void:
 		loaded_inv.get_item_count(&"backpack_driftwood") == char_inv.get_item_count(&"backpack_driftwood"))
 
 	print("==================================================")
+	# -------------------------------------------------------------------------
+	# 10. Configurable Hotbar, Hammer Detection & Quick Transfer
+	# -------------------------------------------------------------------------
+	var hammer_def: ItemDef = ItemDB.get_item(&"builders_hammer")
+	assert_test.call("ItemDB contains builders_hammer with tag 'hammer'", hammer_def != null and hammer_def.has_tag("hammer"))
+	var hoe_def: ItemDef = ItemDB.get_item(&"driftwood_hoe")
+	assert_test.call("ItemDB contains driftwood_hoe with tag 'hoe'", hoe_def != null and hoe_def.has_tag("hoe"))
+
+	var hb_inv := Inventory.new(24)
+	hb_inv.slots[10] = ItemSlot.new(&"builders_hammer", 1)
+	hb_inv.slots[11] = ItemSlot.new(&"driftwood", 30)
+	assert_test.call("Move builders_hammer from backpack slot 10 to hotbar slot 2",
+		hb_inv.move_to_hotbar(10, 2) and hb_inv.slots[2].item_id == &"builders_hammer" and hb_inv.slots[10].is_empty())
+	hb_inv.set_active_hotbar(2)
+	assert_test.call("is_hammer_active() returns true when hammer is in active hotbar slot", hb_inv.is_hammer_active())
+	hb_inv.set_active_hotbar(0)
+	assert_test.call("is_hammer_active() returns false when active slot is empty", not hb_inv.is_hammer_active())
+
+	# Quick transfer between backpack and hotbar
+	assert_test.call("Quick transfer backpack slot 11 moves driftwood to first open hotbar slot (0)",
+		hb_inv.quick_transfer_slot(11) and hb_inv.slots[0].item_id == &"driftwood" and hb_inv.slots[0].count == 30)
+	assert_test.call("Quick transfer hotbar slot 0 moves driftwood back to backpack (slot 8)",
+		hb_inv.quick_transfer_slot(0) and hb_inv.slots[0].is_empty() and hb_inv.slots[8].item_id == &"driftwood")
+
+	# -------------------------------------------------------------------------
+	# 11. Player Configurable Hotbar & Hammer Build Modes
+	# -------------------------------------------------------------------------
+	var player := Player.new()
+	player.inventory.slots[0] = ItemSlot.new(&"driftwood_pickaxe", 1)
+	player.inventory.slots[1] = ItemSlot.new(&"builders_hammer", 1)
+	player.inventory.slots[2] = ItemSlot.new(&"whittle_rod", 1)
+	player.inventory.slots[3] = ItemSlot.new(&"driftwood_hoe", 1)
+	player.inventory.slots[4] = ItemSlot.new(&"rusty_cutlass", 1)
+	player.select_hotbar_slot(0)
+	assert_test.call("Selecting pickaxe slot sets tool to 0 (Sculpt/Mine) and unequips hammer",
+		player.tool == 0 and not player.is_hammer_equipped())
+	player.select_hotbar_slot(1)
+	assert_test.call("Selecting hammer slot equips hammer", player.is_hammer_equipped())
+	player.select_hammer_prefab(3)
+	assert_test.call("Selecting hammer prefab sets hammer_build_mode=0 (PREFAB) and tool=2",
+		player.hammer_build_mode == 0 and player.tool == 2 and player.prefab_id == 3)
+	player.select_hammer_block(4)
+	assert_test.call("Selecting hammer block sets hammer_build_mode=1 (BLOCK) and tool=1 with mat_index=4",
+		player.hammer_build_mode == 1 and player.tool == 1 and player.mat_index == 4)
+	player.select_hammer_furniture(0)
+	assert_test.call("Selecting hammer furniture sets hammer_build_mode=2 (FURNITURE) and tool=2",
+		player.hammer_build_mode == 2 and player.tool == 2 and player.selected_furniture_idx == 0)
+	player.select_hotbar_slot(2)
+	assert_test.call("Selecting rod slot sets tool to 3 (Fishing Rod)", player.tool == 3 and not player.is_hammer_equipped())
+	player.select_hotbar_slot(3)
+	assert_test.call("Selecting hoe slot sets tool to 4 (Farming)", player.tool == 4)
+
+	# -------------------------------------------------------------------------
+	# 12. Tool Tiers & Material Harvesting Gating
+	# -------------------------------------------------------------------------
+	assert_test.call("Tiered pickaxes exist in ItemDB (stone, copper, iron)",
+		ItemDB.has_item(&"stone_pickaxe") and ItemDB.has_item(&"copper_pickaxe") and ItemDB.has_item(&"iron_pickaxe"))
+	assert_test.call("Tiered hatchets exist in ItemDB (driftwood, stone, copper, iron)",
+		ItemDB.has_item(&"driftwood_axe") and ItemDB.has_item(&"stone_axe") and ItemDB.has_item(&"copper_axe") and ItemDB.has_item(&"iron_axe"))
+	assert_test.call("Tiered shovels exist in ItemDB (driftwood, stone, iron)",
+		ItemDB.has_item(&"driftwood_shovel") and ItemDB.has_item(&"stone_shovel") and ItemDB.has_item(&"iron_shovel"))
+
+	# Equip pickaxe (slot 0) -> can harvest stone, dirt, and tree trunks
+	player.select_hotbar_slot(0)
+	assert_test.call("With pickaxe equipped: can harvest STONE and DIRT",
+		player.can_harvest_voxel(Palette.STONE) and player.can_harvest_voxel(Palette.DIRT))
+
+	# Equip hatchet in slot 5 -> can harvest tree trunks and dirt, NOT stone
+	player.inventory.slots[5] = ItemSlot.new(&"driftwood_axe", 1)
+	player.select_hotbar_slot(5)
+	assert_test.call("With hatchet equipped: can harvest TRUNK and DIRT, but NOT STONE",
+		player.can_harvest_voxel(Palette.TRUNK) and player.can_harvest_voxel(Palette.DIRT) and not player.can_harvest_voxel(Palette.STONE))
+
+	# Empty slot 6 (bare hands) -> can harvest DIRT and GRASS, NOT STONE or TRUNK
+	player.inventory.slots[6] = ItemSlot.new()
+	player.select_hotbar_slot(6)
+	assert_test.call("Bare-handed: can harvest DIRT and GRASS, but NOT STONE or TRUNK",
+		player.can_harvest_voxel(Palette.DIRT) and player.can_harvest_voxel(Palette.GRASS) and not player.can_harvest_voxel(Palette.STONE) and not player.can_harvest_voxel(Palette.TRUNK))
+
+	# -------------------------------------------------------------------------
+	# 13. DroppedItem Walk-Over Pickup
+	# -------------------------------------------------------------------------
+	var drop_root := Node3D.new()
+	player.position = Vector3(10.0, 5.0, 10.0)
+	var stone_before := player.inventory.get_item_count(&"stone")
+	var drop := DroppedItem.spawn_drop(drop_root, null, player, Vector3(20.0, 5.0, 20.0), &"stone", 4)
+	assert_test.call("DroppedItem spawns at mined location without adding to inventory while far away",
+		drop != null and player.inventory.get_item_count(&"stone") == stone_before)
+	# Walk player over to the dropped item after pickup_delay
+	drop.age = 1.0
+	player.position = Vector3(20.0, 5.0, 20.0)
+	for _step in 10:
+		drop._process(0.05)
+	assert_test.call("Walking over DroppedItem magnetizes and collects items into player inventory",
+		player.inventory.get_item_count(&"stone") == stone_before + 4)
+	drop_root.free()
+
+	# -------------------------------------------------------------------------
+	# 14. InventoryUI & BuildMenuUI Instantiation
+	# -------------------------------------------------------------------------
+	var inv_ui := InventoryUI.new()
+	var build_ui := BuildMenuUI.new()
+	assert_test.call("InventoryUI and BuildMenuUI instantiate cleanly", inv_ui != null and build_ui != null)
+	inv_ui.free()
+	build_ui.free()
+	player.free()
+
 	print("Summary: %d / %d tests passed!" % [stats[0], stats[1]])
 	print("==================================================")
 

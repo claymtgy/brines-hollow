@@ -41,6 +41,7 @@ public:
 
 	enum Kind { K_BEACH, K_GRASS, K_ROCK, K_SEABED, K_GRASS_DRY };
 	enum IslandType { T_HOME, T_STANDARD, T_ISLET };
+	enum IslandStyle { STYLE_FLAT_MEADOW = 0, STYLE_SANDY_ATOLL = 1, STYLE_ROLLING_HILLS = 2, STYLE_ROCKY_CRAGS = 3, STYLE_CLIFF_MESA = 4 };
 	enum Mat {
 		M_BEDROCK, M_STONE, M_SA, M_SB, M_SC, M_SAND, M_WET, M_GRAVEL, M_DIRT, M_GRASS, M_GRASS_DRY,
 		M_KELP, M_LEAVES, M_LEAVES_DARK, M_TRUNK, M_FLOWER_Y, M_FLOWER_P, M_DRIFTWOOD, M_GLOW, M_COBBLE, M_DARK_WOOD,
@@ -50,6 +51,8 @@ public:
 	struct Island {
 		float cx, cz, R;
 		int type;
+		int style;           // IslandStyle
+		float rock_bias;     // + more exposed rock / boulders
 		float hill;          // height scale
 		float cliff_bias;    // + more cliffs
 		float dry_bias;      // + more dry grass

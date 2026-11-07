@@ -26,6 +26,9 @@ const BUILTIN := {
 	&"smokehouse":      ["Fisher's Smokehouse",    {&"wood_plank": 12, &"cobblestone": 6}, &"ground", 5],
 	&"saltery":         ["Brine Saltery",          {&"wood_plank": 6, &"stone": 4},     &"ground", 5],
 	&"brewery":         ["Coastal Teahouse",       {&"wood_plank": 6, &"sea_glass": 2}, &"ground", 5],
+	&"furnace":         ["Smelting Furnace",       {&"stone": 8, &"driftwood": 4},      &"ground", 5],
+	&"anvil":           ["Blacksmith's Anvil",     {&"iron_ingot": 2, &"stone": 4},     &"ground", 5],
+	&"pine_sapling":    ["Pine Sapling",           {&"leaves": 2, &"driftwood": 1},     &"soil", 20],
 }
 
 const BAIT_ITEMS := [&"kelp_frond", &"silver_mackerel", &"tidepool_flounder", &"shore_crab"]
@@ -45,6 +48,7 @@ static func register_builtin() -> void:
 		&"workbench": "Carpentry Workbench", &"campfire": "Campfire Skillet",
 		&"hearth_pot": "Hearth Stew Pot", &"smokehouse": "Fisher's Smokehouse",
 		&"saltery": "Brine Saltery", &"brewery": "Coastal Teahouse",
+		&"furnace": "Smelting Furnace", &"anvil": "Blacksmith's Anvil",
 	}
 	for tag: StringName in stations:
 		var name: String = stations[tag]
@@ -58,6 +62,7 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"barber_mirror", MirrorEntity, {"aliases": [&"mirror"]})
 	EntityManager.register_type(&"crab_pot", CrabPotEntity, {"rule": &"intertidal"})
 	EntityManager.register_type(&"salt_pan", SaltPanEntity, {"rule": &"intertidal"})
+	EntityManager.register_type(&"pine_sapling", TreeSaplingEntity, {"rule": &"soil", "aliases": [&"sapling"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]
 		add_item(type, b[0], b[1], b[3])

@@ -24,5 +24,10 @@ set_target_properties(brines PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     PREFIX "lib"
     OUTPUT_NAME "brines${GODOTCPP_SUFFIX}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../bin"
+    # $<1:...> stops multi-config generators (Visual Studio) adding a Debug/Release subdir.
+    # On Windows the .dll is a RUNTIME output; the .lib/.exp import files go to the build dir.
+    LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_CURRENT_SOURCE_DIR}/../bin>"
+    RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_CURRENT_SOURCE_DIR}/../bin>"
+    ARCHIVE_OUTPUT_DIRECTORY "$<1:${CMAKE_CURRENT_BINARY_DIR}>"
+    PDB_OUTPUT_DIRECTORY "$<1:${CMAKE_CURRENT_BINARY_DIR}>"
 )

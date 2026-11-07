@@ -50,6 +50,29 @@ static func has_recipe(recipe_id: StringName) -> bool:
 	return _recipes.has(recipe_id)
 
 
+const STATION_NAMES := {
+	&"none": "Hand Crafting",
+	&"workbench": "Carpentry Workbench",
+	&"furnace": "Smelting Furnace",
+	&"anvil": "Blacksmith's Anvil",
+	&"campfire": "Campfire Skillet",
+	&"hearth_pot": "Hearth Stew Pot",
+	&"smokehouse": "Fisher's Smokehouse",
+	&"saltery": "Brine Saltery",
+	&"brewery": "Coastal Teahouse",
+}
+
+
+static func get_station_exclusive_recipes(station: StringName) -> Array[RecipeDef]:
+	if not _initialized:
+		init_db()
+	var list: Array[RecipeDef] = []
+	if _by_station.has(station):
+		for r in _by_station[station]:
+			list.append(r)
+	return list
+
+
 static func get_recipes_for_station(station: StringName) -> Array[RecipeDef]:
 	if not _initialized:
 		init_db()
@@ -116,6 +139,132 @@ static func _register_basic_and_tools() -> void:
 		&"parchment_shore_chart", 1, 0.0, [&"map", &"chart"]
 	))
 
+	register_recipe(RecipeDef.new(
+		&"craft_builders_hammer", "Builder's Hammer", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"wood_plank", "count": 1}],
+		&"builders_hammer", 1, 0.0, [&"tool", &"hammer", &"building"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_driftwood_pickaxe", "Driftwood Pickaxe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"wood_plank", "count": 2}],
+		&"driftwood_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_driftwood_hoe", "Driftwood Hoe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"wood_plank", "count": 1}],
+		&"driftwood_hoe", 1, 0.0, [&"tool", &"hoe", &"farming"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_driftwood_axe", "Wooden Hatchet", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"wood_plank", "count": 1}],
+		&"driftwood_axe", 1, 0.0, [&"tool", &"axe", &"forestry"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_driftwood_shovel", "Wooden Shovel", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 1}, {"item_id": &"wood_plank", "count": 2}],
+		&"driftwood_shovel", 1, 0.0, [&"tool", &"shovel"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_pine_plank", "Pine Wood Planks", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"pine_wood", "count": 1}],
+		&"wood_plank", 4, 0.0, [&"timber", &"building"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_pine_sapling", "Pine Sapling", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"leaves", "count": 2}, {"item_id": &"pine_wood", "count": 1}],
+		&"pine_sapling", 2, 0.0, [&"placeable", &"sapling", &"forestry"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_pine_sapling_drift", "Pine Sapling (Driftwood)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"leaves", "count": 2}, {"item_id": &"driftwood", "count": 1}],
+		&"pine_sapling", 1, 0.0, [&"placeable", &"sapling", &"forestry"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_tarred_wood", "Tarred Wood", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"kelp_frond", "count": 1}],
+		&"dark_wood", 2, 0.0, [&"timber", &"refined"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_stone_pickaxe", "Stone Pickaxe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 3}],
+		&"stone_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_stone_axe", "Stone Hatchet", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_stone_shovel", "Stone Shovel", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_shovel", 1, 0.0, [&"tool", &"shovel"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_stone_hoe", "Stone Hoe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_hoe", 1, 0.0, [&"tool", &"hoe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"smelt_copper_ingot", "Smelt Sea-Brass Ingot", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"copper_ore", "count": 2}],
+		&"sea_brass_ingot", 1, 0.0, [&"metal", &"alloy"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"smelt_iron_ingot", "Smelt Iron Ingot", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"sea_iron_ore", "count": 2}],
+		&"iron_ingot", 1, 0.0, [&"metal", &"refined"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_copper_pickaxe", "Copper Pickaxe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"sea_brass_ingot", "count": 3}],
+		&"copper_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_copper_axe", "Copper Hatchet", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"sea_brass_ingot", "count": 2}],
+		&"copper_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_iron_pickaxe", "Iron Pickaxe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 3}],
+		&"iron_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_iron_axe", "Iron Hatchet", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 2}],
+		&"iron_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_iron_shovel", "Iron Shovel", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 1}],
+		&"iron_shovel", 1, 0.0, [&"tool", &"shovel"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_iron_hoe", "Iron Hoe", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 2}],
+		&"iron_hoe", 1, 0.0, [&"tool", &"hoe"]
+	))
+
 	# Workbench Crafting
 	register_recipe(RecipeDef.new(
 		&"craft_backpack_driftwood", "Driftwood Rucksack", RecipeDef.Category.WORKBENCH, &"workbench",
@@ -133,6 +282,124 @@ static func _register_basic_and_tools() -> void:
 		&"craft_hydrographic_chart", "Hydrographic Sea Chart", RecipeDef.Category.WORKBENCH, &"workbench",
 		[{"item_id": &"parchment_shore_chart", "count": 1}, {"item_id": &"ghost_squid", "count": 1}],
 		&"hydrographic_sea_chart", 1, 2.0, [&"map", &"chart"]
+	))
+
+	# Hand-craftable starter stations (so you can build stations from inventory without a Hammer)
+	register_recipe(RecipeDef.new(
+		&"hand_craft_workbench", "Carpentry Workbench", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 4}, {"item_id": &"wood_plank", "count": 4}],
+		&"workbench", 1, 0.0, [&"placeable", &"station"]
+	))
+	register_recipe(RecipeDef.new(
+		&"hand_craft_campfire", "Campfire Skillet", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 4}, {"item_id": &"stone", "count": 4}],
+		&"campfire", 1, 0.0, [&"placeable", &"station"]
+	))
+	register_recipe(RecipeDef.new(
+		&"hand_craft_campfire_pine", "Campfire (Pine Logs)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"pine_wood", "count": 3}, {"item_id": &"stone", "count": 4}],
+		&"campfire", 1, 0.0, [&"placeable", &"station"]
+	))
+	register_recipe(RecipeDef.new(
+		&"hand_craft_furnace", "Smelting Furnace", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"stone", "count": 8}, {"item_id": &"driftwood", "count": 4}],
+		&"furnace", 1, 0.0, [&"placeable", &"station"]
+	))
+
+	# Smelting Furnace Recipes (&"furnace")
+	register_recipe(RecipeDef.new(
+		&"furnace_smelt_copper", "Smelt Sea-Brass Ingot", RecipeDef.Category.FORGE, &"furnace",
+		[{"item_id": &"copper_ore", "count": 2}],
+		&"sea_brass_ingot", 1, 0.0, [&"metal", &"alloy"]
+	))
+	register_recipe(RecipeDef.new(
+		&"furnace_smelt_iron", "Smelt Iron Ingot", RecipeDef.Category.FORGE, &"furnace",
+		[{"item_id": &"sea_iron_ore", "count": 2}],
+		&"iron_ingot", 1, 0.0, [&"metal", &"refined"]
+	))
+	register_recipe(RecipeDef.new(
+		&"furnace_fire_sea_glass", "Fire Sea Glass", RecipeDef.Category.FORGE, &"furnace",
+		[{"item_id": &"sand", "count": 3}],
+		&"sea_glass", 2, 0.0, [&"glass", &"refined"]
+	))
+	register_recipe(RecipeDef.new(
+		&"furnace_bake_cobble", "Kiln-Fired Cobblestone", RecipeDef.Category.FORGE, &"furnace",
+		[{"item_id": &"stone", "count": 2}, {"item_id": &"dirt", "count": 1}],
+		&"cobblestone", 4, 0.0, [&"stone", &"building"]
+	))
+
+	# Blacksmith's Anvil Recipes (&"anvil")
+	register_recipe(RecipeDef.new(
+		&"anvil_copper_pickaxe", "Forge Copper Pickaxe", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"sea_brass_ingot", "count": 3}],
+		&"copper_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_copper_axe", "Forge Copper Hatchet", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"sea_brass_ingot", "count": 2}],
+		&"copper_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_iron_pickaxe", "Forge Iron Pickaxe", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 3}],
+		&"iron_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_iron_axe", "Forge Iron Hatchet", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 2}],
+		&"iron_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_iron_shovel", "Forge Iron Shovel", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 1}],
+		&"iron_shovel", 1, 0.0, [&"tool", &"shovel"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_iron_hoe", "Forge Iron Hoe", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"dark_wood", "count": 2}, {"item_id": &"iron_ingot", "count": 2}],
+		&"iron_hoe", 1, 0.0, [&"tool", &"hoe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_rusty_cutlass", "Forge Mariner's Cutlass", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"iron_ingot", "count": 2}, {"item_id": &"dark_wood", "count": 1}],
+		&"rusty_cutlass", 1, 0.0, [&"weapon", &"cutlass"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_harpoon_lance", "Forge Harpoon Lance", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"dark_wood", "count": 3}, {"item_id": &"iron_ingot", "count": 1}],
+		&"harpoon_lance", 1, 0.0, [&"weapon", &"harpoon"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_diving_helmet", "Forge Brass Diving Helm", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"sea_brass_ingot", "count": 4}, {"item_id": &"sea_glass", "count": 2}],
+		&"diving_helmet" if ItemDB.has_item(&"diving_helmet") else &"brass_diving_helmet", 1, 0.0, [&"armor", &"head"]
+	))
+
+	# Additional Carpentry Workbench Recipes (&"workbench")
+	register_recipe(RecipeDef.new(
+		&"wb_stone_pickaxe", "Stone Pickaxe", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 3}],
+		&"stone_pickaxe", 1, 0.0, [&"tool", &"pickaxe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"wb_stone_axe", "Stone Hatchet", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_axe", 1, 0.0, [&"tool", &"axe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"wb_stone_shovel", "Stone Shovel", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_shovel", 1, 0.0, [&"tool", &"shovel"]
+	))
+	register_recipe(RecipeDef.new(
+		&"wb_stone_hoe", "Stone Hoe", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"stone_hoe", 1, 0.0, [&"tool", &"hoe"]
+	))
+	register_recipe(RecipeDef.new(
+		&"wb_tarred_wood", "Tarred Wood", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"pine_wood", "count": 2}, {"item_id": &"kelp_frond", "count": 1}],
+		&"dark_wood", 2, 0.0, [&"timber", &"refined"]
 	))
 
 

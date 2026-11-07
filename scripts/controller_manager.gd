@@ -129,6 +129,8 @@ func _get_dualsense_glyph(action: StringName) -> String:
 		&"brush_up": return "D-Pad Up"
 		&"brush_down": return "D-Pad Down"
 		&"snap": return "Touchpad / Select"
+		&"inventory_toggle": return "Touchpad"
+		&"build_menu_toggle": return "L2"
 		&"menu_toggle": return "Options"
 		&"swap_shoulder": return "R3"
 		_: return String(action)
@@ -150,6 +152,8 @@ func _get_xbox_glyph(action: StringName) -> String:
 		&"brush_up": return "D-Pad Up"
 		&"brush_down": return "D-Pad Down"
 		&"snap": return "View / Back"
+		&"inventory_toggle": return "View"
+		&"build_menu_toggle": return "LT"
 		&"menu_toggle": return "Menu"
 		&"swap_shoulder": return "RS"
 		_: return String(action)
@@ -164,15 +168,18 @@ func _get_keyboard_glyph(action: StringName) -> String:
 		&"sprint": return "Shift"
 		&"pick": return "MMB"
 		&"rotate": return "R"
-		&"cycle_tool_prev": return "1-5"
-		&"cycle_tool_next": return "1-5"
+		&"cycle_tool_prev": return "1-8"
+		&"cycle_tool_next": return "1-8"
 		&"prev_item": return "Q"
 		&"next_item": return "E"
 		&"brush_up": return "X"
 		&"brush_down": return "Z"
 		&"snap": return "G"
+		&"inventory_toggle": return "I / Tab"
+		&"build_menu_toggle": return "B"
 		&"menu_toggle": return "Esc"
 		&"swap_shoulder": return "V"
+		&"toggle_first_person": return "F5 / P"
 		_: return String(action)
 
 
@@ -306,11 +313,15 @@ func setup_input_map() -> void:
 		"sprint": [KEY_SHIFT],
 		"interact": [KEY_F],
 		"tool_1": [KEY_1], "tool_2": [KEY_2], "tool_3": [KEY_3],
-		"tool_4": [KEY_4], "tool_5": [KEY_5],
+		"tool_4": [KEY_4], "tool_5": [KEY_5], "tool_6": [KEY_6],
+		"tool_7": [KEY_7], "tool_8": [KEY_8],
 		"prev_item": [KEY_Q], "next_item": [KEY_E],
 		"brush_down": [KEY_Z], "brush_up": [KEY_X],
 		"rotate": [KEY_R], "snap": [KEY_G],
+		"inventory_toggle": [KEY_I, KEY_TAB],
+		"build_menu_toggle": [KEY_B],
 		"fast_time": [KEY_T], "swap_shoulder": [KEY_V],
+		"toggle_first_person": [KEY_F5, KEY_P],
 		"menu_toggle": [KEY_ESCAPE],
 	}
 	for action in keys:
@@ -325,7 +336,9 @@ func setup_input_map() -> void:
 	var mouse := [
 		["use", MOUSE_BUTTON_LEFT],
 		["alt_use", MOUSE_BUTTON_RIGHT],
-		["pick", MOUSE_BUTTON_MIDDLE]
+		["pick", MOUSE_BUTTON_MIDDLE],
+		# Mouse wheel is reserved for camera zoom and UI scrolling, not hotbar cycling
+		# (Unbound MOUSE_BUTTON_WHEEL_DOWN from cycle_tool_next)
 	]
 	for pair in mouse:
 		if not InputMap.has_action(pair[0]):

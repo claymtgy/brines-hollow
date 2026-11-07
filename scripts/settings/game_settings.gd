@@ -25,6 +25,7 @@ var fov := 66.0
 var shoulder_right := true
 var camera_distance := 5.5
 var foliage_fade := true
+var first_person := false
 
 # graphics
 var preset := Preset.MEDIUM
@@ -63,7 +64,7 @@ var pixel_budget := 1.4
 const SAVED_FIELDS := ["mouse_sensitivity", "invert_y", "controller_look_speed", "fov", "shoulder_right",
 	"camera_distance", "foliage_fade", "preset", "render_scale", "pixel_budget", "upscaler", "aa", "shadows",
 	"view_distance", "glow", "vsync", "max_fps", "window_mode", "ui_scale",
-	"master_volume", "ambience_volume", "effects_volume"]
+	"master_volume", "ambience_volume", "effects_volume", "first_person"]
 
 
 static func is_steam_deck() -> bool:
@@ -131,6 +132,7 @@ func apply(main: Node) -> void:
 		rig.foliage_fade = foliage_fade
 		rig.shoulder = absf(rig.shoulder) * (1.0 if shoulder_right else -1.0)
 		rig.dist = camera_distance
+		rig.set_first_person(first_person)
 		if rig.cam != null:
 			rig.cam.fov = fov
 	# --- resolution scaling + anti-aliasing

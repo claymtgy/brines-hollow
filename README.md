@@ -7,7 +7,8 @@ Co-op coastal voxel sandbox. Godot 4.7; voxel core in C++ (GDExtension), gamepla
 Needs a C++17 compiler, CMake and Python 3.
 
 ```sh
-native/build.sh            # -> bin/libbrines.linux.template_debug.x86_64.so
+native/build.sh            # Linux  -> bin/libbrines.linux.template_debug.x86_64.so
+native\build.bat           # Windows (VS 2022 Build Tools) -> bin/libbrines.windows.template_debug.x86_64.dll
 native/build.sh release    # for exports / Steam Deck builds
 ```
 

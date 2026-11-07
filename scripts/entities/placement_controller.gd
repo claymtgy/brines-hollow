@@ -133,7 +133,7 @@ func update_ghost() -> void:
 	if _place_type == &"" or player.entities == null:
 		return
 	player._ghost.visible = false
-	player._highlight.visible = false
+	# Keep player._highlight visible so the block/entity under the cursor stays highlighted
 	if player.target.is_empty():
 		_place_reason = "aim at the ground"
 		return
@@ -172,6 +172,8 @@ func _check(probe: WorldEntity, box: AABB) -> String:
 	var m := w.get_voxel(c.x, c.y - 1, c.z)
 	if m == 0 or Palette.is_foliage(m):
 		return "needs solid ground"
+	if rule == &"soil" and not (m in [Palette.GRASS, Palette.GRASS_DRY, Palette.DIRT, Palette.SAND]):
+		return "needs dirt, grass, or sand to take root"
 	var lo := Vector3i((box.position / VS).floor())
 	var hi := Vector3i(((box.end - Vector3.ONE * 0.001) / VS).floor())
 	for y in range(lo.y, hi.y + 1):

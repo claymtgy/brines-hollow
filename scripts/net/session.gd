@@ -63,6 +63,74 @@ var _check_started := false
 var _ext := {}                 # key -> {"save": Callable, "load": Callable}
 var _pending_ext := {}         # key -> state received/loaded before its system registered
 var _is_new_world := true
+var selected_customizer_data: Dictionary = {}
+var skin_overridden_in_menu := false
+
+
+static func list_saved_worlds() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not DirAccess.dir_exists_absolute("user://worlds"):
+		return out
+	for d in DirAccess.get_directories_at("user://worlds"):
+		if d.contains(".bak-"):
+			continue
+		var wpath := "user://worlds/%s/world.json" % d
+		if FileAccess.file_exists(wpath):
+			var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(wpath))
+			if meta is Dictionary:
+				out.append({
+					"id": d,
+					"name": String(meta.get("name", d)),
+					"seed": int(meta.get("seed", 1106)),
+					"saved_at": String(meta.get("saved_at", "")),
+				})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a.get("saved_at", "")) > String(b.get("saved_at", ""))
+	)
+	return out
+
+
+func configure_world(p_world_name: String, p_seed: int, create_new: bool = false) -> void:
+	world_name = p_world_name.validate_filename()
+	if world_name == "":
+		world_name = "hollow"
+	dir = "user://worlds/%s/" % world_name
+	if create_new and DirAccess.dir_exists_absolute(dir):
+		_archive_world()
+	_is_new_world = not FileAccess.file_exists(dir + "world.json")
+	_loaded_state = {}
+	if not _is_new_world:
+		var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir + "world.json"))
+		if meta is Dictionary and meta.has("seed"):
+			main.seed_value = int(meta.seed)
+		_loaded_state = _read_var(dir + "state.dat", {})
+		if _loaded_state.has("tod") and main.sky != null:
+			main.sky.time_of_day = float(_loaded_state.tod)
+		if _loaded_state.has("weather") and main.sky != null and main.sky.weather != null:
+			main.sky.weather.deserialize(_loaded_state.weather)
+	else:
+		main.seed_value = p_seed
+
+
+func save_skin_preference(cust_data: Dictionary) -> void:
+	selected_customizer_data = cust_data.duplicate(true)
+	skin_overridden_in_menu = true
+	var path := "user://profile_default.cfg"
+	var cfg := ConfigFile.new()
+	cfg.load(path)
+	cfg.set_value("player", "appearance", selected_customizer_data)
+	cfg.save(path)
+
+
+func load_skin_preference() -> Dictionary:
+	var path := "user://profile_default.cfg"
+	var cfg := ConfigFile.new()
+	if cfg.load(path) == OK:
+		var d: Variant = cfg.get_value("player", "appearance", {})
+		if d is Dictionary:
+			selected_customizer_data = d
+			return d
+	return {}
 
 
 func setup(p_main: Node, args: Dictionary) -> void:
@@ -74,6 +142,7 @@ func setup(p_main: Node, args: Dictionary) -> void:
 		world_name = "hollow"
 	dir = "user://worlds/%s/" % world_name
 	player_key = _load_player_key(String(args.get("profile", "default")))
+	load_skin_preference()
 	if args.has("new-world") or args.has("new_world"):
 		_archive_world()
 	_is_new_world = not FileAccess.file_exists(dir + "world.json")
@@ -227,6 +296,9 @@ func _bind_systems() -> void:
 		_profile_applied = true
 		apply_profile(_pending_profile)
 		_pending_profile = null
+	elif not _profile_applied and main.player != null and not selected_customizer_data.is_empty():
+		_profile_applied = true
+		main.player.customizer.deserialize(selected_customizer_data)
 
 
 func _server_tick(delta: float) -> void:
@@ -274,7 +346,10 @@ func apply_profile(d: Dictionary) -> void:
 	if d.has("inv"):
 		p.inventory.deserialize(d.inv)
 	if d.has("cust"):
-		p.customizer.deserialize(d.cust)
+		if skin_overridden_in_menu and not selected_customizer_data.is_empty():
+			p.customizer.deserialize(selected_customizer_data)
+		else:
+			p.customizer.deserialize(d.cust)
 	if d.has("quests") and main.quests != null:
 		main.quests.deserialize(d.quests)
 	if d.has("pos"):

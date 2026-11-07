@@ -8,6 +8,8 @@ signal craft_completed(recipe_id: StringName, output_item_id: StringName, count:
 signal fuel_updated(remaining_sec: float)
 signal station_halted(reason: String)
 
+const MAX_FUEL_SEC: float = 240.0
+
 var station_id: StringName = &"none"
 var station_name: String = "Field Crafting"
 var requires_fuel: bool = false
@@ -22,16 +24,40 @@ var is_active: bool = false
 ## Fuel burn durations per item (in seconds)
 const FUEL_BURN_TIMES: Dictionary = {
 	&"driftwood": 20.0,
+	&"pine_wood": 45.0,
 	&"dark_wood": 60.0,
 	&"wood_plank": 15.0,
-	&"kelp_frond": 10.0
+	&"kelp_frond": 10.0,
+	&"leaves": 8.0
 }
+
+const FUEL_PRIORITY: Array[StringName] = [
+	&"driftwood",
+	&"pine_wood",
+	&"wood_plank",
+	&"dark_wood",
+	&"kelp_frond",
+	&"leaves"
+]
 
 
 func _init(p_station_id: StringName = &"none", p_name: String = "Field Crafting", p_req_fuel: bool = false) -> void:
 	station_id = p_station_id
 	station_name = p_name
 	requires_fuel = p_req_fuel
+
+
+static func is_fuel_item(item_id: StringName) -> bool:
+	return FUEL_BURN_TIMES.has(item_id)
+
+
+static func has_any_fuel(inv: Inventory) -> bool:
+	if inv == null:
+		return false
+	for fid: StringName in FUEL_PRIORITY:
+		if inv.has_item(fid, 1):
+			return true
+	return false
 
 
 ## Adds fuel from inventory. Returns count of fuel items actually consumed.
@@ -41,15 +67,43 @@ func add_fuel_from_inventory(inv: Inventory, fuel_id: StringName, count: int = 1
 	var burn_per_unit: float = FUEL_BURN_TIMES[fuel_id]
 	var removed := inv.remove_item(fuel_id, count)
 	if removed > 0:
-		fuel_remaining_sec += removed * burn_per_unit
+		fuel_remaining_sec = minf(MAX_FUEL_SEC, fuel_remaining_sec + removed * burn_per_unit)
 		fuel_updated.emit(fuel_remaining_sec)
 	return removed
+
+
+## Recharges the fire using 1 fuel item from inventory (prioritizing preferred_item if valid).
+func recharge_from_inventory(inv: Inventory, preferred_item: StringName = &"") -> Dictionary:
+	if inv == null:
+		return {"recharged": false, "reason": "No inventory"}
+	if fuel_remaining_sec >= MAX_FUEL_SEC - 1.0:
+		return {"recharged": false, "reason": "Fire is already fully stoked (%.0fs)" % fuel_remaining_sec}
+	var order: Array[StringName] = []
+	if preferred_item != &"" and FUEL_BURN_TIMES.has(preferred_item):
+		order.append(preferred_item)
+	for fid: StringName in FUEL_PRIORITY:
+		if not order.has(fid):
+			order.append(fid)
+	for fid: StringName in order:
+		if inv.has_item(fid, 1):
+			var burn_sec: float = float(FUEL_BURN_TIMES[fid])
+			var removed := inv.remove_item(fid, 1)
+			if removed > 0:
+				fuel_remaining_sec = minf(MAX_FUEL_SEC, fuel_remaining_sec + removed * burn_sec)
+				fuel_updated.emit(fuel_remaining_sec)
+				return {
+					"recharged": true,
+					"item_id": fid,
+					"added_sec": burn_sec,
+					"remaining_sec": fuel_remaining_sec
+				}
+	return {"recharged": false, "reason": "Requires wood, driftwood, or planks for fuel"}
 
 
 ## Directly injects fuel time (useful for tests or ambient fires).
 func add_fuel_time(seconds: float) -> void:
 	if seconds > 0.0:
-		fuel_remaining_sec += seconds
+		fuel_remaining_sec = minf(MAX_FUEL_SEC, fuel_remaining_sec + seconds)
 		fuel_updated.emit(fuel_remaining_sec)
 
 
