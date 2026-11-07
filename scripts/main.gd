@@ -20,8 +20,11 @@ var quests: QuestManager
 var village: SettlementManager
 var entities: EntityManager
 var session: Session
+var creatures: CreatureNet   # Agent C: creatures & optional combat
 var settings: GameSettings
 var settings_menu: SettingsMenu
+var village_mgr: VillageManager
+var trade: TradeManager
 var controller: ControllerManager = ControllerManager.new()
 
 var is_net := false
@@ -37,7 +40,11 @@ var _assigned_spawn_idx: int = -1
 
 func _ready() -> void:
 	controller.setup_input_map()
-	for a in OS.get_cmdline_user_args():
+	var raw_args := OS.get_cmdline_user_args()
+	for a in OS.get_cmdline_args():
+		if a.begins_with("--") and not raw_args.has(a):
+			raw_args.append(a)
+	for a in raw_args:
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		_args[kv[0]] = kv[1] if kv.size() > 1 else ""
 	if _args.has("seed"):
@@ -79,6 +86,20 @@ func _ready() -> void:
 	add_child(session)
 	session.setup(self, _args)
 
+	# Entities (Agent A): created up front so the node exists on every peer before RPCs arrive.
+	# Saved/synced via Session.register_state; starter furniture spawns once per world.
+	entities = EntityManager.new()
+	entities.name = "EntityManager"
+	add_child(entities)
+	entities.bind(self)
+
+	# --- Agent C: creatures & optional combat (host-simulated; see scripts/creatures/) ---
+	creatures = CreatureNet.new()
+	creatures.name = "Creatures"
+	creatures.main = self
+	add_child(creatures)
+	# --- end Agent C ---
+
 	# Player settings (user://settings.cfg). Dev args override for this run only:
 	#   --preset=deck|low|medium|high   --deck   --radius=N
 	settings = GameSettings.load_or_default()
@@ -98,6 +119,20 @@ func _ready() -> void:
 	add_child(settings_menu)
 	settings_menu.setup(self, settings)
 
+	# --- Village & trade (agent B): drifters, homes, routines, merchant ships. Their RPC
+	# nodes (/root/Main/Village, /root/Main/Trade) must exist on every peer.
+	village_mgr = VillageManager.new()
+	village_mgr.main = self
+	add_child(village_mgr)
+	trade = TradeManager.new()
+	trade.main = self
+	add_child(trade)
+	if _args.has("villagecheck"):
+		village_mgr.call_deferred("run_check", String(_args.villagecheck))
+	elif _args.has("tradecheck"):
+		trade.call_deferred("run_check")
+	# --- end village & trade
+
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected)
@@ -110,7 +145,8 @@ func _ready() -> void:
 		start_host()
 	elif _args.has("join"):
 		start_join(_args.join if _args.join != "" else "127.0.0.1")
-	elif _args.has("solo") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck"):
+	elif _args.has("solo") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck") \
+			or (_args.has("villagecheck") and not _args.has("join") and not _args.has("host")) or _args.has("tradecheck"):
 		start_solo()
 	else:
 		hud.show_menu(true)
@@ -182,10 +218,6 @@ func _begin_world() -> void:
 	farm = NetFarm.new(VoxelWorld.SEA_MID, VoxelWorld.TIDE_AMP)
 	quests = QuestManager.new()
 	village = SettlementManager.new(Vector3i(world.gen.spawn), "Brine's Hollow")
-	entities = EntityManager.new()
-	entities.name = "EntityManager"
-	add_child(entities)
-	_spawn_initial_entities()
 
 	quests.accept_quest(&"story_first_hearth")
 	quests.accept_quest(&"story_tide_tackle")
@@ -231,18 +263,6 @@ func _begin_world() -> void:
 		_run_screenshots(_args.shot)
 
 
-func _spawn_initial_entities() -> void:
-	if world == null or world.gen == null or entities == null:
-		return
-	var sp: Vector3i = Vector3i(world.gen.spawn)
-	entities.spawn_entity(&"workbench", sp + Vector3i(2, 0, 1))
-	entities.spawn_entity(&"campfire", sp + Vector3i(3, 0, -1))
-	entities.spawn_entity(&"hearth_pot", sp + Vector3i(1, 0, 3))
-	entities.spawn_entity(&"driftwood_chest", sp + Vector3i(-2, 0, 1))
-	entities.spawn_entity(&"fisher_bed", sp + Vector3i(-2, 0, -2))
-	entities.spawn_entity(&"barber_mirror", sp + Vector3i(2, 0, -2))
-
-
 # ---------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
@@ -250,7 +270,7 @@ func _process(delta: float) -> void:
 		return
 	player.water_level = sky.water_level_m()
 	if farm != null:
-		farm.tick_all(delta, sky.water_level_vox, sky.is_day(), false)
+		farm.tick_all(delta, sky.water_level_vox, sky.is_day(), sky.is_raining())  # [weather] rain waters crops
 	if village != null:
 		village.tick_settlement(delta, sky.time_of_day)
 	# Terrain streams around the player (or the free camera in scripted shots).
@@ -334,6 +354,8 @@ func _apply_cmd(cmd: Dictionary) -> void:
 	_cmd_is_mine = not is_net or int(cmd.get("by", -1)) == multiplayer.get_unique_id()
 	world.apply_command(cmd)
 	_cmd_is_mine = false
+	if village_mgr != null:
+		village_mgr.on_world_edit(cmd)   # homes re-check, villagers re-route
 
 
 func _valid(cmd: Dictionary) -> bool:
@@ -459,10 +481,14 @@ func _run_screenshots(dir: String) -> void:
 		await get_tree().process_frame
 	await _shot(dir, "01_spawn")
 	hud.help.visible = false
+	player.vitality.eat_food(&"samphire_bouillabaisse")
+	player.vitality.eat_food(&"smoked_fish_ration")
+	player.inventory.add_item(&"hydrographic_sea_chart", 1)
+	player.inventory.equip_item_from_slot(0)
 	rig.yaw = 0.0
 	rig.pitch = -0.30
 	rig.dist = 9.0
-	for i in 4:
+	for i in 6:
 		await get_tree().process_frame
 	await _shot(dir, "02_toward_hut")
 	rig.dist = 16.0

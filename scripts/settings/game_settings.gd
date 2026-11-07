@@ -41,6 +41,11 @@ var window_mode := WindowMode.WINDOWED
 # interface
 var ui_scale := 1.0
 
+# audio (linear 0..1)
+var master_volume := 0.8
+var ambience_volume := 0.8
+var effects_volume := 0.8
+
 # keyboard rebinds: action -> physical keycode (only actions the player changed)
 var key_overrides := {}
 
@@ -57,7 +62,8 @@ var pixel_budget := 1.4
 
 const SAVED_FIELDS := ["mouse_sensitivity", "invert_y", "controller_look_speed", "fov", "shoulder_right",
 	"camera_distance", "foliage_fade", "preset", "render_scale", "pixel_budget", "upscaler", "aa", "shadows",
-	"view_distance", "glow", "vsync", "max_fps", "window_mode", "ui_scale"]
+	"view_distance", "glow", "vsync", "max_fps", "window_mode", "ui_scale",
+	"master_volume", "ambience_volume", "effects_volume"]
 
 
 static func is_steam_deck() -> bool:
@@ -178,6 +184,13 @@ func apply(main: Node) -> void:
 			WindowMode.BORDERLESS: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		main.get_tree().root.content_scale_factor = ui_scale
 	Engine.max_fps = max_fps
+	# --- audio buses (Ambience / Effects are created by AmbientAudio)
+	AmbientAudio.ensure_buses()
+	for pair in [["Master", master_volume], ["Ambience", ambience_volume], ["Effects", effects_volume]]:
+		var bi := AudioServer.get_bus_index(pair[0])
+		if bi >= 0:
+			AudioServer.set_bus_volume_db(bi, linear_to_db(maxf(float(pair[1]), 0.0001)))
+			AudioServer.set_bus_mute(bi, float(pair[1]) <= 0.001)
 	apply_keys()
 
 

@@ -355,6 +355,8 @@ func _process(_delta: float) -> void:
 			var ent: WorldEntity = main.entities.get_closest_interactable(p.position)
 			if ent != null:
 				prompt = ent.get_interaction_prompt(p)
+				if ent.item_id != &"":
+					prompt += "      (hold F: pick up)"
 	main.hud.set_prompt(prompt)
 	# Remote avatars may have been created after a seat change.
 	for id in main.remotes:

@@ -15,6 +15,16 @@ extends Node
 ##   terrain.dat      edited chunk columns (zstd)       {Vector2i: PackedByteArray}
 ##   state.dat        time, farm, village, boats, lights (zstd)
 ##   players/<key>.dat  one profile per player (zstd)
+##
+## Generic shared state (any system):
+##   session.register_state(key: StringName, save: Callable() -> Variant, load: Callable(Variant))
+##     * authority: `save` is written to state.dat["ext"][key] on every save; on load the stored
+##       value is passed to `load` once the world is generated (or at registration, if later)
+##     * joining players receive `save.call()` right after the terrain snapshot, before any
+##       later live RPCs, and `load` runs on their machine (buffered until registered)
+##     * live changes after that are the system's own business (its own RPCs)
+##   signal world_ready(is_new_world: bool)  - after terrain + registered state are restored
+##   is_new_world() -> bool                  - authority: no save existed for this world
 
 const SAVE_VERSION := 1
 const AUTOSAVE_SEC := 60.0
@@ -23,6 +33,8 @@ const PROFILE_SEND_SEC := 15.0
 const FARM_SNAPSHOT_SEC := 10.0
 const VILLAGE_SNAPSHOT_SEC := 20.0
 const COLUMN_BATCH := 16
+
+signal world_ready(is_new_world: bool)
 
 var main: Node
 var world_name := "hollow"
@@ -48,6 +60,9 @@ var _village_t := VILLAGE_SNAPSHOT_SEC
 var _time_t := 1.0
 var _args := {}
 var _check_started := false
+var _ext := {}                 # key -> {"save": Callable, "load": Callable}
+var _pending_ext := {}         # key -> state received/loaded before its system registered
+var _is_new_world := true
 
 
 func setup(p_main: Node, args: Dictionary) -> void:
@@ -61,6 +76,7 @@ func setup(p_main: Node, args: Dictionary) -> void:
 	player_key = _load_player_key(String(args.get("profile", "default")))
 	if args.has("new-world") or args.has("new_world"):
 		_archive_world()
+	_is_new_world = not FileAccess.file_exists(dir + "world.json")
 	# Not joining: our own save decides the seed and the time of day.
 	if not args.has("join") and FileAccess.file_exists(dir + "world.json"):
 		var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir + "world.json"))
@@ -69,10 +85,31 @@ func setup(p_main: Node, args: Dictionary) -> void:
 		_loaded_state = _read_var(dir + "state.dat", {})
 		if _loaded_state.has("tod"):
 			main.sky.time_of_day = float(_loaded_state.tod)
+		if _loaded_state.has("weather") and main.sky.weather != null:  # [weather] day clock
+			main.sky.weather.deserialize(_loaded_state.weather)
 		print("[session] world '%s' found (seed %d)" % [world_name, main.seed_value])
 	main.multiplayer.peer_connected.connect(_on_peer_connected)
 	main.multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	main.multiplayer.connected_to_server.connect(_on_connected_to_server)
+
+
+## Generic persistence + join sync for any system (see header).
+func register_state(key: StringName, save_fn: Callable, load_fn: Callable) -> void:
+	_ext[key] = {"save": save_fn, "load": load_fn}
+	if _pending_ext.has(key):
+		load_fn.call(_pending_ext[key])
+		_pending_ext.erase(key)
+
+
+func is_new_world() -> bool:
+	return _is_new_world and is_authority()
+
+
+func _load_ext(key: StringName, data: Variant) -> void:
+	if _ext.has(key):
+		(_ext[key].load as Callable).call(data)
+	else:
+		_pending_ext[key] = data
 
 
 func is_authority() -> bool:
@@ -99,9 +136,13 @@ func on_world_generated() -> void:
 				_profiles[f.trim_suffix(".dat")] = _read_var(dir + "players/" + f, {})
 		if _profiles.has(player_key) and not dedicated:
 			_pending_profile = _profiles[player_key]
+		var ext: Dictionary = _loaded_state.get("ext", {})
+		for key: StringName in ext:
+			_load_ext(key, ext[key])
 	for e: Array in _pending_columns:
 		store.import_column(e[0], e[1])
 	_pending_columns.clear()
+	world_ready.emit(is_new_world())
 
 
 func _restore_boats() -> void:
@@ -190,7 +231,7 @@ func _bind_systems() -> void:
 
 func _server_tick(delta: float) -> void:
 	if main.farm != null:
-		main.farm.tick_all(delta, main.sky.water_level_vox, main.sky.is_day(), false)
+		main.farm.tick_all(delta, main.sky.water_level_vox, main.sky.is_day(), main.sky.is_raining())
 	if main.village != null:
 		main.village.tick_settlement(delta, main.sky.time_of_day)
 	_time_t -= delta
@@ -276,10 +317,12 @@ func save_all() -> void:
 	var state := {
 		"v": SAVE_VERSION,
 		"tod": main.sky.time_of_day,
+		"weather": main.sky.weather.serialize() if main.sky.weather != null else {},
 		"farm": main.farm.serialize() if main.farm != null else {},
 		"village": main.village.serialize() if main.village != null else {},
 		"boats": boats,
 		"lights": main.world._lights.keys(),
+		"ext": _save_ext(),
 	}
 	_write_var(dir + "state.dat", state)
 	if main.player != null and not dedicated:
@@ -293,6 +336,13 @@ func save_all() -> void:
 		f.store_string(JSON.stringify(meta, "  "))
 	print("[session] saved '%s': %d columns, %d players (%d ms)" % [
 		world_name, cols.size(), _profiles.size(), Time.get_ticks_msec() - t0])
+
+
+func _save_ext() -> Dictionary:
+	var out := {}
+	for key: StringName in _ext:
+		out[key] = (_ext[key].save as Callable).call()
+	return out
 
 
 func _write_var(path: String, value: Variant) -> void:
@@ -349,7 +399,9 @@ func _on_peer_connected(id: int) -> void:
 		farm_full.rpc_id(id, main.farm.serialize())
 	if main.village != null:
 		village_full.rpc_id(id, main.village.serialize())
-	print("[session] peer %d joined: sent %d edited columns" % [id, sent])
+	for key: StringName in _ext:
+		ext_state.rpc_id(id, key, _pack((_ext[key].save as Callable).call()))
+	print("[session] peer %d joined: sent %d edited columns, %d state blocks" % [id, sent, _ext.size()])
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -372,6 +424,11 @@ static func _pack(v: Variant) -> PackedByteArray:
 static func _unpack(data: PackedByteArray) -> Variant:
 	var n := data.decode_u64(0)
 	return bytes_to_var(data.slice(8).decompress(n, FileAccess.COMPRESSION_ZSTD))
+
+
+@rpc("authority", "call_remote", "reliable")
+func ext_state(key: StringName, data: PackedByteArray) -> void:
+	_load_ext(key, _unpack(data))
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -500,9 +557,21 @@ func _check_report(tag: String) -> void:
 	var eh := 17
 	for col: Vector2i in cols:
 		eh = hash([eh, col, main.world.store.export_column(col)])
-	print("[%s] edits_hash=%d checksum=%d edited_cols=%d plots=%d planted=%d inv_stone=%d boats=%d" % [
+	# Entities (Agent A): count + the check crab pot's bait + check barrel's stored fish.
+	var ents := -1
+	var pot_bait := -1
+	var barrel_fish := -1
+	if main.entities != null:
+		ents = main.entities.get_count()
+		var pot: WorldEntity = main.entities.get_entity_at(c + Vector3i(-8, 0, 4))
+		if pot is CrabPotEntity:
+			pot_bait = (pot as CrabPotEntity).pot.bait_count
+		var barrel: WorldEntity = main.entities.get_entity_at(c + Vector3i(14, 0, -12))
+		if barrel is ChestEntity:
+			barrel_fish = (barrel as ChestEntity)._stored_count()
+	print("[%s] edits_hash=%d checksum=%d edited_cols=%d plots=%d planted=%d inv_stone=%d boats=%d entities=%d pot_bait=%d barrel=%d" % [
 		tag, eh, main._region_checksum(c, 14), cols.size(), plots, planted,
-		inv_stone, main.boats.boats.size() if main.boats != null else -1])
+		inv_stone, main.boats.boats.size() if main.boats != null else -1, ents, pot_bait, barrel_fish])
 
 
 func _check_edits() -> void:
@@ -515,6 +584,23 @@ func _check_edits() -> void:
 	main.player.inventory.add_item(&"seed_shore_wheat", 1)
 	main.farm.plant_from_inventory(cell, main.player.inventory)
 	main.player.inventory.add_item(&"stone", 7)
+	# Entities (Agent A): a crab pot and a sea barrel, placed through the authority.
+	if main.entities != null:
+		main.entities.request_place(&"crab_pot", c + Vector3i(-8, 0, 4), 0)
+		main.entities.request_place(&"sea_barrel", c + Vector3i(14, 0, -12), 1)
+
+
+## Entities (Agent A): bait the check pot and stock the check barrel (after they exist).
+func _check_entity_actions() -> void:
+	if main.entities == null:
+		return
+	var c := _check_cell()
+	var pot: WorldEntity = main.entities.get_entity_at(c + Vector3i(-8, 0, 4))
+	if pot != null:
+		main.entities.request_action(pot, &"bait", {"item": &"kelp_frond", "n": 2})
+	var barrel: WorldEntity = main.entities.get_entity_at(c + Vector3i(14, 0, -12))
+	if barrel != null:
+		main.entities.request_action(barrel, &"deposit", {"item": &"silver_mackerel", "n": 3})
 
 
 func _maybe_run_check() -> void:
@@ -534,6 +620,8 @@ func _persist_check(mode: String) -> void:
 	if mode == "write":
 		_check_edits()
 		await get_tree().create_timer(1.0).timeout
+		_check_entity_actions()
+		await get_tree().create_timer(0.5).timeout
 		_check_report("persist-write")
 		save_all()
 	else:
@@ -550,7 +638,9 @@ func _sync_check(role: String) -> void:
 		"a":
 			await get_tree().create_timer(2.0).timeout
 			_check_edits()
-			await get_tree().create_timer(3.0).timeout
+			await get_tree().create_timer(1.5).timeout
+			_check_entity_actions()
+			await get_tree().create_timer(1.5).timeout
 			_check_report("sync-a")
 			profile_upload.rpc_id(1, player_key, capture_profile())
 			await get_tree().create_timer(1.0).timeout

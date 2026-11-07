@@ -29,7 +29,7 @@ var chart_texture: ImageTexture
 var _texture_generated: bool = false
 var _texture_size: int = 128
 
-var landmarks: Array[Dictionary] = []
+var landmarks: Array = []
 var boats: Array[Vector3] = []
 var peer_positions: Array[Vector3] = []
 
@@ -121,7 +121,7 @@ func update_state(
 	p_player_pos: Vector3,
 	p_yaw: float,
 	p_water_level: float,
-	p_landmarks: Array[Dictionary] = [],
+	p_landmarks: Array = [],
 	p_boats: Array[Vector3] = [],
 	p_peers: Array[Vector3] = []
 ) -> void:

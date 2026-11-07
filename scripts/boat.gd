@@ -118,7 +118,8 @@ func forward2() -> Vector2:
 
 
 func water_y() -> float:
-	return sky.water_level_m() if sky != null else VoxelWorld.SEA_MID * VS
+	# [weather] the hull rides the same swell the water shader draws
+	return (sky.water_level_m() + sky.wave_offset_at(position)) if sky != null else VoxelWorld.SEA_MID * VS
 
 
 func seat_transform(i: int) -> Transform3D:
@@ -148,7 +149,10 @@ func _solid(p: Vector3) -> bool:
 	if world.has_method("is_loaded_at") and not world.call("is_loaded_at", p):
 		return true  # never sail into unloaded chunks
 	var m := world.get_voxel(floori(p.x / VS), floori(p.y / VS), floori(p.z / VS))
-	return m != 0 and not Palette.is_foliage(m)
+	if m != 0 and not Palette.is_foliage(m):
+		return true
+	# Entities (Agent A): placed entities and other boats are obstacles too.
+	return EntityManager.current != null and EntityManager.current.point_solid(p, self)
 
 
 ## Number of hull sample points overlapping terrain at a candidate pose.
@@ -180,7 +184,8 @@ func find_exit_spot() -> Variant:
 				var y := vy * VS
 				var lo := Vector3(p.x - Player.HW + 0.002, y + 0.002, p.z - Player.HW + 0.002)
 				var hi := Vector3(p.x + Player.HW - 0.002, y + Player.H, p.z + Player.HW - 0.002)
-				if world.aabb_collides(lo, hi):
+				# Entities (Agent A): ignore=world (nothing) so the spot also clears this boat's own hull.
+				if world.aabb_collides(lo, hi) or (EntityManager.current != null and EntityManager.current.blocks(lo, hi, world)):
 					continue
 				if world.aabb_collides(Vector3(p.x - 0.18, y - 0.06, p.z - 0.18), Vector3(p.x + 0.18, y - 0.01, p.z + 0.18)):
 					if y >= water - 0.2:
@@ -213,6 +218,8 @@ func simulate(delta: float, f: float, t: float, hard: bool) -> void:
 	yaw_vel *= exp(-2.4 * delta)
 	# A lazy current so an empty boat drifts a little.
 	var drift := Vector2(sin(_t * 0.05 + id * 1.7), cos(_t * 0.037 + id)) * 0.04
+	if sky != null:
+		drift += sky.wind_drift()  # [weather] storms push boats downwind
 	vel += (drift - vel * 0.02) * delta
 
 	var old_blocked := blocked_count(position, yaw, water)
@@ -286,6 +293,13 @@ func _process(delta: float) -> void:
 	var bob := sin(_t * 1.3 + id) * 0.035
 	var roll := sin(_t * 0.9 + id * 2.0) * 0.035 - yaw_vel * 0.08
 	var pitch := -clampf(vel.dot(forward2()), -1.0, 3.0) * 0.025 + sin(_t * 1.1) * 0.015
+	# [weather] pitch/roll follow the swell slope under the hull
+	if sky != null and not grounded:
+		var fw := Vector3(sin(yaw), 0, cos(yaw))
+		var rt := Vector3(fw.z, 0, -fw.x)
+		pitch += (sky.wave_offset_at(position - fw * 1.6) - sky.wave_offset_at(position + fw * 1.6)) * 0.3
+		roll += (sky.wave_offset_at(position - rt * 0.7) - sky.wave_offset_at(position + rt * 0.7)) * 0.5
+		bob *= 1.0 + sky.sea_roughness() * 2.0
 	if grounded:
 		bob *= 0.2
 		roll = 0.06

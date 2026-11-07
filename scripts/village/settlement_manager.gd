@@ -59,9 +59,67 @@ func validate_and_register_room(start_pos: Vector3i, query_voxel: Callable) -> i
 
 func get_vacant_room_id() -> int:
 	for r in rooms:
-		if r["assigned_drifter_id"] == &"":
+		if r["assigned_drifter_id"] == &"" and r.get("valid", true):
 			return r["id"]
 	return -1
+
+
+## World-scale homes (RoomDetector.scan_home): one record per bed.
+## Returns the room id; an existing record for the same bed is updated in place.
+func register_home(result: RoomDetector.RoomValidationResult, bed: Vector3i) -> int:
+	var rid := find_room_by_bed(bed)
+	if rid >= 0:
+		update_home(rid, result)
+		return rid
+	var room_record: Dictionary = {
+		"id": rooms.size(),
+		"center": bed,
+		"bed": bed,
+		"bounds_min": result.room_bounds_min,
+		"bounds_max": result.room_bounds_max,
+		"volume": result.volume,
+		"quality": result.quality_score,
+		"valid": true,
+		"assigned_drifter_id": &""
+	}
+	rooms.append(room_record)
+	room_registered.emit(room_record["id"], result.quality_score)
+	# Homeless villagers move in straight away.
+	for d in drifters:
+		if d.is_homeless():
+			assign_drifter_to_room(d.id, room_record["id"])
+			break
+	_check_tier_progression()
+	return room_record["id"]
+
+
+## Re-validation after nearby edits. Invalid homes keep their record (and resident) but
+## don't count until they're fixed.
+func update_home(room_id: int, result: RoomDetector.RoomValidationResult) -> void:
+	if room_id < 0 or room_id >= rooms.size():
+		return
+	var r: Dictionary = rooms[room_id]
+	r["valid"] = result.is_valid
+	if result.is_valid:
+		r["bounds_min"] = result.room_bounds_min
+		r["bounds_max"] = result.room_bounds_max
+		r["volume"] = result.volume
+		r["quality"] = result.quality_score
+
+
+func find_room_by_bed(bed: Vector3i) -> int:
+	for r in rooms:
+		if r.has("bed") and r["bed"] == bed:
+			return r["id"]
+	return -1
+
+
+func valid_room_count() -> int:
+	var n := 0
+	for r in rooms:
+		if r.get("valid", true):
+			n += 1
+	return n
 
 
 # -------------------------------------------------------------------------

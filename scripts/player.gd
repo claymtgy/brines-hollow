@@ -22,12 +22,14 @@ var farm: FarmManager
 var quests: QuestManager
 var village: SettlementManager
 var entities: EntityManager
+var placement: PlacementController   # Entities (Agent A): place / use / pick up
 var controller: ControllerManager
 
 var inventory: Inventory = Inventory.new(24)
 var customizer: CharacterCustomizer = CharacterCustomizer.new()
 var fishing: FishingController = FishingController.new(1)
 var vitality: VitalityController = VitalityController.new()
+var combat: PlayerCombat = null   # Agent C: attached by CreatureNet
 var fishing_cast_power: float = 0.0
 
 var vel := Vector3.ZERO
@@ -86,6 +88,11 @@ func unboard(stand_at: Vector3) -> void:
 
 
 func _ready() -> void:
+	# --- Entities (Agent A): placement, interaction and pick-up controller
+	placement = PlacementController.new()
+	add_child(placement)
+	placement.setup(self)
+	# ---
 	model = CharacterModel.new()
 	add_child(model)
 	model.setup(Palette.COAT_A, Palette.HAT_A, customizer)
@@ -111,6 +118,8 @@ func _ready() -> void:
 		if world and world.gen:
 			var respawn: Dictionary = world.gen.get_spawn_for_player(1)
 			position = respawn.get("pos", position)
+			if has_meta("respawn_point"):  # Entities (Agent A): wake at the last bed used
+				position = get_meta("respawn_point")
 			vel = Vector3.ZERO
 			vitality.revive(position)
 	)
@@ -154,6 +163,7 @@ void fragment() {
 	# Starter inventory setup
 	ItemDB.init_db()
 	inventory.add_item(&"driftwood_pickaxe", 1)
+	inventory.add_item(&"rusty_cutlass", 1)   # Agent C: optional combat starter
 	inventory.add_item(&"whittle_rod", 1)
 	inventory.add_item(&"seed_shore_wheat", 5)
 	inventory.add_item(&"seed_samphire", 3)
@@ -210,8 +220,10 @@ func _on_quest_completed(q: QuestDef) -> void:
 func _collides(p: Vector3) -> bool:
 	# Box shrunk by EPS so resting exactly on a voxel boundary doesn't count as overlap.
 	const EPS := 0.002
-	return world.aabb_collides(Vector3(p.x - HW + EPS, p.y + EPS, p.z - HW + EPS),
-			Vector3(p.x + HW - EPS, p.y + H - EPS, p.z + HW - EPS))
+	var lo := Vector3(p.x - HW + EPS, p.y + EPS, p.z - HW + EPS)
+	var hi := Vector3(p.x + HW - EPS, p.y + H - EPS, p.z + HW - EPS)
+	# Entities (Agent A): solid entities and boat hulls block the player too.
+	return world.aabb_collides(lo, hi) or (entities != null and entities.blocks(lo, hi))
 
 
 func _move_horizontal(axis: int, amount: float) -> bool:
@@ -303,6 +315,8 @@ func _physics_process(delta: float) -> void:
 	var speed := (3.2 * swim_mult) if swimming else (7.2 if is_sprinting else 4.4)
 	var accel := 6.0 if swimming else (14.0 if on_ground else 5.0)
 	var target_v := wish * speed
+	if combat != null:   # Agent C: sneaking slows you, a dodge roll overrides movement
+		target_v = combat.modify_move(target_v)
 	vel.x = lerpf(vel.x, target_v.x, 1.0 - exp(-accel * delta))
 	vel.z = lerpf(vel.z, target_v.z, 1.0 - exp(-accel * delta))
 
@@ -377,12 +391,9 @@ func _set_tool(new_tool: int) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if not input_enabled or is_seated():
 		return
-	if e.is_action_pressed("interact"):
-		if entities != null:
-			var ent: WorldEntity = entities.get_closest_interactable(position)
-			if ent != null and ent.can_interact(self):
-				ent.interact(self)
-				return
+	# Entities (Agent A): tap F = use nearest entity, hold F = pick it up.
+	if placement != null and placement.handle_input(e):
+		return
 	if e.is_action_pressed("tool_1"): _set_tool(0)
 	elif e.is_action_pressed("tool_2"): _set_tool(1)
 	elif e.is_action_pressed("tool_3"): _set_tool(2)
@@ -425,7 +436,9 @@ func _try_eat_active_food() -> bool:
 
 
 func _cycle(d: int) -> void:
-	if tool == 2:
+	if tool == 2 and placement != null:
+		placement.cycle_blueprint(d)  # Entities (Agent A): prefabs, then placeable furniture
+	elif tool == 2:
 		prefab_id = posmod(prefab_id + d, Prefabs.count())
 	elif tool == 4:
 		inventory.active_hotbar_index = posmod(inventory.active_hotbar_index + d, 8)
@@ -491,6 +504,8 @@ func _process(delta: float) -> void:
 	model.rotation = Vector3(0, facing, 0)
 	model.animate(delta, horizontal_speed, on_ground, swimming)
 	_update_target()
+	if placement != null:
+		placement.update_ghost()  # Entities (Agent A)
 	_use_cd -= delta
 
 	if tool == 3 and fishing != null:
@@ -509,6 +524,9 @@ func _process(delta: float) -> void:
 			fishing.tick(delta)
 
 	var can_input: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or (controller != null and controller.current_type != ControllerManager.Type.KEYBOARD_MOUSE)
+	# Agent C: a weapon in the active hotbar slot turns LMB into a swing (RMB parry, C dodge).
+	if combat != null and combat.process_input(delta, input_enabled and can_input):
+		return
 	if input_enabled and can_input and Input.is_action_pressed("use") and _use_cd <= 0.0 and tool != 3 and not target.is_empty():
 		_use_tool()
 
@@ -572,6 +590,9 @@ func prefab_origin() -> Vector3i:
 
 
 func _use_tool() -> void:
+	if placement != null and placement.try_use():  # Entities (Agent A): placing furniture
+		_use_cd = 0.35
+		return
 	var cell: Vector3i = target.cell
 	match tool:
 		0:

@@ -1,11 +1,16 @@
 class_name ChestEntity
 extends WorldEntity
-## Physical 3D Storage Chest in the world.
-## Wraps StorageContainer to provide persistent storage for items and fish.
+## Storage chest / crate / watertight sea barrel. Contents live on the host/server.
+##   F            take up to 5 of the first stored stack
+##   Shift + F    deposit the active hotbar stack (if this container accepts it)
+## Deposits and withdrawals are server actions, so two players can't duplicate items.
 
 signal container_accessed(player: Player)
 
+const U := VoxelWorld.VS * 0.5
+
 var container: StorageContainer
+var style := &"chest"   # chest | crate | barrel
 
 
 func _init(
@@ -17,59 +22,158 @@ func _init(
 	super._init(&"driftwood_chest", p_name, p_coord)
 	entity_type = EntityType.CONTAINER
 	container = StorageContainer.new(p_name, p_capacity, p_tags)
+	size = Vector3(9, 6, 6) * U
+
+
+static func make_crate(coord: Vector3i) -> ChestEntity:
+	var c := ChestEntity.new("Storage Crate", coord, 24)
+	c.entity_id = &"storage_crate"
+	c.style = &"crate"
+	c.size = Vector3(8, 8, 8) * U
+	return c
+
+
+## Seafood-only barrel that keeps catches fresh.
+static func make_sea_barrel(coord: Vector3i) -> ChestEntity:
+	var c := ChestEntity.new("Watertight Sea Barrel", coord, 12, PackedStringArray(["fish", "shellfish"]))
+	c.container.preserves_freshness = true
+	c.entity_id = &"sea_barrel"
+	c.style = &"barrel"
+	c.size = Vector3(7, 10, 7) * U
+	return c
 
 
 func _build_visuals() -> void:
-	_mesh_instance = MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.75, 0.50, 0.50)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.48, 0.36, 0.24) # Weathered driftwood chest
-	_mesh_instance.mesh = box
-	_mesh_instance.material_override = mat
-	add_child(_mesh_instance)
+	var g: Prefabs.Grid
+	match style:
+		&"crate":
+			g = Prefabs.Grid.new(8, 8, 8)
+			g.box(0, 0, 0, 7, 7, 7, Palette.PLANK)
+			for e in [0, 7]:
+				g.box(e, 0, 0, e, 7, 0, Palette.DARK_WOOD); g.box(e, 0, 7, e, 7, 7, Palette.DARK_WOOD)
+				g.box(0, e, 0, 7, e, 0, Palette.DARK_WOOD); g.box(0, e, 7, 7, e, 7, Palette.DARK_WOOD)
+			g.box(1, 3, 0, 6, 4, 0, Palette.DRIFTWOOD)
+		&"barrel":
+			g = Prefabs.Grid.new(7, 10, 7)
+			for y in 10:
+				var r := 3.3 if (y > 1 and y < 8) else 2.9
+				for z in 7:
+					for x in 7:
+						if Vector2(x - 3, z - 3).length() <= r:
+							g.setv(x, y, z, Palette.PLANK if (x + z) % 2 == 0 else Palette.DRIFTWOOD)
+			for y in [1, 8]:
+				for z in 7:
+					for x in 7:
+						if g.getv(x, y, z) != 0 and Vector2(x - 3, z - 3).length() > 2.2:
+							g.setv(x, y, z, Palette.METAL)
+			g.box(2, 9, 2, 4, 9, 4, Palette.DARK_WOOD)
+		_:
+			g = Prefabs.Grid.new(9, 6, 6)
+			g.box(0, 0, 0, 8, 5, 5, Palette.DRIFTWOOD)
+			g.box(0, 4, 0, 8, 5, 5, Palette.PLANK)          # lid
+			for x in [0, 8]:
+				g.box(x, 0, 0, x, 5, 5, Palette.DARK_WOOD)
+			g.box(4, 3, 5, 4, 4, 5, Palette.METAL)           # latch (front = +z)
+	_mesh_instance = _voxel_model(g)
+
+
+func _stored_count() -> int:
+	var n := 0
+	for slot in container.inventory.slots:
+		if not slot.is_empty():
+			n += slot.count
+	return n
 
 
 func get_interaction_prompt(player: Player) -> String:
-	var item_cnt := 0
-	for slot in container.inventory.slots:
-		if not slot.is_empty():
-			item_cnt += slot.count
-	return "F  Open %s (%d items stored)" % [entity_name, item_cnt]
+	var active := player.inventory.get_active_item()
+	var dep := ""
+	if active != null and not active.is_empty() and container.can_accept_item(active.item_id):
+		dep = "    Shift+F  Store %s" % _item_name(active.item_id)
+	return "F  Take from %s (%d stored)%s" % [entity_name, _stored_count(), dep]
 
 
+static func _item_name(id: StringName) -> String:
+	var def: ItemDef = ItemDB.get_item(id)
+	return def.name if def != null else String(id)
+
+
+func client_interact(player: Player) -> void:
+	container_accessed.emit(player)
+	if Input.is_action_pressed("sprint"):
+		var active := player.inventory.get_active_item()
+		if active == null or active.is_empty():
+			_toast(player, "Select a hotbar stack to store it.")
+			return
+		var id := active.item_id
+		if not container.can_accept_item(id):
+			_toast(player, "%s only holds seafood." % entity_name if style == &"barrel" else "That won't fit in %s." % entity_name)
+			return
+		var n := player.inventory.remove_item(id, active.count)
+		if n > 0:
+			manager.request_action(self, &"deposit", {"item": id, "n": n})
+		return
+	if _stored_count() == 0:
+		_toast(player, "%s is empty. Hold Shift and press F to store your active stack." % entity_name)
+		return
+	manager.request_action(self, &"take", {})
+
+
+func _toast(player: Player, t: String) -> void:
+	if player.hud:
+		player.hud.show_toast(t)
+
+
+func server_action(action: StringName, args: Dictionary, _peer: int) -> Dictionary:
+	match action:
+		&"deposit":
+			var id := StringName(args.get("item", ""))
+			var n := int(args.get("n", 0))
+			if n <= 0:
+				return {}
+			var left := container.deposit(id, n)
+			var res := {"changed": left < n, "toast": "Stored %d %s" % [n - left, _item_name(id)]}
+			if left > 0:
+				res["grant"] = [[id, left]]   # didn't fit: give it back
+				res["toast"] = "%s is full" % entity_name if left == n else res["toast"] + " (%d didn't fit)" % left
+			return res
+		&"take":
+			for slot in container.inventory.slots:
+				if not slot.is_empty():
+					var id: StringName = slot.item_id
+					var taken := container.withdraw(id, mini(slot.count, 5))
+					return {"changed": true, "grant": [[id, taken]], "toast": "Took %d %s" % [taken, _item_name(id)]}
+	return {}
+
+
+## Legacy local interaction (unit tests / older callers): same rules, applied directly.
 func interact(player: Player) -> void:
 	super.interact(player)
 	container_accessed.emit(player)
-	# Fast deposit / take interaction: if player has items in active hotbar slot, deposit them
 	var active_slot := player.inventory.get_active_item()
-	if active_slot and not active_slot.is_empty():
+	if active_slot and not active_slot.is_empty() and container.can_accept_item(active_slot.item_id):
 		var deposit_id: StringName = active_slot.item_id
-		var deposit_count: int = active_slot.count
-		if container.can_accept_item(deposit_id):
-			var remaining := container.inventory.add_item(deposit_id, deposit_count)
-			var transferred := deposit_count - remaining
-			if transferred > 0:
-				player.inventory.remove_item(deposit_id, transferred)
-				if player.hud:
-					player.hud.show_toast("Stored %d %s in %s." % [transferred, deposit_id, entity_name])
-				return
-
-	# Otherwise, retrieve first available item from container
+		var remaining := container.inventory.add_item(deposit_id, active_slot.count)
+		var transferred := active_slot.count - remaining
+		if transferred > 0:
+			player.inventory.remove_item(deposit_id, transferred)
+			return
 	for slot in container.inventory.slots:
 		if not slot.is_empty():
 			var item_id: StringName = slot.item_id
-			var count: int = mini(slot.count, 5)
-			var unadded := player.inventory.add_item(item_id, count)
-			var taken := count - unadded
+			var taken := mini(slot.count, 5) - player.inventory.add_item(item_id, mini(slot.count, 5))
 			if taken > 0:
 				container.inventory.remove_item(item_id, taken)
-				if player.hud:
-					player.hud.show_toast("Retrieved %d %s from %s." % [taken, item_id, entity_name])
-				return
+			return
 
-	if player.hud:
-		player.hud.show_toast("%s is currently empty." % entity_name)
+
+## Picking a container up returns it with its contents.
+func pickup_items() -> Array:
+	var out := super.pickup_items()
+	for slot in container.inventory.slots:
+		if not slot.is_empty():
+			out.append([slot.item_id, slot.count])
+	return out
 
 
 func serialize() -> Dictionary:

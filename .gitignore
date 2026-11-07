@@ -13,3 +13,6 @@ bin/*.dylib
 # Dev artifacts
 shots/
 *.avi
+
+# Claude Code agent worktrees
+.claude/

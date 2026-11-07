@@ -106,6 +106,13 @@ func open() -> void:
 		main.player.input_enabled = false
 
 
+## Straight to the settings screen (main menu "Settings" button).
+func open_settings() -> void:
+	open()
+	_pause.visible = false
+	_settings_panel.visible = true
+
+
 func close() -> void:
 	_cancel_rebind()
 	_root.visible = false
@@ -130,38 +137,10 @@ func _input(e: InputEvent) -> void:
 
 # ---------------------------------------------------------------- UI
 
-func _theme() -> Theme:
-	var t := Theme.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.13, 0.11, 0.10, 0.92)
-	sb.set_corner_radius_all(12)
-	sb.set_content_margin_all(18)
-	sb.border_color = Color(0.95, 0.85, 0.65, 0.3)
-	sb.set_border_width_all(1)
-	t.set_stylebox("panel", "PanelContainer", sb)
-	t.set_color("font_color", "Label", Color(0.98, 0.94, 0.86))
-	t.set_font_size("font_size", "Label", 17)
-	var bn := StyleBoxFlat.new()
-	bn.bg_color = Color(0.86, 0.55, 0.30)
-	bn.set_corner_radius_all(8)
-	bn.set_content_margin_all(9)
-	var bh := bn.duplicate() as StyleBoxFlat
-	bh.bg_color = Color(0.93, 0.64, 0.38)
-	for st in ["normal", "focus"]:
-		t.set_stylebox(st, "Button", bn)
-	t.set_stylebox("hover", "Button", bh)
-	t.set_stylebox("pressed", "Button", bh)
-	t.set_color("font_color", "Button", Color(0.16, 0.10, 0.07))
-	t.set_color("font_hover_color", "Button", Color(0.12, 0.07, 0.05))
-	t.set_color("font_focus_color", "Button", Color(0.12, 0.07, 0.05))
-	t.set_font_size("font_size", "Button", 17)
-	return t
-
-
 func _build() -> void:
 	_building = true
 	_root = Control.new()
-	_root.theme = _theme()
+	UiTheme.prepare(_root)
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_root)
 	var dim := ColorRect.new()
@@ -181,7 +160,8 @@ func _build() -> void:
 	_pause.add_child(pv)
 	var title := Label.new()
 	title.text = "Brine's Hollow"
-	title.add_theme_font_size_override("font_size", 30)
+	title.theme_type_variation = &"Title"
+	title.add_theme_font_size_override("font_size", 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pv.add_child(title)
 	_button(pv, "Resume", close)
@@ -204,6 +184,7 @@ func _build() -> void:
 	_build_graphics(_tab(tabs, "Graphics"))
 	_build_interface(_tab(tabs, "Interface"))
 	_build_keys(_tab(tabs, "Keys"))
+	_build_audio(_tab(tabs, "Audio"))
 	var bottom := HBoxContainer.new()
 	bottom.alignment = BoxContainer.ALIGNMENT_END
 	sv.add_child(bottom)
@@ -292,8 +273,7 @@ func _option(parent: Control, label: String, field: String, names: Array, graphi
 func _header(parent: Control, text: String) -> void:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", 20)
-	l.add_theme_color_override("font_color", Color(0.95, 0.75, 0.5))
+	l.theme_type_variation = &"Header"
 	parent.add_child(l)
 
 
@@ -329,9 +309,18 @@ func _build_graphics(v: VBoxContainer) -> void:
 	_slider(v, "Frame cap (0 = none)", "max_fps", 0, 144, 1, "%d")
 
 
+func _build_audio(v: VBoxContainer) -> void:
+	_header(v, "Volume")
+	_slider(v, "Master", "master_volume", 0.0, 1.0, 0.05, "%.2f")
+	_slider(v, "Ambience (sea, wind, rain)", "ambience_volume", 0.0, 1.0, 0.05, "%.2f")
+	_slider(v, "Effects (thunder)", "effects_volume", 0.0, 1.0, 0.05, "%.2f")
+
+
 func _build_interface(v: VBoxContainer) -> void:
 	_header(v, "Interface")
 	_slider(v, "UI scale", "ui_scale", 0.75, 2.0, 0.05, "%.2fx")
+	if main.get("creatures") != null:   # Agent C: world difficulty (host-editable)
+		main.creatures.build_settings_row(v)
 
 
 func _build_keys(v: VBoxContainer) -> void:

@@ -6,6 +6,8 @@ extends Node3D
 const DAY_LENGTH := 720.0
 
 var time_of_day := 0.34       # 0..1 (0.25 = sunrise, 0.5 = noon, 0.75 = sunset)
+var day := 0                  # whole days since world creation (weather schedule clock)
+var weather: Weather
 var time_scale := 1.0
 var glow_mode := 1            # 0 off, 1 night only, 2 always (set by GameSettings)
 var water_level_vox := VoxelWorld.SEA_MID
@@ -30,7 +32,12 @@ var _keys := [
 ]
 
 
+const BASE_FOG := 0.0042
+const BASE_SATURATION := 0.92
+
+
 func _ready() -> void:
+	name = "Sky"  # fixed node path for the Weather RPCs (/root/Main/Sky/Weather)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
@@ -45,6 +52,23 @@ func _ready() -> void:
 	sky_mat.sun_curve = 0.12
 	sky_mat.ground_bottom_color = Color("1c4a58")
 	sky_mat.energy_multiplier = 1.0
+	# Cloud layer: a soft noise panorama faded in by the weather's cloud cover.
+	var cover := NoiseTexture2D.new()
+	cover.width = 512
+	cover.height = 256
+	cover.seamless = true
+	var cn := FastNoiseLite.new()
+	cn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	cn.frequency = 0.012
+	cn.fractal_octaves = 4
+	cover.noise = cn
+	cover.color_ramp = Gradient.new()
+	cover.color_ramp.set_offset(0, 0.45)
+	cover.color_ramp.set_color(0, Color(1, 1, 1, 0))
+	cover.color_ramp.set_offset(1, 0.8)
+	cover.color_ramp.set_color(1, Color(1, 1, 1, 1))
+	sky_mat.sky_cover = cover
+	sky_mat.sky_cover_modulate = Color(1, 1, 1, 0)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_64
@@ -96,6 +120,9 @@ func _ready() -> void:
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water.position = Vector3(VoxelWorld.WX * 0.5, 0, VoxelWorld.WZ * 0.5) * VoxelWorld.VS
 	add_child(water)
+	weather = Weather.new()
+	weather.sky = self
+	add_child(weather)
 	_apply()
 
 
@@ -113,6 +140,31 @@ func water_level_m() -> float:
 	return water_level_vox * VoxelWorld.VS
 
 
+# ---- weather queries (used by farming, boats, HUD, audio)
+
+func is_raining() -> bool:
+	return weather != null and weather.is_raining()
+
+
+## Swell height at a world position (metres), matching the water shader.
+func wave_offset_at(pos: Vector3) -> float:
+	return weather.wave_height_at(pos) if weather != null else 0.0
+
+
+func wind_drift() -> Vector2:
+	return weather.wind_drift() if weather != null else Vector2.ZERO
+
+
+func sea_roughness() -> float:
+	return weather.params.wind if weather != null else 0.2
+
+
+func weather_label() -> String:
+	if weather == null:
+		return ""
+	return "%s, wind %d%%" % [weather.state_name(), int(weather.params.wind * 100.0)]
+
+
 ## True while the sun is meaningfully up (used by farming, fishing, salt pans).
 func is_day() -> bool:
 	return night_factor() < 0.5
@@ -124,10 +176,16 @@ func night_factor() -> float:
 
 
 var _sky_t := -1.0
+var _sky_cloud := -1.0
 
 
 func _process(delta: float) -> void:
-	time_of_day = fposmod(time_of_day + delta * time_scale / DAY_LENGTH, 1.0)
+	var t := time_of_day + delta * time_scale / DAY_LENGTH
+	if t >= 1.0:
+		day += 1
+	time_of_day = fposmod(t, 1.0)
+	if weather != null:
+		weather.update(delta * time_scale)
 	_apply()
 	# The sea follows the camera (snapped so the vertex waves don't swim).
 	var cam := get_viewport().get_camera_3d()
@@ -149,16 +207,42 @@ func _apply() -> void:
 	f = smoothstep(0.0, 1.0, f)
 	var top: Color = (a[1] as Color).lerp(b[1], f)
 	var hor: Color = (a[2] as Color).lerp(b[2], f)
+	var w: Dictionary = weather.params if weather != null else {"cloud": 0.0, "fog": 0.0, "rain": 0.0, "wind": 0.2, "storm": 0.0, "wind_dir": Vector2(1, 0)}
+	var cloud: float = w.cloud
+	var storm: float = w.storm
+	# Overcast: desaturate toward a soft sea-grey, storms darken further.
+	var lum_t := top.get_luminance()
+	var lum_h := hor.get_luminance()
+	top = top.lerp(Color(lum_t * 0.9, lum_t * 0.95, lum_t * 1.02), cloud * 0.8) * (1.0 - storm * 0.4)
+	hor = hor.lerp(Color(lum_h * 0.92, lum_h * 0.96, lum_h), cloud * 0.75) * (1.0 - storm * 0.3)
+	top.a = 1.0
+	hor.a = 1.0
 	# Sky colour changes force a radiance re-bake, so only push them occasionally.
-	if absf(t - _sky_t) > 0.002 or _sky_t < 0.0:
+	if absf(t - _sky_t) > 0.002 or _sky_t < 0.0 or absf(cloud - _sky_cloud) > 0.02:
 		_sky_t = t
+		_sky_cloud = cloud
 		sky_mat.sky_top_color = top
 		sky_mat.sky_horizon_color = hor
 		sky_mat.ground_horizon_color = hor.lerp(Color("2f6f78"), 0.4)
+		var cov := Color(1, 1, 1).lerp(Color(0.45, 0.48, 0.52), storm) * lerpf(1.0, 0.25, night_factor())
+		cov.a = clampf(cloud * 1.1 - 0.05, 0.0, 1.0)
+		sky_mat.sky_cover_modulate = cov
 	sun.light_color = (a[3] as Color).lerp(b[3], f)
-	sun.light_energy = lerpf(a[4], b[4], f)
-	env.fog_light_color = (a[5] as Color).lerp(b[5], f)
-	env.ambient_light_energy = lerpf(a[6], b[6], f)
+	sun.light_energy = lerpf(a[4], b[4], f) * (1.0 - cloud * 0.6)
+	sun.shadow_opacity = 1.0 - cloud * 0.55
+	var fog_col: Color = (a[5] as Color).lerp(b[5], f)
+	var fl := fog_col.get_luminance()
+	env.fog_light_color = fog_col.lerp(Color(fl, fl * 1.02, fl * 1.05), cloud * 0.6)
+	env.fog_density = BASE_FOG + (w.fog as float) * 0.026 + (w.rain as float) * 0.005
+	env.ambient_light_energy = lerpf(a[6], b[6], f) * (1.0 - cloud * 0.2)
+	# Wet, rainy days look a little duller; lightning briefly floods the scene.
+	var flash: float = weather.lightning if weather != null else 0.0
+	env.adjustment_saturation = BASE_SATURATION - (w.rain as float) * 0.18
+	env.adjustment_brightness = 1.0 - (w.rain as float) * 0.06 + flash * 0.9
+	var vol: bool = weather != null and weather.quality >= 1.0 and (w.fog as float) > 0.25
+	env.volumetric_fog_enabled = vol
+	if vol:
+		env.volumetric_fog_density = (w.fog as float) * 0.012
 
 	# Sun arc (tilted so shadows are long and warm); moon takes over at night.
 	var night := night_factor()
@@ -170,9 +254,17 @@ func _apply() -> void:
 	sun.look_at_from_position(Vector3.ZERO, -dir.normalized(), Vector3.FORWARD if absf(dir.y) > 0.99 else Vector3.UP)
 
 	water_level_vox = tide_level(t)
+	# Storm surge: a stormy high tide comes in a little higher.
+	var tide_rel := (water_level_vox - VoxelWorld.SEA_MID) / VoxelWorld.TIDE_AMP
+	water_level_vox += WeatherModel.surge_vox(storm, tide_rel)
 	water.position.y = water_level_vox * VoxelWorld.VS
-	var lm := lerpf(1.0, 0.35, night)
+	var lm := lerpf(1.0, 0.35, night) * (1.0 - cloud * 0.25)
 	water_mat.set_shader_parameter("light_mult", lm)
+	water_mat.set_shader_parameter("wave_amp", WeatherModel.swell_amp(w.wind))
+	water_mat.set_shader_parameter("wave_dir", w.wind_dir)
+	water_mat.set_shader_parameter("wave_time", weather.wave_time if weather != null else 0.0)
+	water_mat.set_shader_parameter("roughness", w.wind)
+	water_mat.set_shader_parameter("storm", storm)
 
 	# Lamps only exist in the lighting pass after dusk; by day they cost ~1.3 ms of GPU
 	# for no visible effect.

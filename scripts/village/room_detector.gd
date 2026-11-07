@@ -124,3 +124,95 @@ static func validate_room(start_pos: Vector3i, query_voxel: Callable) -> RoomVal
 	# Quality score scales with volume, lighting, and space
 	res.quality_score = int(clamp(float(volume) / 5.0, 10.0, 100.0))
 	return res
+
+
+# ---------------------------------------------------------------- world-scale homes
+
+const HOME_MIN_VOLUME := 900       ## ~5 m^3: a 1.6 x 1.6 x 2 m nook is the smallest home
+const HOME_MAX_VOLUME := 45000     ## past this the fill has escaped into a cave or the open
+const CEILING_REACH := 24          ## voxels (4.3 m): a cell with no ceiling this close is outdoors
+const DOOR_HEIGHT := 10            ## an opening must be this tall (1.8 m) to count as a door
+
+
+## Flood-fills the room around `start` at world scale (0.18 m voxels).
+##   solid.call(p: Vector3i) -> bool        voxel blocks movement (walls, floors, lanterns)
+##   ceiling.call(p: Vector3i) -> bool      a roof exists within CEILING_REACH above p
+##   fixtures: {Vector3i: "bed" | "light" | "decor"}   entity / lantern cells
+## Open doorways are fine: cells without a ceiling are outdoors, so the fill stops one cell
+## past any opening. A floor-level opening at least DOOR_HEIGHT tall is the entrance;
+## shorter openings (windows) aren't.
+static func scan_home(start: Vector3i, solid: Callable, ceiling: Callable, fixtures: Dictionary) -> RoomValidationResult:
+	var res := RoomValidationResult.new()
+	if solid.call(start) or not ceiling.call(start):
+		res.error_message = "Not inside a roofed space."
+		res.has_roof = false
+		return res
+	var visited := {start: true}
+	var queue: Array[Vector3i] = [start]
+	var head := 0
+	var min_b := start
+	var max_b := start
+	var outdoor_edges := {}       # indoor cell -> true when it touches an outdoor cell sideways
+	var dirs := [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+		Vector3i(0, 1, 0), Vector3i(0, -1, 0)]
+	var beds := 0
+	var lights := 0
+	var decor := 0
+	while head < queue.size():
+		var c: Vector3i = queue[head]
+		head += 1
+		if queue.size() > HOME_MAX_VOLUME:
+			res.error_message = "This space is too big or open to be a home."
+			return res
+		min_b = Vector3i(mini(min_b.x, c.x), mini(min_b.y, c.y), mini(min_b.z, c.z))
+		max_b = Vector3i(maxi(max_b.x, c.x), maxi(max_b.y, c.y), maxi(max_b.z, c.z))
+		var f: String = fixtures.get(c, "")
+		if f == "bed": beds += 1
+		elif f == "light": lights += 1
+		elif f == "decor": decor += 1
+		for i in 6:
+			var n: Vector3i = c + dirs[i]
+			if visited.has(n):
+				continue
+			if solid.call(n):
+				if fixtures.get(n, "") == "light":
+					lights += 1    # lantern voxels hang as solid cells
+					visited[n] = true
+				continue
+			if not ceiling.call(n):
+				if i < 4:
+					outdoor_edges[c] = true
+				continue
+			visited[n] = true
+			queue.append(n)
+	res.volume = queue.size()
+	res.room_bounds_min = min_b
+	res.room_bounds_max = max_b
+	res.has_bed = beds > 0
+	res.has_light = lights > 0
+	# Door: an indoor floor-level cell next to the outdoors with DOOR_HEIGHT of headroom.
+	var windows := 0
+	for c: Vector3i in outdoor_edges:
+		var on_floor: bool = solid.call(c + Vector3i(0, -1, 0)) and c.y <= min_b.y + 1
+		var tall := true
+		for k in DOOR_HEIGHT:
+			if solid.call(c + Vector3i(0, k, 0)):
+				tall = false
+				break
+		if on_floor and tall:
+			res.has_door = true
+		else:
+			windows += 1
+	if res.volume < HOME_MIN_VOLUME:
+		res.error_message = "Too cramped to live in."
+	elif not res.has_bed:
+		res.error_message = "Needs a bed."
+	elif not res.has_light:
+		res.error_message = "Needs a light (lantern or lamp)."
+	elif not res.has_door:
+		res.error_message = "Needs a doorway at least 1.8 m tall."
+	else:
+		res.is_valid = true
+		var vol_score := clampf(float(res.volume) / 120.0, 10.0, 60.0)
+		res.quality_score = int(clampf(vol_score + mini(windows, 12) * 1.5 + mini(decor, 6) * 3.0 + mini(lights, 3) * 2.0, 10.0, 100.0))
+	return res

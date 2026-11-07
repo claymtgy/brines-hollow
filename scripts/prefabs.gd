@@ -300,7 +300,11 @@ static func _build_hut() -> void:
 	# chimney
 	g.box(19, RY, Z1 - 5, 21, top + 3, Z1 - 3, Palette.COBBLE)
 	g.box(19, top + 3, Z1 - 5, 21, top + 3, Z1 - 3, Palette.STONE)
+	# lantern hanging from the ridge inside (a lit room can house a drifter)
+	var lx := 12
+	g.box(lx, WALL_H + 2, ridge_z, lx, top - 1, ridge_z, Palette.METAL)
+	g.setv(lx, WALL_H + 1, ridge_z, Palette.LANTERN)
 	# lantern beside the door
 	g.setv(d0 + DOOR_W + 2, 12, 0, Palette.LANTERN)
 	g.setv(d0 + DOOR_W + 2, 13, 0, Palette.DARK_WOOD)
-	_add("Fisher's Hut", g, Vector3i((X1 + 2) / 2, 0, (Z1 + 2) / 2), [Vector3i(d0 + DOOR_W + 2, 12, 0)], "solid")
+	_add("Fisher's Hut", g, Vector3i((X1 + 2) / 2, 0, (Z1 + 2) / 2), [Vector3i(d0 + DOOR_W + 2, 12, 0), Vector3i(lx, WALL_H + 1, ridge_z)], "solid")

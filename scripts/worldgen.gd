@@ -32,6 +32,9 @@ var boat_spawns: Array = []
 ## Lamp light positions (voxel coords) for stamped prefabs; VoxelWorld creates the lights.
 var stamp_lights: Array = []
 var islands: Array = []
+## Starter-area layout for the village systems (voxel units):
+## {hut: Vector3i origin, hut_r: int, front: Vector2i, side: Vector2i, dock_o: Vector2i, dock_y: int}
+var starter := {}
 
 
 func _init(p_seed: int, sx: int, sy: int, sz: int, p_sea_mid: float, tide_amp: float) -> void:
@@ -161,6 +164,7 @@ func plan_starter() -> void:
 	_stamp(PREFAB_RACK, Vector3i(rack.x, col_h(rack.x, rack.y) + 1, rack.y), (hut_r + 1) % 4)
 	# Boat entity (spawned by the boat system): near the dock end, bow toward open water.
 	boat_spawns = [_find_mooring(dock_o, d, side)]
+	starter = {"hut": origin, "hut_r": hut_r, "front": d, "side": side, "dock_o": dock_o, "dock_y": sea_high + 3}
 	var sp := Vector2i(best.x, best.z) + d * 24
 	spawn_yaw = atan2(float(d.x), float(d.y))
 	spawn = Vector3(sp.x + 0.5, col_h(sp.x, sp.y) + 2, sp.y + 0.5)
