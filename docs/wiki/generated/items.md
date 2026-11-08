@@ -127,7 +127,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Blueprint: Dry Dock | `blueprint_dry_dock` | 1 | 1 | blueprint, maritime |
 | Blueprint: Tide Mill | `blueprint_tide_mill` | 1 | 1 | blueprint, engineering |
 
-## Special (28)
+## Special (29)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
@@ -145,6 +145,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Fisher's Smokehouse | `smokehouse` | 5 | 1 | placeable |
 | Gilded Ship Wheel | `gilded_ship_wheel` | 1 | 1 | trophy, boss_drop |
 | Guard Dog Kennel | `dog_kennel` | 1 | 1 | placeable |
+| Harbour Bell | `village_bell` | 1 | 1 | placeable |
 | Hearth Stew Pot | `hearth_pot` | 5 | 1 | placeable |
 | Kelp-Oil Lantern Post | `lantern_post` | 10 | 1 | placeable |
 | Latched Pen Gate | `pen_gate` | 10 | 1 | placeable |

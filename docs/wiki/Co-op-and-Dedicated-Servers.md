@@ -9,6 +9,9 @@
 - **Dedicated server:** run `godot --headless --path . -- --server` (or `--server=PORT`) to keep a world up
   without anyone playing on that machine.
 
+A **Harbour Bell** rings for every player when a raid starts near it, and marks the spot
+with a beacon. Ring it by hand to call everyone over.
+
 Livestock move live for everyone. Joined players can lead, pet, feed, milk and shear
 animals just like the host. A befriended otter remembers its friend across sessions.
 

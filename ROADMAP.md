@@ -179,7 +179,7 @@ Life on the islands beyond the player: some of it ambient, some of it hungry. Pr
 - **Defences & answers:** ✅ boarded Pen Fence prefab and Latched Pen Gate (the rail fence's gap matters), lantern posts and lit stations that raiders won't enter, chasing raiders off (they drop what they carry), baited live traps with release/relocation, filling dens so foxes move further off, and pens remembered as defended. ✅ Also: Guard Dog Kennel (dog sees off foxes, stoats and rats within 16 m, with a bark alert), Dock Cat's Basket (rats and stoats within 12 m), Oilskin Scarecrow (eagles and gulls keep clear within 14 m), Sealed Pantry Barrel (rat-proof food store; the sea barrel is sealed too), and roofed pens against eagles.
 - **Behaviour:** predators path toward the weakest pen, retreat from light and noise, remember defended farms for a few days, and return to dens that can be found and moved on.
 - **Difficulty:** *Cozy*: raids only take eggs or feed and never harm animals; *Tidewatch*: occasional losses with clear warnings ("A fox is circling the coop"); *Undertow*: bolder, smarter raids.
-- **Co-op:** ✅ host/server simulates wildlife and livestock; livestock poses stream to clients (~10 Hz), clients' petting/feeding/shearing and herding reach the host; raid alerts go to everyone. Befriended otters are remembered per player profile and find their friend again after a reload or rejoin. Still to build: village bells as a physical alarm.
+- **Co-op:** ✅ host/server simulates wildlife and livestock; livestock poses stream to clients (~10 Hz), clients' petting/feeding/shearing and herding reach the host; raid alerts go to everyone. Befriended otters are remembered per player profile and find their friend again after a reload or rejoin. ✅ Harbour Bell: rings by itself when a raid starts within 90 m (alert with direction and distance for every player, 3D toll, light-shaft beacon over the raid); ring it by hand to call everyone and scare off raiders within 25 m.
 
 ### 8. Subterranean World & Cave Networks
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
@@ -432,7 +432,7 @@ A reference players can browse outside the game, kept in `docs/wiki/` as linked 
 
 ## Immediate Next Steps
 
-1. **Wildlife & predators** ✅ Complete (ambient animals, fox and stoat raids, lanterns, pen fences, gates, live traps, dens). Follow-ups also done: sea eagles, shore rats, guard dogs, dock cats, scarecrows, sealed pantry barrels, otter friends persisting. Next Up: village bells for raid alerts in co-op.
+1. **Wildlife & predators** ✅ Complete (ambient animals, fox and stoat raids, lanterns, pen fences, gates, live traps, dens). Follow-ups also done: sea eagles, shore rats, guard dogs, dock cats, scarecrows, sealed pantry barrels, otter friends persisting. Harbour Bell raid alarm ✅ done too.
 2. **Player wiki** ✅ Set up (`docs/wiki/` hand-written pages and the generated tables).
 3. **Polish from the last merges** ✅ Complete (bed respawn point saved in the profile, gamepad dodge/sneak including back paddles, merchant stock persistence, eels avoiding lantern posts and lit stations). Livestock now sync live to co-op clients.
 4. **Overhauled High-Impact Combat System** ✅ Complete (3-hit combos, charged attacks, aerial plunge slams, precision parry & Riposte, RMB guard stance, guard-break stumble, 8-directional i-frame dodge rolls, poise meters, hit-stop, and camera shake).

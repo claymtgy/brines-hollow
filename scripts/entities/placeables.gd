@@ -38,6 +38,7 @@ const BUILTIN := {
 	&"cat_basket":      ["Dock Cat's Basket",      {&"kelp_frond": 6, &"driftwood": 2, &"silver_mackerel": 1}, &"ground", 1],
 	&"scarecrow":       ["Oilskin Scarecrow",      {&"driftwood": 4, &"leaves": 4, &"wood_plank": 2}, &"ground", 5],
 	&"pantry_barrel":   ["Sealed Pantry Barrel",   {&"wood_plank": 6, &"kelp_frond": 2, &"stone": 1}, &"ground", 10],
+	&"village_bell":    ["Harbour Bell",           {&"iron_ingot": 2, &"wood_plank": 8, &"cobblestone": 4}, &"ground", 1],
 }
 
 const TroughEntityClass := preload("res://scripts/entities/trough_entity.gd")
@@ -83,6 +84,7 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"dog_kennel", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_kennel(c), {"aliases": [&"kennel", &"dog"]})
 	EntityManager.register_type(&"cat_basket", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_cat_basket(c), {"aliases": [&"cat"]})
 	EntityManager.register_type(&"scarecrow", ScarecrowEntity)
+	EntityManager.register_type(&"village_bell", VillageBellEntity, {"aliases": [&"bell"]})
 	EntityManager.register_type(&"pantry_barrel", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_pantry_barrel(c), {"aliases": [&"pantry"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]

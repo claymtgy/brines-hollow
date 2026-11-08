@@ -335,6 +335,45 @@ func _init() -> void:
 	check(a.pet_cooldown == 45.0 and a.happiness == 99.0, "a client's petting / shearing is applied on the host")
 	check(LivestockAnimal_holds_test(), "herd bait detection works for any player node")
 
+	print("-- harbour bell")
+	check(ItemDB.has_item(&"village_bell") and RecipeDB.has_recipe(&"place_village_bell")
+			and EntityManager.resolve_type(&"bell") == &"village_bell", "the harbour bell is craftable and placeable")
+	check(WildlifeDirector.compass(Vector3.ZERO, Vector3(0, 0, -20)) == "north"
+			and WildlifeDirector.compass(Vector3.ZERO, Vector3(20, 0, 20)) == "south-east", "bell calls give compass directions")
+	net = make_net()
+	em = EntityManager.new()
+	EntityManager.current = em
+	var bell: VillageBellEntity = em.spawn_entity(&"village_bell", vox(site + Vector3(0, 0, 30)), 0)
+	check(bell != null, "bell places")
+	var lone := Vector3(400, ground, 400)
+	check(not net.wildlife.ring_for_raid(lone, &"fox"), "a raid far from any bell rings nothing")
+	crate = em.spawn_entity(&"storage_crate", vox(site), 0)
+	crate.container.deposit(&"silver_mackerel", 3)
+	net.alerts.clear()
+	var r0 := net.wildlife.try_start_rat_raid([player(site + Vector3(40, 0, 0))])
+	check(r0 != null and bell.is_ringing() and bell.beacon_active(), "a raid near the bell rings it and lights the beacon")
+	check(bell.alarm_at.distance_to(crate.position) < 1.0, "the beacon marks the raid, not the bell")
+	check(net.alerts.any(func(t: String) -> bool: return t.contains("harbour bell") and t.contains("north of the bell")),
+			"everyone is told what and where (%s)" % [net.alerts])
+	check(not bell.ring(site, "again"), "a bell can't be rung again while it's still humming")
+	for i in 200:
+		bell._process(0.05)
+	check(bell.can_ring() and not bell.is_ringing(), "it settles and can ring again")
+	var near_fox := raider(net, &"fox", bell.position + Vector3(8, 0, 0))
+	var far_fox2 := raider(net, &"fox", bell.position + Vector3(60, 0, 0))
+	var res: Dictionary = bell.server_action(&"ring", {}, 1)
+	check(String(res.get("toast", "")).contains("bolts") and near_fox.state == Creature.State.FLEE,
+			"ringing by hand sends a nearby raider running")
+	check(far_fox2.state != Creature.State.FLEE, "raiders out of earshot carry on")
+	check(not bell.serialize().has("alarm") and not bell.serialize().has("ring"), "old alarms aren't saved (loading never rings)")
+	var client_bell := VillageBellEntity.new(bell.grid_coord)
+	client_bell.play_ring(site, "Fox!")
+	check(client_bell.is_ringing() and client_bell.beacon_active() and client_bell.alarm_text == "Fox!",
+			"a client rings and shows the beacon when the host's ring arrives")
+	client_bell.free()
+	var toll := VillageBellEntity.toll_stream()
+	check(toll != null and toll.data.size() > 40000, "the bell's toll is synthesised")
+
 	EntityManager.current = null
 	print("Farm guardians suite: %d / %d tests passed!" % [passed, total])
 	quit(0 if passed == total else 1)

@@ -37,7 +37,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Wooden Hatchet | 2 Driftwood, 1 Wood Plank | 1 Wooden Hatchet | anywhere | instant | known |
 | Wooden Shovel | 1 Driftwood, 2 Wood Plank | 1 Wooden Shovel | anywhere | instant | known |
 
-## Workbench (39)
+## Workbench (40)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -54,6 +54,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Fisher's Bunk | 8 Wood Plank, 6 Forest Foliage | 1 Fisher's Bunk | Workbench | 2 s | known |
 | Fisher's Smokehouse | 12 Wood Plank, 6 Cobblestone | 1 Fisher's Smokehouse | Workbench | 2 s | find Cliff Salmon; recruit a Smoker & Chef; Wren: "A Warm Belly" |
 | Guard Dog Kennel | 10 Wood Plank, 4 Driftwood, 2 Silver Mackerel | 1 Guard Dog Kennel | Workbench | 2 s | known |
+| Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | 1 Harbour Bell | Workbench | 2 s | known |
 | Hearth Stew Pot | 6 Cobblestone, 2 Wood Plank | 1 Hearth Stew Pot | Workbench | 2 s | find Brine Oyster; Wren: "A Warm Belly" |
 | Heavy Oilskin Coat | 4 Shore-Sheep Wool, 1 Marsh Honey | 1 Heavy Oilskin Coat | Workbench | 6 s | find Shore-Sheep Wool |
 | Hydrographic Sea Chart | 1 Parchment Shore Chart, 1 Ghost Squid | 1 Hydrographic Sea Chart | Workbench | 2 s | find Ghost Squid |
@@ -68,8 +69,8 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Sealed Pantry Barrel | 6 Wood Plank, 2 Kelp Fronds, 1 Limestone | 1 Sealed Pantry Barrel | Workbench | 2 s | known |
 | Shearing Shears | 2 Limestone, 2 Driftwood | 1 Shearing Shears | Workbench | 2 s | known |
 | Shepherd's Whistle | 2 Wood Plank, 1 Polished Sea Glass | 1 Shepherd's Whistle | Workbench | 2 s | known |
-| Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 4 s | known |
 | Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 2 s | known |
+| Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 4 s | known |
 | Smelting Furnace | 8 Limestone, 4 Driftwood | 1 Smelting Furnace | Workbench | 2 s | known |
 | Stone Hatchet | 2 Driftwood, 2 Limestone | 1 Stone Hatchet | Workbench | instant | known |
 | Stone Hoe | 2 Driftwood, 2 Limestone | 1 Stone Hoe | Workbench | instant | known |

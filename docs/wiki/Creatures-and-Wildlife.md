@@ -69,5 +69,14 @@ sometimes carries one off, and on Undertow it usually does.
 | **Stay with your ducks** | an eagle won't stoop with a player within 6 m of its target |
 | **Hit it** | an eagle carrying a duck drops it when struck |
 
+## The Harbour Bell
+Build a **Harbour Bell** in the middle of your farm or village. It's an alarm for everyone:
+- **When a raid starts** within 90 m of the bell (fox, stoat, shore rat or sea eagle), it rings
+  by itself. Everyone in the world gets the message with what and where ("Fox raid 30 m
+  north-east of the bell"), the toll carries across the island, and a **shaft of light marks
+  the spot** for about 25 seconds.
+- **Ring it by hand** (F) to call everyone to the bell. The din also sends any raider within
+  25 m running. After ringing, it hums for a few seconds before it can ring again.
+
 ---
 [Home](Home.md) · [Livestock & Pens](Livestock-and-Pens.md) · [Difficulty Modes](Difficulty-Modes.md)

@@ -25,6 +25,8 @@ The blueprints list has two fences, and they behave differently:
 - **Dock Cat's Basket:** comes with a cat that keeps rats away within 12 m.
 - **Oilskin Scarecrow:** sea eagles and gulls keep clear within 14 m.
 - **Sealed Pantry Barrel:** stores any food, and shore rats can't get in.
+- **Harbour Bell:** the village alarm (2 iron ingots, 8 planks, 4 cobblestone). See
+  [Creatures & Wildlife](Creatures-and-Wildlife.md#the-harbour-bell).
 
 Every structure and its size: [Furniture & Placeables](generated/placeables.md).
 

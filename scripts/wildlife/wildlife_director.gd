@@ -25,7 +25,7 @@ const DEN_MAX_REUSE := 90.0
 const RAID_RANGE := 60.0
 const BUDGET := [1, 2, 3]                  # raids per night by difficulty
 const DEFEND_DAYS := {"light": 2, "fence": 3, "chased": 2, "struck": 2, "startled": 2,
-	"trapped": 6, "relocated": 6, "nothing": 1, "dog": 3, "cat": 3, "roof": 2, "scarecrow": 2}
+	"trapped": 6, "relocated": 6, "nothing": 1, "dog": 3, "cat": 3, "roof": 2, "scarecrow": 2, "bell": 2}
 const RAT_BUDGET := [1, 2, 3]              # rat raids a night after a storm, by difficulty
 const EAGLE_BUDGET := [1, 1, 2]            # eagle stoops a day, by difficulty
 const STORM_MEMORY_DAYS := 1               # rats come up the nights after a storm
@@ -53,8 +53,13 @@ const CAP := {&"hare": 6, &"seal": 6, &"puffin": 10, &"otter": 3, &"heron": 3, &
 const DESPAWN := {&"whale": 240.0, &"puffin": 100.0, &"heron": 90.0}
 
 
+## The live director (bells and other placeables reach wildlife through this).
+static var current: WildlifeDirector
+
+
 func _init(p_net: Node) -> void:
 	net = p_net
+	current = self
 	rng.randomize()
 
 
@@ -126,6 +131,59 @@ func guard_check(r: Raider) -> String:
 					alert("%s the dock cat chases the %s away!" % [g.pet_name, kind_word(r.kind)])
 				return g.species_word()
 	return ""
+
+
+# ---------------------------------------------------------------- harbour bells
+
+## Compass word for the direction from `from` to `to` (-Z is north).
+static func compass(from: Vector3, to: Vector3) -> String:
+	var d := Vector2(to.x - from.x, to.z - from.z)
+	if d.length() < 3.0:
+		return "right by"
+	var deg := fposmod(rad_to_deg(atan2(d.x, -d.y)), 360.0)
+	var names := ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]
+	return names[int(round(deg / 45.0)) % 8]
+
+
+func nearest_bell(pos: Vector3, r: float) -> VillageBellEntity:
+	var em := EntityManager.current
+	if em == null:
+		return null
+	var best: VillageBellEntity = null
+	var bd := r
+	for e: WorldEntity in em.entities.values():
+		if e is VillageBellEntity:
+			var d := e.position.distance_to(pos)
+			if d < bd:
+				bd = d
+				best = e
+	return best
+
+
+## A raid has started at `site`: the nearest bell in range tolls and marks it.
+func ring_for_raid(site: Vector3, kind: StringName) -> bool:
+	var b := nearest_bell(site, VillageBellEntity.RAID_RANGE)
+	if b == null:
+		return false
+	var dist := b.position.distance_to(site)
+	var dir := compass(b.position, site)
+	var where := "right by the bell" if dir == "right by" else "%d m %s of the bell" % [int(dist), dir]
+	var what := kind_word(kind).capitalize()
+	if b.ring(site + Vector3.UP * 0.5, "%s!" % what):
+		alert("The harbour bell is ringing! %s raid %s." % [what, where])
+		return true
+	return false
+
+
+## Someone rang a bell by hand: every raider within `r` bolts. Returns how many.
+func bell_scare(pos: Vector3, r: float) -> int:
+	var n := 0
+	for c: Creature in net.creatures.values():
+		if c is Raider and c.state != Creature.State.FLEE and c.state != Creature.State.DEAD \
+				and c.position.distance_to(pos) < r:
+			(c as Raider)._spooked("bell")
+			n += 1
+	return n
 
 
 static func kind_word(k: StringName) -> String:
@@ -491,6 +549,7 @@ func try_start_raid(players: Array, force_kind: StringName = &"") -> Raider:
 	else:
 		r.target_animal_id = int(target.get("animal_id"))
 	raids_left -= 1
+	ring_for_raid(target.position, kind)
 	if kind == &"stoat":
 		alert("A stoat is after the eggs!")
 	elif _difficulty() == CombatMath.Difficulty.COZY:
@@ -563,6 +622,7 @@ func try_start_rat_raid(players: Array) -> Raider:
 			first = r
 	if first != null:
 		rat_raids_left -= 1
+		ring_for_raid(target.position, &"rat")
 		alert("Shore rats are up from the tideline after the storm! Seal your food away.")
 		print("[wildlife] rat raid on %s from %s" % [target.position, origin])
 	return first
@@ -637,6 +697,7 @@ func try_start_eagle(players: Array) -> Raider:
 	r.raid_site = target.position
 	r.target_animal_id = int(target.get("animal_id"))
 	eagles_left -= 1
+	ring_for_raid(target.position, &"eagle")
 	if _difficulty() == CombatMath.Difficulty.COZY:
 		alert("A sea eagle is circling high over the ducks...")
 	else:

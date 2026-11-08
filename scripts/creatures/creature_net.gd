@@ -708,6 +708,20 @@ func cr_toast(text: String) -> void:
 		main.hud.show_toast(text)
 
 
+## Host: a bell rang; let every client see and hear it.
+func broadcast_bell(coord: Vector3i, at: Vector3, text: String) -> void:
+	if main.is_net and main.multiplayer.multiplayer_peer != null and is_authority():
+		cr_bell.rpc(coord, at, text)
+
+
+@rpc("authority", "call_remote", "reliable")
+func cr_bell(coord: Vector3i, at: Vector3, text: String) -> void:
+	var em := EntityManager.current
+	var b: WorldEntity = em.entities.get(coord) if em != null else null
+	if b is VillageBellEntity:
+		(b as VillageBellEntity).play_ring(at, text)
+
+
 func broadcast_dens(list: Array) -> void:
 	if main.is_net and main.multiplayer.multiplayer_peer != null and is_authority():
 		cr_dens.rpc(list)
