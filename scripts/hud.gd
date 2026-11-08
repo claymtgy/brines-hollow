@@ -71,6 +71,11 @@ var stomach_label: Label
 var rested_label: Label
 
 var _toast_t := 0.0
+var banner: VBoxContainer
+var banner_title: Label
+var banner_sub: Label
+var _banner_t := 0.0
+var chart_islands: Array = []   # discovered island labels for the sea chart
 var _prompt_text := "\u0001"
 var _help_type := -2
 var _help_tween: Tween
@@ -616,6 +621,29 @@ func _build_hud() -> void:
 	toast.add_child(toast_label)
 	toast.visible = false
 
+	# --- landfall banner (island names, upper third)
+	var banner_anchor := CenterContainer.new()
+	banner_anchor.anchor_right = 1.0
+	banner_anchor.offset_top = 150
+	banner_anchor.offset_bottom = 250
+	banner_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(banner_anchor)
+	banner = VBoxContainer.new()
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_anchor.add_child(banner)
+	banner_title = _label("", &"", 40)
+	banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner_title.add_theme_font_override("font", UiTheme.font(800))
+	banner_title.add_theme_color_override("font_outline_color", Color(0.1, 0.07, 0.05, 0.9))
+	banner_title.add_theme_constant_override("outline_size", 10)
+	banner.add_child(banner_title)
+	banner_sub = _label("", &"", 18)
+	banner_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner_sub.add_theme_color_override("font_outline_color", Color(0.1, 0.07, 0.05, 0.9))
+	banner_sub.add_theme_constant_override("outline_size", 6)
+	banner.add_child(banner_sub)
+	banner.visible = false
+
 	# --- interaction prompt (just under the crosshair)
 	var prompt_anchor := CenterContainer.new()
 	prompt_anchor.anchor_top = 0.5
@@ -802,6 +830,13 @@ func set_prompt(text: String) -> void:
 			row.add_child(_label("·", &"Small", 17))
 
 
+## Big centred island name on landfall (fades in, holds, fades out).
+func show_banner(title: String, subtitle := "") -> void:
+	banner_title.text = title
+	banner_sub.text = subtitle
+	_banner_t = 4.5
+
+
 func show_toast(text: String) -> void:
 	toast_label.text = text
 	_toast_t = 3.2
@@ -864,6 +899,10 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	_toast_t -= get_process_delta_time()
 	toast.modulate.a = clampf(_toast_t * 1.5, 0.0, 1.0)
 	toast.visible = _toast_t > 0.0
+	if banner != null:
+		_banner_t -= get_process_delta_time()
+		banner.visible = _banner_t > 0.0
+		banner.modulate.a = clampf(minf(_banner_t * 1.2, (4.5 - _banner_t) * 3.0), 0.0, 1.0)
 	bottom_bar.visible = not player.is_seated()
 	underwater.visible = cam_under
 	_rebuild_help()
@@ -939,6 +978,7 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 		minimap.update_state(map_tier, map_name, player.position,
 			player.rig.yaw if player.rig != null else player.facing,
 			sky.water_level_vox * VoxelWorld.VS, lm_list, boat_pos_list)
+		minimap.island_labels = chart_islands
 
 	# --- hotbar + tool context
 	var active_idx: int = player.inventory.active_hotbar_index if player.inventory != null else 0

@@ -34,6 +34,7 @@ var boats: Array[Vector3] = []
 var peer_positions: Array[Vector3] = []
 
 var depth_sounding: float = 0.0
+var island_labels: Array = []   # [{pos, name, home}] islands this player has discovered
 
 var _readout_label: Label
 var _tier_label: Label
@@ -223,6 +224,14 @@ func _draw() -> void:
 			if p_uv.distance_to(map_center) <= map_radius - 2.0:
 				draw_circle(p_uv, 3.0, Color(0.2, 0.75, 0.9, 0.9))
 				draw_circle(p_uv, 1.5, Color(1, 1, 1))
+
+	# 7b. Names of discovered islands (every tier: it's a chart)
+	for il: Dictionary in island_labels:
+		var i_uv := _world_to_minimap(il.get("pos", Vector3.ZERO), map_center, map_radius)
+		if i_uv.distance_to(map_center) <= map_radius - 6.0:
+			var nm := String(il.get("name", ""))
+			var col := Color(0.55, 0.12, 0.10) if il.get("home", false) else Color(0.18, 0.12, 0.08)
+			draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 3), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 8, col)
 
 	# 8. Compass Rose & Cardinal Ticks
 	var north_pt := map_center + Vector2(0, -map_radius + 4.0)

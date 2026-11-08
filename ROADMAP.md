@@ -36,7 +36,7 @@ Goal: Tech de-risking and the fundamental data models that every gameplay layer 
 | Item | Why | Size | Status |
 |---|---|---|---|
 | **C++ voxel core** (GDExtension: storage, meshing, raycast, collision, brushes, fill) | GDScript meshing was ~10 ms/chunk; Steam Deck needs headroom | M | ✅ Complete |
-| **Archipelago world** — seeded island placement, varied island sizes/biomes, open sea between | Core world shape | L | 🔨 In progress |
+| **Archipelago world** — seeded island placement, varied island sizes/biomes, open sea between | Core world shape | L | ✅ Complete (home island + 5 larger islands in distinct styles: meadow, atoll, hills, crags, mesa + ~10 islets + sea stacks; seeded names every player shares; landfall banner and per-character discoveries named on the sea chart) |
 | **Expanded Island Scale & Vertical Depth** — Starter Island scaled to ~600m–800m diameter; world height increased from 23m (4 chunks) to 46m–69m (8–12 chunks) | Fits expansive multi-tier village, agricultural fields, and deep subterranean cave networks | M | Planned |
 | **Chunk streaming + LOD** — load/unload chunks around players, low-detail distant islands | Memory and GPU scaling | L | ✅ Complete |
 | **Dedicated server** — headless Linux build, world persistence, admin config | Villages live on when players log off | L | ✅ Complete (headless `--server`, autosave 30 s) |
@@ -172,7 +172,7 @@ Life on the islands beyond the player: some of it ambient, some of it hungry. Pr
 - **Ambient wildlife:** ✅ Complete. Coastal hares, harbour seals hauled out at low tide, puffins on cliffs and skerries, sea otters in kelp beds (befriend with a fish; they bring gifts), grey herons in the shallows, migrating whales offshore with spouts. They step over terrain, leave tracks in sand and mud, and flee rather than fight (`scripts/wildlife/`).
 - **Predators that raid the farm:**
   - *Red foxes:* ✅ den away from the farm; at night they scout for the weakest pen, slip under rail fences, take eggs or feed, and (Tidewatch/Undertow) carry off ducks. Tracks and scattered feathers lead back to the den.
-  - *Stoats:* ✅ small and quick; steal eggs (Tidewatch and up).
+  - *Stoats:* ✅ small and quick; steal eggs.
   - *Gulls (built):* already steal unattended fish.
   - *Sea eagles:* ✅ circle, then stoop on ducks left in the open by day (Cozy: only scatters them; Tidewatch/Undertow: may carry one off; strike it to make it drop the duck).
   - *Shore rats:* ✅ come up off the tideline the nights after a storm and eat food from open chests and crates (1/2/3 bites by difficulty). Drying racks are voxel prefabs, not stores, so they're left alone for now.

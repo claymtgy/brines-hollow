@@ -32,6 +32,9 @@ var quest_log_ui: QuestLogUI
 var village_mgr: VillageManager
 var trade: TradeManager
 var livestock_mgr: Node
+var atlas := IslandAtlas.new()   # island names + which ones this player has found
+var _atlas_gen: Object = null
+var _atlas_t := 0.0
 var controller: ControllerManager = ControllerManager.new()
 
 static var force_menu := false
@@ -354,6 +357,34 @@ func _begin_world() -> void:
 		_run_screenshots(_args.shot)
 
 
+# ---------------------------------------------------------------- islands
+
+## Names the islands once the world exists, then announces each landfall.
+func _tick_atlas(delta: float) -> void:
+	if world == null or world.gen == null:
+		return
+	if _atlas_gen != world.gen:
+		_atlas_gen = world.gen
+		var n: ArchipelagoGen = world.gen.native
+		atlas.setup(world.gen.islands, seed_value, n.column_height, n.column_island, VoxelWorld.SEA_MID)
+	hud.chart_islands = atlas.chart_labels()
+	_atlas_t -= delta
+	if _atlas_t > 0.0 or player.is_seated():
+		return
+	# Wait for this character's saved discoveries before announcing anything.
+	if session != null and session._pending_profile != null:
+		return
+	_atlas_t = 0.4
+	var ev := atlas.update(player.position)
+	if ev.is_empty():
+		return
+	print("[atlas] landfall on %s (%s)%s" % [ev.name, ev.style, ", new" if ev.new else ""])
+	if ev.new:
+		hud.show_banner(ev.name, "New island discovered  ·  %s  ·  %d of %d charted" % [ev.style, atlas.discovered_count(), atlas.islands.size()])
+	else:
+		hud.show_banner(ev.name, ev.style)
+
+
 # ---------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
@@ -370,6 +401,7 @@ func _process(delta: float) -> void:
 	sky.time_scale = 40.0 if (host_like and Input.is_action_pressed("fast_time")) else 1.0
 	var cam_under := world != null and world.is_water_at(rig.cam.global_position, sky.water_level_m() - 0.03)
 	hud.update_hud(player, sky, _peers_text(), world, cam_under)
+	_tick_atlas(delta)
 	if build_menu_ui != null:
 		build_menu_ui.update_for_player(player)
 	if is_net and multiplayer.multiplayer_peer != null:

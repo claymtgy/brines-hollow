@@ -625,9 +625,14 @@ func _snap_to_ground(main: Node) -> void:
 	# then the column top as a fallback (fresh spawns, big drops).
 	var g := TerrainStep.ground_at(main.world.get_voxel, position.x, position.z, position.y, 3, 8)
 	if is_nan(g):
-		var gy: int = store.find_ground_y(vx, vz, 120)
+		# Column top: scan down for the first solid voxel (only for fresh spawns / big drops).
+		var gy := -1
+		for y in range(VoxelWorld.WY - 1, 0, -1):
+			if main.world.get_voxel(vx, y, vz) != 0:
+				gy = y + 1
+				break
 		if gy <= 0:
-			return
+			return   # column not streamed in yet: try again next frame
 		g = float(gy) * VoxelWorld.VS
 	position.y = lerpf(position.y, g + 0.1, 0.2)
 

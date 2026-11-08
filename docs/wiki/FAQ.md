@@ -16,6 +16,10 @@ A sea eagle. Roof the pen, or put up a scarecrow. Hit the eagle to make it drop 
 **How do I know a raid is happening when I'm across the island?**
 Build a Harbour Bell. It rings for everyone and lights a beacon over the raid.
 
+**Where are the other islands?**
+Take the rowboat out from the pier. There are five larger islands and many islets around
+Brine's Hollow. Each one is named and added to your chart the first time you land on it.
+
 **My cast says "No water there".**
 Face open water deep enough for a float. If you aim at land, the lure drops at the furthest
 water along the line. If there isn't any, try again closer to the edge.

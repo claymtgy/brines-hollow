@@ -9,6 +9,17 @@ There's a rowboat tied at the pier. You can build more with the **Rowboat** blue
 - Storms bring big swell. Keep the bow into the waves.
 - Boats drift with the current while nobody's rowing, so tie up at a pier.
 
+## The islands
+Brine's Hollow is your home island. Around it lie five larger islands, each with its own
+character (a flat meadow, a sandy atoll, rolling hills, rocky crags and a cliff-sided mesa),
+plus a scatter of small islets and sea stacks, with open sea between them. Every island has a
+name that everyone in the world shares.
+
+The first time you set foot on an island, its name comes up with **"New island
+discovered"** and how many you've charted so far. Discovered islands are named on your sea
+chart (equip a chart in the map slot). Each character remembers their own discoveries in that
+world.
+
 Out past the shallows you'll find deep-sea fish, seals and puffins on the skerries, and the
 occasional whale passing by (see [Creatures & Wildlife](Creatures-and-Wildlife.md)).
 

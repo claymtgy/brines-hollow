@@ -363,6 +363,8 @@ func capture_profile() -> Dictionary:
 		d["bed"] = p.get_meta("respawn_point")
 	if main.quests != null:
 		d["quests"] = main.quests.serialize()
+	if main.get("atlas") != null:
+		d["isles"] = main.atlas.serialize()
 	return d
 
 
@@ -381,6 +383,8 @@ func apply_profile(d: Dictionary) -> void:
 		p.recipes.deserialize(d.recipes)
 	if d.has("quests") and main.quests != null:
 		main.quests.deserialize(d.quests)
+	if d.has("isles") and main.get("atlas") != null:
+		main.atlas.deserialize(d.isles)
 	if d.get("bed") is Vector3:
 		p.set_meta("respawn_point", d.bed)
 	if d.has("pos"):
