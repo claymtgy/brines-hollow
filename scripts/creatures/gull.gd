@@ -90,6 +90,10 @@ func simulate(dt: float, ctx: Dictionary) -> void:
 			if p.is_empty() or p.speed > 2.0 or not p.holding_fish:
 				set_state(State.FLEE)
 				return
+			var wl: Variant = net.get("wildlife")
+			if wl != null and wl.near_scarecrow(p.pos):
+				set_state(State.FLEE)   # a scarecrow nearby: not worth the risk
+				return
 			position = position.lerp(Vector3(p.pos.x, p.pos.y + 3.0, p.pos.z), 1.0 - exp(-dt * 2.0))
 			if state_t >= CombatMath.windup_time(0.9, ctx.difficulty):
 				_swoop_from = position

@@ -119,8 +119,10 @@ func _get_dualsense_glyph(action: StringName) -> String:
 		&"alt_use": return "L2"
 		&"jump": return "✕"
 		&"interact": return "□"
-		&"sprint": return "L3 / ○"
-		&"pick": return "R3"
+		&"sprint": return "L3"
+		&"dodge": return "○"
+		&"sneak": return "R3"
+		&"pick": return "Mic / Create"
 		&"rotate": return "△"
 		&"cycle_tool_prev": return "L1"
 		&"cycle_tool_next": return "R1"
@@ -142,8 +144,10 @@ func _get_xbox_glyph(action: StringName) -> String:
 		&"alt_use": return "LT"
 		&"jump": return "A"
 		&"interact": return "X"
-		&"sprint": return "LS / B"
-		&"pick": return "RS"
+		&"sprint": return "LS"
+		&"dodge": return "B"
+		&"sneak": return "RS"
+		&"pick": return "Share"
 		&"rotate": return "Y"
 		&"cycle_tool_prev": return "LB"
 		&"cycle_tool_next": return "RB"
@@ -166,6 +170,8 @@ func _get_keyboard_glyph(action: StringName) -> String:
 		&"jump": return "Space"
 		&"interact": return "F"
 		&"sprint": return "Shift"
+		&"dodge": return "C"
+		&"sneak": return "Ctrl"
 		&"pick": return "MMB"
 		&"rotate": return "R"
 		&"cycle_tool_prev": return "1-8"
@@ -311,6 +317,8 @@ func setup_input_map() -> void:
 		"move_right": [KEY_D, KEY_RIGHT],
 		"jump": [KEY_SPACE],
 		"sprint": [KEY_SHIFT],
+		"dodge": [KEY_C],
+		"sneak": [KEY_CTRL],
 		"interact": [KEY_F],
 		"tool_1": [KEY_1], "tool_2": [KEY_2], "tool_3": [KEY_3],
 		"tool_4": [KEY_4], "tool_5": [KEY_5], "tool_6": [KEY_6],
@@ -319,6 +327,7 @@ func setup_input_map() -> void:
 		"brush_down": [KEY_Z], "brush_up": [KEY_X],
 		"rotate": [KEY_R], "snap": [KEY_G],
 		"inventory_toggle": [KEY_I, KEY_TAB],
+		"quest_log_toggle": [KEY_J, KEY_L],
 		"build_menu_toggle": [KEY_B],
 		"fast_time": [KEY_T], "swap_shoulder": [KEY_V],
 		"toggle_first_person": [KEY_F5, KEY_P],
@@ -351,8 +360,10 @@ func setup_input_map() -> void:
 	var joy_buttons := {
 		"jump": [JOY_BUTTON_A],                      # Xbox: A, DualSense: Cross
 		"interact": [JOY_BUTTON_X],                  # Xbox: X, DualSense: Square
-		"sprint": [JOY_BUTTON_LEFT_STICK, JOY_BUTTON_B], # L3 or B/Circle
-		"pick": [JOY_BUTTON_RIGHT_STICK],            # R3
+		"sprint": [JOY_BUTTON_LEFT_STICK],           # L3 (hold)
+		"dodge": [JOY_BUTTON_B, JOY_BUTTON_PADDLE1], # Xbox: B, DualSense: Circle (+ back paddle)
+		"sneak": [JOY_BUTTON_RIGHT_STICK, JOY_BUTTON_PADDLE2], # R3 (hold) (+ back paddle)
+		"pick": [JOY_BUTTON_MISC1],                  # Share / Create / Mic
 		"rotate": [JOY_BUTTON_Y],                    # Xbox: Y, DualSense: Triangle
 		"cycle_tool_prev": [JOY_BUTTON_LEFT_SHOULDER], # LB / L1
 		"cycle_tool_next": [JOY_BUTTON_RIGHT_SHOULDER], # RB / R1
@@ -366,6 +377,11 @@ func setup_input_map() -> void:
 	for action in joy_buttons:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
+		# This table is the source of truth for pad buttons: drop any older pad bindings
+		# (e.g. saved in project.godot by the editor) so remaps here take effect.
+		for old in InputMap.action_get_events(action):
+			if old is InputEventJoypadButton:
+				InputMap.action_erase_event(action, old)
 		for b in joy_buttons[action]:
 			var ev := InputEventJoypadButton.new()
 			ev.button_index = b

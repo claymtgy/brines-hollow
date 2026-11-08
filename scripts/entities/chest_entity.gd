@@ -11,6 +11,9 @@ const U := VoxelWorld.VS * 0.5
 
 var container: StorageContainer
 var style := &"chest"   # chest | crate | barrel
+## Sealed stores (sea barrels, pantry barrels) are rat-proof: shore rats only raid
+## open chests and crates with food in them.
+var sealed := false
 
 
 func _init(
@@ -39,8 +42,32 @@ static func make_sea_barrel(coord: Vector3i) -> ChestEntity:
 	c.container.preserves_freshness = true
 	c.entity_id = &"sea_barrel"
 	c.style = &"barrel"
+	c.sealed = true
 	c.size = Vector3(7, 10, 7) * U
 	return c
+
+
+## Tar-sealed pantry barrel: holds any food and keeps shore rats out.
+static func make_pantry_barrel(coord: Vector3i) -> ChestEntity:
+	var c := ChestEntity.new("Sealed Pantry Barrel", coord, 16)
+	c.entity_id = &"pantry_barrel"
+	c.style = &"barrel"
+	c.sealed = true
+	c.size = Vector3(7, 10, 7) * U
+	return c
+
+
+## Food a shore rat could carry off (empty if sealed).
+func raidable_food() -> Array:
+	var out: Array = []
+	if sealed:
+		return out
+	for slot in container.inventory.slots:
+		if not slot.is_empty():
+			var def: ItemDef = ItemDB.get_item(slot.item_id)
+			if def != null and def.category == ItemDef.Category.FOOD:
+				out.append(slot.item_id)
+	return out
 
 
 func _build_visuals() -> void:
@@ -67,6 +94,8 @@ func _build_visuals() -> void:
 						if g.getv(x, y, z) != 0 and Vector2(x - 3, z - 3).length() > 2.2:
 							g.setv(x, y, z, Palette.METAL)
 			g.box(2, 9, 2, 4, 9, 4, Palette.DARK_WOOD)
+			if entity_id == &"pantry_barrel":
+				g.box(1, 9, 1, 5, 9, 5, Palette.BEDROCK)   # tarred lid
 		_:
 			g = Prefabs.Grid.new(9, 6, 6)
 			g.box(0, 0, 0, 8, 5, 5, Palette.DRIFTWOOD)

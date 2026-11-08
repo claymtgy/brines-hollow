@@ -14,17 +14,17 @@ const FRONT_DAYS := 0.22        # ~2.6 real minutes per front at 720 s/day
 const BLEND := 0.3              # fraction of a front spent transitioning in
 
 # Odds per state (storms are rare: they're the opt-in "hard mode" weather).
-const WEIGHTS := [38.0, 20.0, 14.0, 18.0, 10.0]
+const WEIGHTS := [48.0, 20.0, 10.0, 14.0, 8.0]
 
 # Continuous parameters each state pushes toward:
 #   cloud: sky cover / light dimming   fog: extra fog   rain: precipitation
 #   wind: sea swell + drift + audio    storm: lightning, surge, whitecaps
 const TARGETS := [
 	{"cloud": 0.05, "fog": 0.0,  "rain": 0.0, "wind": 0.20, "storm": 0.0},  # CLEAR
-	{"cloud": 0.65, "fog": 0.10, "rain": 0.0, "wind": 0.35, "storm": 0.0},  # OVERCAST
-	{"cloud": 0.45, "fog": 1.0,  "rain": 0.0, "wind": 0.08, "storm": 0.0},  # FOG
-	{"cloud": 0.85, "fog": 0.25, "rain": 0.7, "wind": 0.50, "storm": 0.0},  # RAIN
-	{"cloud": 1.0,  "fog": 0.35, "rain": 1.0, "wind": 1.0,  "storm": 1.0},  # STORM
+	{"cloud": 0.65, "fog": 0.02, "rain": 0.0, "wind": 0.35, "storm": 0.0},  # OVERCAST
+	{"cloud": 0.45, "fog": 0.85, "rain": 0.0, "wind": 0.08, "storm": 0.0},  # FOG
+	{"cloud": 0.85, "fog": 0.06, "rain": 0.7, "wind": 0.50, "storm": 0.0},  # RAIN
+	{"cloud": 1.0,  "fog": 0.10, "rain": 1.0, "wind": 1.0,  "storm": 1.0},  # STORM
 ]
 const KEYS := ["cloud", "fog", "rain", "wind", "storm"]
 # Storm is drawn first so its odds interval only ever shrinks when other weights are
@@ -48,7 +48,7 @@ static func front_state(seed_value: int, i: int) -> int:
 	var w: Array = WEIGHTS.duplicate()
 	var t_start := fposmod(i * FRONT_DAYS, 1.0)
 	if t_start > 0.18 and t_start < 0.38:
-		w[State.FOG] *= 2.5      # dawn fog banks
+		w[State.FOG] *= 1.4      # dawn fog banks
 	if _raw_state(seed_value, i - 1) == State.STORM:
 		w[State.STORM] = 0.0
 	return _pick(w, r)

@@ -22,8 +22,8 @@ Every feature should serve at least one of these. If it serves none, cut it.
 Built to answer "does the scale, camera and building feel right?"
 
 - 0.18 m voxels (player ≈ 10 voxels tall), 92 m island with tidal flats, terraced cliffs, sea stacks, a sea cave
-- Over-the-shoulder camera with terrain collision; auto-step movement; swimming
-- Dig / build brushes, 12 prefabs with ghost preview, rotate + grid snap
+- Over-the-shoulder camera with terrain collision, wall-clearance raycasting, and comfortable 1.05m side offset for an unobstructed view; toggleable shoulder (V); auto-step movement; swimming
+- Dig / build brushes, multi-size block placements (1x1, 3x3, 5x5, 7x7, 11x11) for fast filling of terrain cavities and holes with dirt/stone, 12 prefabs with ghost preview, rotate + grid snap
 - Day/night with a sunny-faded palette, ±1.26 m tide, lamps at night
 - Host-authoritative co-op, edits sent as commands, late-join edit log
 
@@ -44,13 +44,14 @@ Goal: Tech de-risking and the fundamental data models that every gameplay layer 
 | **Save / load** — per-region chunk diff files + world seed + entity/NPC state | Persistence across play sessions | M | ✅ Complete (terrain, farm, village, boats, lights, player profiles) |
 | **Entity layer** (workstations, chests, beds, barber mirror, physical objects) | Proximity interactions, stations, persistent furniture | M | ✅ Complete |
 | **Diegetic Parchment Minimap & Chart System** (equipment-gated 3-tier nautical charts, depth soundings, landmark pins) | Navigation, tide contours, and co-op cartography | M | ✅ Complete |
-| **Inventory & Resource System** (data-driven definitions, slot limits, stacking, containers) | Foundation for crafting, trade, and building | M | ✅ Complete |
+| **Inventory & Resource System** (data-driven definitions, slot limits, stacking, containers, 3D item dropping, full bag protection) | Foundation for crafting, trade, and building | M | ✅ Complete |
 | **Crafting & Culinary Cooking Systems** (workbenches, campfire skillets, hearth cauldrons, smokehouses, salteries, teahouses) | Food buffs, construction materials, and trade provisions | M | ✅ Complete |
 | **Vitality Triad (Health, Stamina & Nourishment)** — diet-driven max HP/stamina, non-punitive hunger, exertion curves, comfort rest | Core survival and physical exertion loops without punitive starvation | M | ✅ Complete |
 | **Armor & Weapon Equipment System** (damage types, armor slots, weapon swings, recoil/tether physics) | Combat, hunting, and defensive utility | M | ✅ Complete |
+| **Overhauled High-Impact Combat System** (3-hit combos, charge finishers, precision parries, guard meter, i-frame dodge rolls, micro hit-stop) | Responsive, tactical action RPG combat with high skill ceiling and visceral feedback | L | ✅ Complete |
 | **Character Customizer & Fisherfolk Wardrobe** (voxel-mesh hair, beards, skin tones, oilskins, sou'westers, paperdoll clothing) | Visual identity and player expression in co-op | M | ✅ Complete |
 | **Controller support + Steam Deck UI scale** (DualSense, Xbox, Adaptive Triggers, vibration, glyphs) | Handheld validation and tactile nautical feedback from day one | M | ✅ Complete |
-| **Settings menu** (sensitivity, FOV, shoulder, keybinds, quality presets) | Player comfort & testing | S | ✅ Complete (Esc menu: controls, graphics presets incl. Steam Deck, UI scale, key rebinding) |
+| **Settings menu & Camera controls** (sensitivity, FOV, shoulder offset slider, distance, keybinds, quality presets) | Player comfort & testing | S | ✅ Complete (Esc menu: controls, side offset slider, graphics presets incl. Steam Deck, UI scale, key rebinding) |
 | **Foliage fade near camera** | Visual clarity under trees and kelp | S | ✅ Complete (dithered fade between camera and player) |
 
 ### Inventory & Storage Specifications
@@ -62,6 +63,8 @@ Goal: Tech de-risking and the fundamental data models that every gameplay layer 
 - **Stacking Logic:** 999 for raw voxels/wood/stone; 20 for food/consumables; 1 for gear/tools.
 - **Backpack Upgrades:** Canvas Sack (starter) → Driftwood Rucksack (36 slots) → Seal-Leather Bag (44 slots) → Deep-Diver's Waterproof Pack (52 slots, waterproof).
 - **Storage Entities:** Watertight Sea Barrels (preserve seafood freshness), Storage Crates, and Shared Town Stockpiles with configurable category filters.
+- **Item Dropping:** Direct item dropping from inventory into the 3D world in front of the player (Drop 1 or Drop All via UI buttons, `Q`/`Delete` hotkeys, or clicking outside the bag). Dropped items simulate 3D physics, preserve custom data/durability, and feature temporary pickup immunity so they aren't immediately re-collected.
+- **Quest Reward Protection:** Automatic reward pausing when bag capacity cannot fit all pending items, ensuring no items are discarded or lost; rewards auto-claim as soon as bag space opens or via the Quest Log.
 
 ---
 
@@ -165,18 +168,18 @@ Goal: A rich, relaxing sandbox loop with no combat required.
 
 ### 7. Wildlife, Livestock & Predators
 Life on the islands beyond the player: some of it ambient, some of it hungry. Predators target **livestock and stores, not players**, and every threat has a non-lethal answer (pillar 3).
-- **Livestock (prerequisite):** pens and coops as placeable entities; animals need feed, water, shelter and space; happiness drives yield (milk, wool, eggs, down). Server-simulated and saved like other entities.
-- **Ambient wildlife:** coastal hares, seals hauled out on the flats at low tide, puffin colonies on sea stacks, otters in kelp beds, herons in salt marshes, migrating whales offshore. Mostly flee; some can be befriended (otters).
+- **Livestock:** ✅ Complete. Domestic Salt-Goats, Shore-Sheep, and Shore-Ducks with articulated voxel models and animations, needs (hunger, thirst, happiness), placeable feeding troughs (`TroughEntity`) & poultry coops (`CoopEntity`), daily feeding and petting with heart emotes, milking with wooden buckets (`salt_milk`), shearing shears with visual fleece removal & regrowth (`sea_wool`), poultry eggs & down feathers, and herding mechanics via held wheat or the Shepherd's Whistle (`animal_whistle`) into fenced pens. Fully server-simulated, synchronized, and saved with world state.
+- **Ambient wildlife:** ✅ Complete. Coastal hares, harbour seals hauled out at low tide, puffins on cliffs and skerries, sea otters in kelp beds (befriend with a fish; they bring gifts), grey herons in the shallows, migrating whales offshore with spouts. They step over terrain, leave tracks in sand and mud, and flee rather than fight (`scripts/wildlife/`).
 - **Predators that raid the farm:**
-  - *Red foxes:* den in island woods; at dusk and night they scout for unguarded coops and pens, slip through gaps in fences, and carry off chickens and ducklings. They leave tracks and scattered feathers so you can follow them back to the den.
-  - *Stoats:* small and quick; steal eggs from coops.
+  - *Red foxes:* ✅ den away from the farm; at night they scout for the weakest pen, slip under rail fences, take eggs or feed, and (Tidewatch/Undertow) carry off ducks. Tracks and scattered feathers lead back to the den.
+  - *Stoats:* ✅ small and quick; steal eggs (Tidewatch and up).
   - *Gulls (built):* already steal unattended fish.
-  - *Sea eagles:* swoop on ducklings and lambs left in the open by day.
-  - *Shore rats:* raid unsealed food stores and drying racks after storms.
-- **Defences & answers:** proper fences and latched gates (gaps matter), lanterns that keep foxes at bay, guard dogs and dock cats, live-capture traps (relocate a fox to another island), scarecrows for birds, sealed sea barrels for food, and, optionally, combat.
+  - *Sea eagles:* ✅ circle, then stoop on ducks left in the open by day (Cozy: only scatters them; Tidewatch/Undertow: may carry one off; strike it to make it drop the duck).
+  - *Shore rats:* ✅ come up off the tideline the nights after a storm and eat food from open chests and crates (1/2/3 bites by difficulty). Drying racks are voxel prefabs, not stores, so they're left alone for now.
+- **Defences & answers:** ✅ boarded Pen Fence prefab and Latched Pen Gate (the rail fence's gap matters), lantern posts and lit stations that raiders won't enter, chasing raiders off (they drop what they carry), baited live traps with release/relocation, filling dens so foxes move further off, and pens remembered as defended. ✅ Also: Guard Dog Kennel (dog sees off foxes, stoats and rats within 16 m, with a bark alert), Dock Cat's Basket (rats and stoats within 12 m), Oilskin Scarecrow (eagles and gulls keep clear within 14 m), Sealed Pantry Barrel (rat-proof food store; the sea barrel is sealed too), and roofed pens against eagles.
 - **Behaviour:** predators path toward the weakest pen, retreat from light and noise, remember defended farms for a few days, and return to dens that can be found and moved on.
 - **Difficulty:** *Cozy*: raids only take eggs or feed and never harm animals; *Tidewatch*: occasional losses with clear warnings ("A fox is circling the coop"); *Undertow*: bolder, smarter raids.
-- **Co-op:** host/server simulates wildlife; village bells alert everyone when a raid starts.
+- **Co-op:** ✅ host/server simulates wildlife and livestock; livestock poses stream to clients (~10 Hz), clients' petting/feeding/shearing and herding reach the host; raid alerts go to everyone. Befriended otters are remembered per player profile and find their friend again after a reload or rejoin. Still to build: village bells as a physical alarm.
 
 ### 8. Subterranean World & Cave Networks
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
@@ -246,8 +249,23 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
   - *Elder Brenda (Town Matriarch):* Village growth, civic structures, housing milestones.
   - *Old Man Corin (Blind Lighthouse Keeper):* Folklore, tide anomalies, secrets of ancient bells.
   - *Cartographer Vane:* Island charting, landmark exploration, sea stack beacons.
-  - *Town Notice Board:* Dynamic procedural requests from villagers ("Gather 15 Tide Kale for the winter stew").
-- **Starter quest — Wren the Wayfarer ✅ (built):** A travelling fisher walks up to new players when they wash ashore and teaches the basics in seven short missions: dig, build, craft, set a crab pot, fish, eat, and row out. Each mission ends by returning to Wren for rewards and new recipes. Per player (local in co-op), saved with the profile, skippable ("I know my way"). Objectives show in an on-screen quest tracker.
+  - *Town Notice Board & Villagers:* Dynamic procedural requests and chores from villagers (e.g. Mara's tide catch, Tobin's timber reserve, Barnaby's kettle kale).
+- **Starter quest — Wren the Wayfarer ✅ (built):** A travelling fisher walks up to new players when they wash ashore and teaches the basics in seven short missions: dig, place blocks with the hammer, craft, set a crab pot, fish, eat, and row out. Each mission ends by returning to Wren for rewards and new recipes. Per player (local in co-op), saved with the profile, skippable ("I know my way"). Building tutorial uses individual block placement with auto-selected bag materials (blocks rather than fabrications). Objectives display in an auto-fading HUD quest tracker (fades after 10s on login and 7s on objective progress).
+- **Wayfarer's Journal / Quest Log System ✅ (built):**
+  - Full interactive Quest Log UI toggled with `J` or `L`, or via a dedicated button in the Inventory screen.
+  - Categorized into **Active Quests** and **Completed Quests** tabs with live quest tallies.
+  - Interactive details pane: narrative quest background/lore, quest giver identity, dynamic objective checklist, reward breakdown, and current quest status.
+  - Unobtrusive HUD tracker toggle button to pin or unpin objectives.
+- **Overhead 3D Quest Markers ✅ (built):**
+  - Visual 3D billboarded markers floating over characters with active quests, visible across distances and through obstacles (`no_depth_test`).
+  - **`!` (Gold Exclamation)**: Unaccepted available quest ready to start (Wren, village drifters like Mara and Tobin, visiting merchants).
+  - **`?` (Gold Question Mark)**: Active quest ready to turn in or speak with the NPC, as well as paused reward turn-ins.
+  - Gentle sinusoidal floating hover animation above NPC heads.
+  - Speaking with villagers (`F`) automatically progresses `TALK_TO` quest steps, accepts new available chores, and claims pending rewards.
+- **Full Inventory Quest Reward Protection ✅ (built):**
+  - If a player completes an objective or turns in a quest while their inventory cannot fit all reward items, the reward distribution automatically pauses safely.
+  - Prevents item loss or ground clutter; marks quest state as `Rewards Paused (Inventory Full)`.
+  - When inventory space is cleared (by dropping items, depositing in chests, or consuming materials), rewards are automatically claimed, or can be claimed manually via the Quest Log's "Claim Rewards Now" button.
 - **Diegetic Navigation & The Map Equipment Slot:**
   - Standard gameplay maintains immersion with clean HUD framing, using an in-world brass *Mariner's Compass*, visible rotating beams from built *Lighthouses*, and a hand-sketched *Field Logbook*.
   - **Minimap Enablement via Map Slot:** Equipping a crafted nautical chart into the dedicated **Map Equipment Slot** activates a corner parchment minimap on the HUD.
@@ -258,7 +276,37 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
   - Unravel the mystery of the ancient civilization swallowed by the "Great Deluge."
   - Discover 4 ancient Tide Regulators across the archipelago to restore natural balance.
 
-### 3. Combat, Marine Arsenal & Armor Tiers
+### 3. Overhauled High-Impact Combat System, Marine Arsenal & Armor Tiers ✅ (Complete)
+
+Combat in Brine's Hollow is reimagined from basic weapon swings into a fluid, tactile, high-skill action RPG combat system with crunchy impact feedback, deliberate defensive options, and deep marine versatility.
+
+- **Dynamic Attack Strings & Weapon Movesets:**
+  - **3-Hit Weapon Combo Chains:** Distinct Light-Light-Heavy weapon combos with unique timings, sweeping horizontal cleaves, piercing thrusts, and grounded forward lunges that prevent awkward "skating on ice."
+  - **Charged Heavy Attacks:** Hold primary attack to charge a devastating blow (e.g. Anchor Maul ground fracture, Cutlass cross-slash, Harpoon impale) that shatters enemy poise and deals massive stagger damage.
+  - **Aerial & Plunging Downward Strikes:** Attacking mid-air or leaping off sea stacks triggers a heavy plunging slam with an AOE shockwave and localized knockback.
+  - **Sprint & Dash Engages:** Seamless sprint-to-strike openers allowing quick initiation and aggressive gap-closing.
+- **Precision Defensive Mechanics (Parries, Guard & Dodges):**
+  - **Active Timed Parry & Riposte:** Tapping block within a tight 150ms window deflects incoming melee and projectile attacks with an intense metallic clash and visual spark burst. Parrying completely negates damage, incurs zero stamina loss, staggers the attacker, and opens a high-multiplier **Riposte Counter-Attack**!
+  - **Guard Stance & Shield Blocking:** Hold `RMB` to raise a buckler, boarding shield, or cross two-handed blades. Blocks absorb damage into a dedicated stamina guard meter; depleting guard stamina triggers a temporary **Guard Break** stumble.
+  - **8-Directional Dodge Roll with Invulnerability Frames (I-Frames):** Responsive directional evasion that cancels attack recovery, allowing players to weave around monster claws and boss lunges.
+- **Visceral Hit-Feel, Impact Audio-Visual "Juice" & Poise Meter:**
+  - **Micro Hit-Stop:** Dynamic freeze-frame pause (40ms on light slashes, 80ms on charged finishers and parries) that imparts genuine tactile crunch and physical weight to strikes.
+  - **Camera Shake & Impact Punch:** Directional camera punch that scales with strike kinetic force.
+  - **Dynamic Particle Effects:** Directional blade sparks against armor and chitin, creature ichor splatters, and fractured debris chunks when swings hit adjacent stone or coral.
+  - **Enemy Poise & Stagger System:** Enemies possess poise thresholds. Continuous pressure or heavy blunt trauma fractures enemy stance, causing stumble animations, knee-drops, and exposing soft underbellies for execution prompts (`F`).
+- **Off-Hand Utility & Dual-Wielding:**
+  - Dual Cutlasses for rapid flurries and 360-degree whirlwind cleaves.
+  - Cutlass + Flintlock/Speargun for seamless pirate "gun-kata" (slash-slash-quickdraw shot combo).
+  - Harpoon + Lantern (long-reach thrusts while keeping dark caves illuminated and blinding photophobic beasts).
+  - One-handed weapon + Boarding Shield (maximum guard stability and projectile deflection).
+- **Aquatic & Environmental Combat Dynamics:**
+  - **Hydrodynamic Drag:** Water depth and density alter weapon speeds: thrusting tridents, rapiers, and spearguns move without drag underwater, while heavy anchor mauls become deliberate concussive weapons.
+  - **Cliff Kicking & Tidal Pushing:** Environmental knockbacks push enemies off sheer sea cliffs into the breakers, or push heavily armored brutes into deep water where their heavy armor drags them down.
+  - **Low-Tide Mud Traps:** Baiting aggressive beasts into intertidal mud flats where their sprint speed is halved.
+- **Coordinated Enemy AI & Telegraphs:**
+  - Enemy group token system prevents overlapping attack spam; enemies surround, flank, feint, and take turns attacking.
+  - Distinct visual telegraphs (weapon raise gleam, eye flare, audio shriek/growl) ensuring every attack is readable.
+  - Humanoid enemies (Sea-Reavers) actively parry, dodge roll away from sustained combos, and call for reinforcements.
 - **Combat Fundamentals:** Stamina management, directional dodge roll, parry window, hit-stop feedback, and telegraph cues.
 - **Armor System & Utility Tiers (Paperdoll: Head, Chest, Legs, Boots, Accessory):**
   - **Tier 1 (Scavenged Coastal Garb):** *Driftwood-Slat Vest & Woven Kelp Mesh* — Lightweight, zero swimming penalty, basic blunt dampening against crab pinches.
@@ -373,18 +421,18 @@ Goal: Build boats, sail beyond the home atoll, and confront or outsmart the guar
 
 ---
 
-## Player Wiki (Markdown in the repo)
+## Player Wiki (Markdown in the repo) ✅ (set up)
 
 A reference players can browse outside the game, kept in `docs/wiki/` as linked Markdown pages (renders on GitHub; can be published to the GitHub Wiki or a static site later).
 - **Pages:** Getting Started (what Wren teaches), Controls (keyboard + controller), Tides & Time, Building & Blueprints, Crafting & Recipes (every recipe and how it is unlocked), Farming & Salt Pans, Fishing & Crab Pots, Food & Vitality, Boats & Sailing, Village & Drifters, Merchants & Trade, Creatures & Wildlife, Weather, Difficulty Modes, Co-op & Dedicated Servers, Settings & Steam Deck, FAQ.
-- **Generated tables:** a small tool exports items, recipes (with unlock sources), fish (tide/time/weather), crops and creatures straight from the game data, so the wiki never drifts from the code.
+- **Generated tables:** `tools/export_wiki_data.gd` exports items, recipes (with unlock sources), fish (tide/time/weather), crops, placeables and creatures into `docs/wiki/generated/` straight from the game data, so the wiki never drifts from the code. Run it with `godot --headless --path . -s tools/export_wiki_data.gd`.
 - **Upkeep:** update the relevant page with each feature merge; screenshots captured by the existing dev screenshot modes.
 
 ---
 
 ## Immediate Next Steps
 
-1. **Livestock** (pens, feed, yields): prerequisite for the wildlife and fox raids above.
-2. **Wildlife & predators:** ambient animals first, then foxes and stoats raiding pens with lanterns, fences and traps as answers.
-3. **Player wiki:** set up `docs/wiki/` and the data-export tool.
-4. **Polish from the last merges:** save the bed respawn point in the profile, gamepad mapping for dodge/sneak, merchant stock persistence, eels avoiding placed lantern entities.
+1. **Wildlife & predators** ✅ Complete (ambient animals, fox and stoat raids, lanterns, pen fences, gates, live traps, dens). Follow-ups also done: sea eagles, shore rats, guard dogs, dock cats, scarecrows, sealed pantry barrels, otter friends persisting. Next Up: village bells for raid alerts in co-op.
+2. **Player wiki** ✅ Set up (`docs/wiki/` hand-written pages and the generated tables).
+3. **Polish from the last merges** ✅ Complete (bed respawn point saved in the profile, gamepad dodge/sneak including back paddles, merchant stock persistence, eels avoiding lantern posts and lit stations). Livestock now sync live to co-op clients.
+4. **Overhauled High-Impact Combat System** ✅ Complete (3-hit combos, charged attacks, aerial plunge slams, precision parry & Riposte, RMB guard stance, guard-break stumble, 8-directional i-frame dodge rolls, poise meters, hit-stop, and camera shake).

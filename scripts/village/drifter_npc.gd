@@ -14,6 +14,7 @@ var recruited := false
 var wreck_pos := Vector3.ZERO     # metres: where they washed up
 var model: CharacterModel
 var label: Label3D
+var marker: Label3D
 
 # simulation (authority)
 var path: Array = []              # Vector3 waypoints (metres, feet)
@@ -48,7 +49,18 @@ func setup(p_idx: int, p_def: DrifterDef, p_wreck: Vector3, look_seed: int) -> v
 	label.pixel_size = 0.004
 	label.modulate = Color(1.0, 0.95, 0.82)
 	add_child(label)
+	marker = Label3D.new()
+	marker.name = "QuestMarker"
+	marker.position = Vector3(0, 2.65, 0)
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.font_size = 96
+	marker.outline_size = 16
+	marker.pixel_size = 0.004
+	marker.modulate = UiTheme.BRASS
+	marker.no_depth_test = true
+	add_child(marker)
 	refresh_label()
+	refresh_marker(null)
 
 
 func profession_name() -> String:
@@ -59,6 +71,90 @@ func refresh_label() -> void:
 	if label == null:
 		return
 	label.text = "%s the %s%s" % [def.name, profession_name(), "" if recruited else "\n(stranded)"]
+
+
+func set_quest_marker(p_text: String) -> void:
+	if marker != null:
+		marker.text = p_text
+
+
+func matches_quest_target(target: Variant) -> bool:
+	if def == null:
+		return false
+	var t_str: String = String(target).strip_edges().to_lower()
+	if t_str == "":
+		return false
+	var my_name: String = def.name.to_lower()
+	var my_id: String = String(def.id).to_lower()
+	var my_prof: String = profession_name().to_lower()
+
+	if t_str == my_name or t_str == my_id or t_str == my_prof:
+		return true
+	if my_name != "" and (t_str.contains(my_name) or my_name.contains(t_str)):
+		return true
+	if my_prof != "" and t_str.contains(my_prof):
+		return true
+	if my_name == "corwin" and t_str.contains("corin"):
+		return true
+	if "cook" in my_prof and "cook" in t_str:
+		return true
+	return false
+
+
+func get_available_quest(qm: QuestManager) -> QuestDef:
+	if qm == null:
+		return null
+	for q_id in qm.available_quests.keys():
+		var qd: QuestDef = qm.available_quests[q_id]
+		if matches_quest_target(qd.giver_name) or matches_quest_target(qd.id):
+			return qd
+	return null
+
+
+func refresh_marker(qm: QuestManager) -> void:
+	if marker == null:
+		return
+	if qm == null:
+		marker.text = ""
+		return
+
+	# Priority 1: Ready to turn in or talk to ("?")
+	for q_id in qm.active_quests.keys():
+		var qd: QuestDef = qm.active_quests[q_id]
+		# Check if rewards are paused for this quest and NPC matches giver
+		if qm.paused_reward_quests.has(qd.id) and matches_quest_target(qd.giver_name):
+			marker.text = "?"
+			marker.modulate = UiTheme.BRASS
+			return
+
+		# Check if NPC is target of active TALK_TO step and all preceding steps are done
+		var talk_step_found := false
+		var other_steps_done := true
+		for s in qd.steps:
+			if not s.is_completed:
+				if s.type == QuestDef.ObjectiveType.TALK_TO and matches_quest_target(s.target_id):
+					talk_step_found = true
+				else:
+					other_steps_done = false
+		if talk_step_found and other_steps_done:
+			marker.text = "?"
+			marker.modulate = UiTheme.BRASS
+			return
+
+		# Check if all steps in quest are done and this NPC is the giver
+		if qd.is_complete() and matches_quest_target(qd.giver_name):
+			marker.text = "?"
+			marker.modulate = UiTheme.BRASS
+			return
+
+	# Priority 2: New available quest to offer ("!")
+	var avail := get_available_quest(qm)
+	if avail != null:
+		marker.text = "!"
+		marker.modulate = UiTheme.BRASS
+		return
+
+	marker.text = ""
 
 
 # ---------------------------------------------------------------- authority simulation
@@ -123,4 +219,6 @@ func _process(delta: float) -> void:
 	model.animate(delta, speed, true, false)
 	if activity == 2 and fmod(Time.get_ticks_msec() / 1000.0 + idx * 0.37, 2.2) < delta:
 		model.swing()   # busy at work
+	if marker != null and marker.text != "":
+		marker.position.y = 2.65 + sin(Time.get_ticks_msec() / 1000.0 * 3.0 + idx) * 0.06
 	model.position.y = -0.25 if activity == 3 else 0.0   # settled into bed

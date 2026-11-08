@@ -130,4 +130,11 @@ func _initialize() -> void:
 	check(not m.has_entity_at(Vector3i(20, 25, 20)), "pickup removes the entity")
 
 	print("Summary: %d / %d tests passed!" % [passed, total])
+	# The test types' factories point into this script; drop them (and the managers)
+	# before the engine tears the script down, or shutdown crashes.
+	EntityManager.unregister_type(&"test_lambda")
+	EntityManager.unregister_type(&"test_thing")
+	m.free()
+	m2.free()
+	EntityManager.current = null
 	quit(0 if passed == total else 1)

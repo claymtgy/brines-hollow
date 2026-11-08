@@ -18,7 +18,9 @@ const SIM_DT := 0.05
 const SNAPSHOT_DT := 0.1
 const SPAWN_DT := 1.0
 const CAP := {&"crab": 12, &"gull": 12, &"eel": 4}
-const KINDS := [&"crab", &"gull", &"eel"]
+## Snapshot kind indices: append only (clients map index -> kind).
+const KINDS := [&"crab", &"gull", &"eel", &"hare", &"seal", &"puffin", &"otter", &"heron", &"whale",
+	&"fox", &"stoat", &"rat", &"eagle"]
 const DESPAWN_DIST := 70.0
 
 var main: Node
@@ -40,6 +42,8 @@ var _overlay_a := 0.0
 var _overlay_color := Color(0.6, 0.05, 0.05)
 var _diff_loaded := false
 var _args := {}
+var wildlife: WildlifeDirector       # ambient animals, farm raids, dens (scripts/wildlife/)
+var fx: WildlifeFX
 
 # Dev-check counters
 var stats_hits := 0
@@ -48,6 +52,12 @@ var stats_hurt := 0.0
 
 func _ready() -> void:
 	_rng.randomize()
+	wildlife = WildlifeDirector.new(self)
+	fx = WildlifeFX.new()
+	fx.name = "WildlifeFX"
+	add_child(fx)
+	if main.get("session") != null:
+		main.session.register_state(&"wildlife", wildlife.serialize, wildlife.deserialize)
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		_args[kv[0]] = kv[1] if kv.size() > 1 else ""
@@ -255,6 +265,15 @@ func _context() -> Dictionary:
 	for pl: Dictionary in players:
 		if pl.has_light:
 			lights.append(pl.pos + Vector3.UP * 1.2)
+	# Placed light sources: lantern posts, campfires, furnaces, smokehouses.
+	var em := EntityManager.current
+	if em != null:
+		for e: WorldEntity in em.entities.values():
+			if e.emits_light():
+				for pl: Dictionary in players:
+					if e.position.distance_squared_to(pl.pos) < 3600.0:
+						lights.append(e.position + Vector3.UP * 0.8)
+						break
 	var night: float = main.sky.night_factor()
 	return {"players": players, "lights": lights, "water_y": main.sky.water_level_m(),
 		"night": night, "darkness": night, "difficulty": difficulty}
@@ -295,6 +314,16 @@ func spawn(kind: StringName, pos: Vector3, cid := -1) -> Creature:
 		&"crab": c = TideCrab.new()
 		&"gull": c = Gull.new()
 		&"eel": c = CaveEel.new()
+		&"hare": c = CoastalHare.new()
+		&"seal": c = HarbourSeal.new()
+		&"puffin": c = Puffin.new()
+		&"otter": c = SeaOtter.new()
+		&"heron": c = GreyHeron.new()
+		&"whale": c = MigratingWhale.new()
+		&"fox": c = RedFox.new()
+		&"stoat": c = Stoat.new()
+		&"rat": c = ShoreRat.new()
+		&"eagle": c = SeaEagle.new()
 		_: return null
 	if cid < 0:
 		cid = _next_id
@@ -329,7 +358,7 @@ func _spawn_tick() -> void:
 	for c: Creature in creatures.values():
 		var near := false
 		for pl: Dictionary in players:
-			if c.position.distance_to(pl.pos) < (40.0 if c.kind == &"eel" else DESPAWN_DIST):
+			if c.position.distance_to(pl.pos) < (40.0 if c.kind == &"eel" else wildlife.despawn_distance(c.kind)):
 				near = true
 				break
 		if not near:
@@ -376,8 +405,9 @@ func _spawn_tick() -> void:
 			var pvz := floori(pp.z / vs)
 			if gen.col_h(pvx, pvz) > floori(pp.y / vs) + 8:   # the player is under rock: a cave
 				var home := _find_cave_water(pp, water_y)
-				if home != Vector3.INF:
+				if home != Vector3.INF and not Perception.is_lit(home, _context().lights):
 					spawn(&"eel", home)
+	wildlife.spawn_tick(players)
 
 
 ## A flooded cell under a natural roof near `pp`, or INF.
@@ -461,10 +491,31 @@ func local_swing(origin: Vector3, fwd: Vector3, stats: Dictionary, in_water: boo
 		hits += 1
 		c.flash()
 		var dmg := CombatMath.outgoing_damage(stats, c.is_staggered(), in_water)
+		var pwr: float = float(stats.get("stagger_power", 1.0)) * float(stats.get("stagger_mult", 1.0))
 		if is_authority():
-			_apply_hit(c, dmg, origin, float(stats.stagger_power), local_id())
+			_apply_hit(c, dmg, origin, pwr, local_id())
 		else:
-			cr_hit.rpc_id(1, c.cid, dmg, origin, float(stats.stagger_power))
+			cr_hit.rpc_id(1, c.cid, dmg, origin, pwr)
+	return hits
+
+
+## Local AOE strike (e.g. plunging slam shockwave). Returns number of creatures struck.
+func local_aoe_strike(center: Vector3, radius: float, stats: Dictionary, in_water: bool = false) -> int:
+	var hits := 0
+	for c: Creature in creatures.values():
+		if c.state == Creature.State.DEAD:
+			continue
+		var dist := center.distance_to(c.position)
+		if dist > radius + c.radius:
+			continue
+		hits += 1
+		c.flash()
+		var dmg := CombatMath.outgoing_damage(stats, c.is_staggered(), in_water)
+		var pwr: float = float(stats.get("stagger_power", 1.0)) * float(stats.get("stagger_mult", 1.0))
+		if is_authority():
+			_apply_hit(c, dmg, center, pwr, local_id())
+		else:
+			cr_hit.rpc_id(1, c.cid, dmg, center, pwr)
 	return hits
 
 
@@ -507,8 +558,20 @@ func _local_hurt(amount: float, from: Vector3, cid: int) -> void:
 		return
 	var res := _combat.receive_hit(amount, from, cid)
 	match res:
-		"dodged": main.hud.show_toast("Dodged!")
-		"parried": main.hud.show_toast("Parried! It's staggered - strike now")
+		"dodged":
+			if main.hud != null:
+				main.hud.show_toast("Dodged!")
+		"parried":
+			if main.hud != null:
+				main.hud.show_toast("Parried! Riposte ready - strike now!")
+		"blocked":
+			if main.hud != null:
+				main.hud.show_toast("Blocked!")
+		"guard_broken":
+			if main.hud != null:
+				main.hud.show_toast("Guard Broken!")
+			_overlay_color = Color(0.7, 0.4, 0.1)
+			_overlay_a = 0.5
 		_:
 			stats_hurt += amount
 			_overlay_color = Color(0.6, 0.05, 0.05)
@@ -570,6 +633,89 @@ func _unhandled_input(e: InputEvent) -> void:
 			else:
 				cr_catch.rpc_id(1, c.cid)
 			return
+	if _wild_interact():
+		get_viewport().set_input_as_handled()
+
+
+## Wildlife answers that need F: offering a fish to an otter, filling in a fox den.
+func _wild_interact() -> bool:
+	var p: Player = main.player
+	if p.is_seated():
+		return false
+	if _combat.holding_fish() and p.horizontal_speed < 1.0:
+		for c: Creature in creatures.values():
+			if c is SeaOtter and not (c as SeaOtter).is_friend() and c.state != Creature.State.FLEE 					and c.position.distance_to(p.position) < 4.0:
+				var slot: ItemSlot = p.inventory.get_active_item()
+				p.inventory.remove_item(slot.item_id, 1)
+				if is_authority():
+					befriend_otter(c.cid, local_id())
+				else:
+					cr_befriend.rpc_id(1, c.cid)
+				main.hud.show_toast("The otter takes the fish from your hand. You've made a friend!")
+				return true
+	if wildlife.nearest_den(p.position, 2.6) >= 0:
+		if is_authority():
+			wildlife.fill_den(p.position)
+		else:
+			cr_fill_den.rpc_id(1, p.position)
+		main.hud.show_toast("You fill in the den. The foxes will move on to a wood further from your farm.")
+		return true
+	return false
+
+
+func befriend_otter(cid: int, pid: int) -> void:
+	var c: Creature = creatures.get(cid)
+	if c is SeaOtter:
+		(c as SeaOtter).befriend(pid)
+		wildlife.remember_otter_friend(pid)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func cr_befriend(cid: int) -> void:
+	if is_authority():
+		befriend_otter(cid, main.multiplayer.get_remote_sender_id())
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func cr_fill_den(pos: Vector3) -> void:
+	if not is_authority():
+		return
+	var rp: Node3D = main.remotes.get(main.multiplayer.get_remote_sender_id())
+	if rp != null and rp.position.distance_to(pos) < 4.0:
+		wildlife.fill_den(pos)
+
+
+## Host: items (and a note) for one player from the wildlife (otter gifts).
+func wild_gift(pid: int, items: Array, toast: String) -> void:
+	_grant(pid, items)
+	if pid == local_id():
+		main.hud.show_toast(toast)
+	elif main.remotes.has(pid):
+		cr_toast.rpc_id(pid, toast)
+
+
+## Host: tell every player about a raid (the village bell).
+func wild_alert(text: String) -> void:
+	if main.hud != null and main.player != null:
+		main.hud.show_toast(text)
+	if main.is_net and main.multiplayer.multiplayer_peer != null:
+		cr_toast.rpc(text)
+
+
+@rpc("authority", "call_remote", "reliable")
+func cr_toast(text: String) -> void:
+	if main.hud != null:
+		main.hud.show_toast(text)
+
+
+func broadcast_dens(list: Array) -> void:
+	if main.is_net and main.multiplayer.multiplayer_peer != null and is_authority():
+		cr_dens.rpc(list)
+
+
+@rpc("authority", "call_remote", "reliable")
+func cr_dens(list: Array) -> void:
+	wildlife.set_dens(list)
 
 
 func catch_crab(cid: int, pid: int) -> bool:
@@ -628,7 +774,7 @@ func _wait(sec: float) -> void:
 func _kinds() -> Dictionary:
 	var d := {&"crab": 0, &"gull": 0, &"eel": 0}
 	for c: Creature in creatures.values():
-		d[c.kind] += 1
+		d[c.kind] = d.get(c.kind, 0) + 1
 	return d
 
 

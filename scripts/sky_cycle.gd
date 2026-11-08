@@ -32,7 +32,7 @@ var _keys := [
 ]
 
 
-const BASE_FOG := 0.0042
+const BASE_FOG := 0.0004
 const BASE_SATURATION := 0.92
 
 
@@ -89,9 +89,10 @@ func _ready() -> void:
 	env.set_glow_level(5, 0.0)
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_density = 0.0042
-	env.fog_sky_affect = 0.35
-	env.fog_aerial_perspective = 0.25
+	env.fog_density = 0.0004
+	env.fog_sky_affect = 0.15
+	env.fog_aerial_perspective = 0.20
+	env.fog_depth_begin = 50.0
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.92
 	env.adjustment_contrast = 1.04
@@ -233,7 +234,13 @@ func _apply() -> void:
 	var fog_col: Color = (a[5] as Color).lerp(b[5], f)
 	var fl := fog_col.get_luminance()
 	env.fog_light_color = fog_col.lerp(Color(fl, fl * 1.02, fl * 1.05), cloud * 0.6)
-	env.fog_density = BASE_FOG + (w.fog as float) * 0.026 + (w.rain as float) * 0.005
+	env.fog_density = BASE_FOG + (w.fog as float) * 0.020 + (w.rain as float) * 0.002
+	env.fog_depth_begin = lerpf(55.0, 10.0, clampf((w.fog as float) * 1.5, 0.0, 1.0))
+	var fog_on: bool = true
+	var parent_node := get_parent()
+	if parent_node != null and parent_node.get("settings") != null and "fog" in parent_node.settings:
+		fog_on = bool(parent_node.settings.fog)
+	env.fog_enabled = fog_on
 	env.ambient_light_energy = lerpf(a[6], b[6], f) * (1.0 - cloud * 0.2)
 	# Wet, rainy days look a little duller; lightning briefly floods the scene.
 	var flash: float = weather.lightning if weather != null else 0.0

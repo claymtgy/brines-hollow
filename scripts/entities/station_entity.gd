@@ -145,6 +145,10 @@ func _build_visuals() -> void:
 		_update_fire_visuals(0.0)
 
 
+func emits_light() -> bool:
+	return station_tag in [&"campfire", &"smokehouse", &"furnace", &"hearth_pot"]
+
+
 func _build_fire_effects() -> void:
 	_flame_node = Node3D.new()
 	_flame_node.position = Vector3(0.0, 2.0 * U, 0.0)

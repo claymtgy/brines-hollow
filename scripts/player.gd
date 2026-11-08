@@ -42,11 +42,12 @@ var facing := 0.0
 var water_level := 0.0      # metres, set by Main
 var input_enabled := true
 var horizontal_speed := 0.0
+var is_sprinting := false
 var swing_count := 0
 
 var tool := 0
-var hammer_build_mode := 0  # 0 = Fabricated Pieces (Prefabs), 1 = Individual Blocks, 2 = Furniture
-var brush := 1
+var hammer_build_mode := 1  # 0 = Fabricated Pieces (Prefabs), 1 = Individual Blocks, 2 = Furniture
+var brush := 0
 var mat_index := 0
 var prefab_id := 5
 var prefab_rot := 0
@@ -200,6 +201,13 @@ void fragment() {
 	inventory.slot_changed.connect(func(slot_idx: int, _slot: ItemSlot) -> void:
 		if slot_idx == inventory.active_hotbar_index:
 			_sync_tool_from_hotbar()
+		if quests != null and not quests.paused_reward_quests.is_empty():
+			var claimed := quests.check_paused_rewards(inventory)
+			for cid in claimed:
+				if hud != null:
+					var def: QuestDef = quests.get_quest_def(cid)
+					var q_title := def.title if def != null else String(cid)
+					hud.show_toast("Space cleared! Claimed paused rewards for '%s'" % q_title)
 	)
 	inventory.active_hotbar_changed.connect(func(_idx: int) -> void:
 		_sync_tool_from_hotbar()
@@ -255,11 +263,17 @@ func bind_quest_signals() -> void:
 	if quests and not quests.quest_progressed.is_connected(_on_quest_progressed):
 		quests.quest_progressed.connect(_on_quest_progressed)
 		quests.quest_completed.connect(_on_quest_completed)
+		quests.quest_rewards_paused.connect(_on_quest_rewards_paused)
 
 
 func _on_quest_progressed(q: QuestDef, step: QuestDef.QuestStep) -> void:
-	if hud:
+	if hud and step != null:
 		hud.show_toast("[%s] %s (%d/%d)" % [q.title, step.description, step.current_count, step.target_count])
+
+
+func _on_quest_rewards_paused(q: QuestDef) -> void:
+	if hud:
+		hud.show_toast("Inventory full! Rewards for '%s' paused until you make room." % q.title)
 
 
 func _on_quest_completed(q: QuestDef) -> void:
@@ -352,7 +366,7 @@ func _physics_process(delta: float) -> void:
 	swimming = in_water
 	var is_submerged: bool = (position.y + 1.2 < water_level) and (world == null or world.is_water_at(position + Vector3(0.0, 1.2, 0.0), water_level))
 	var sprint := input_enabled and Input.is_action_pressed("sprint")
-	var is_sprinting: bool = sprint and wish.length_squared() > 0.01 and not vitality.is_exhausted and vitality.current_stamina > 0.0
+	is_sprinting = sprint and wish.length_squared() > 0.01 and not vitality.is_exhausted and vitality.current_stamina > 0.0
 
 	if is_sprinting:
 		vitality.drain_stamina_continuous(10.0, delta)
@@ -413,6 +427,8 @@ func _physics_process(delta: float) -> void:
 		probe.y -= 0.02
 		landed = _collides(probe)
 	on_ground = landed
+	if combat != null and combat.is_plunging and landed:
+		combat.on_land_plunge()
 
 	# Keep inside the island bounds.
 	var lim := VoxelWorld.WX * VS
@@ -432,6 +448,57 @@ func _physics_process(delta: float) -> void:
 
 func current_material() -> int:
 	return Palette.BUILDABLE[mat_index]
+
+
+func _ensure_valid_block_material() -> void:
+	if inventory == null:
+		return
+	var cur_mat := current_material()
+	var cur_item := BuildCosts.item_for(cur_mat)
+	if inventory.get_item_count(cur_item) > 0:
+		return
+	for idx in Palette.BUILDABLE.size():
+		var m: int = Palette.BUILDABLE[idx]
+		var item_id := BuildCosts.item_for(m)
+		if item_id != &"" and inventory.get_item_count(item_id) > 0:
+			mat_index = idx
+			return
+
+
+## Drops an item from a specific inventory slot into the 3D world in front of the player.
+## If count <= 0, drops the entire stack.
+func drop_item_from_inventory(slot_idx: int, count: int = -1) -> DroppedItem:
+	if inventory == null or slot_idx < 0 or slot_idx >= inventory.capacity:
+		return null
+	var slot: ItemSlot = inventory.slots[slot_idx]
+	if slot == null or slot.is_empty():
+		return null
+	var item_id := slot.item_id
+	var def := ItemDB.get_item(item_id)
+	var remove_cnt := slot.count if (count <= 0 or count >= slot.count) else count
+	var actual_removed := inventory.remove_from_slot(slot_idx, remove_cnt)
+	if actual_removed <= 0:
+		return null
+
+	_sync_tool_from_hotbar()
+
+	# Drop into world in front of the player
+	var fwd := -rig.cam.global_transform.basis.z if (rig != null and rig.cam != null) else -global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.is_zero_approx():
+		fwd = Vector3.FORWARD
+	else:
+		fwd = fwd.normalized()
+
+	var drop_pos := global_position + Vector3(0.0, 0.9, 0.0) + fwd * 0.9
+	var drop := DroppedItem.spawn_drop(get_parent() if get_parent() != null else self, world, self, drop_pos, item_id, actual_removed)
+	if drop != null:
+		drop.pickup_delay = 1.8
+		drop.velocity = fwd * randf_range(2.8, 4.2) + Vector3(0.0, 2.5, 0.0)
+	if hud != null:
+		var item_name := def.name if def != null else String(item_id)
+		hud.show_toast("Dropped %s x%d" % [item_name, actual_removed])
+	return drop
 
 
 func is_hammer_equipped() -> bool:
@@ -523,6 +590,7 @@ func _sync_tool_from_hotbar() -> void:
 			1: # Individual Blocks
 				if placement != null:
 					placement.entity_blueprint = &""
+				_ensure_valid_block_material()
 				_set_tool(1)
 			2: # Furniture & Workstations
 				if placement != null and placement.entity_blueprint == &"":
@@ -558,7 +626,8 @@ func _sync_tool_from_hotbar() -> void:
 		var b_idx := Palette.BUILDABLE.find(def.voxel_mat)
 		if b_idx >= 0:
 			mat_index = b_idx
-		brush = 0 # Single block placement by default when holding blocks directly
+		# Preserve active placement size (e.g. 1x1, 3x3, 5x5) when switching or holding voxel blocks
+		brush = clampi(brush, 0, BRUSHES.size() - 1)
 		_set_tool(1)
 	elif def.category == ItemDef.Category.FOOD:
 		_set_tool(4)
@@ -581,6 +650,8 @@ func _set_tool(new_tool: int) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if not input_enabled or is_seated():
 		return
+	if not InputMap.has_action(&"tool_1"):
+		ControllerManager.new().setup_input_map()
 	# Entities (Agent A): tap F = use nearest entity, hold F = pick it up.
 	if placement != null and placement.handle_input(e):
 		return
@@ -605,10 +676,16 @@ func _unhandled_input(e: InputEvent) -> void:
 			build_menu_ui.toggle_catalogue()
 		else:
 			set_hammer_build_mode((hammer_build_mode + 1) % 3)
+	elif tool == 1 and not is_hammer_equipped() and e.is_action_pressed("alt_use"):
+		cycle_brush_size()
 	elif e.is_action_pressed("next_item"): _cycle(1)
 	elif e.is_action_pressed("prev_item"): _cycle(-1)
-	elif e.is_action_pressed("brush_up"): brush = mini(brush + 1, BRUSHES.size() - 1)
-	elif e.is_action_pressed("brush_down"): brush = maxi(brush - 1, 0)
+	elif e.is_action_pressed("brush_up"):
+		brush = mini(brush + 1, BRUSHES.size() - 1)
+		_on_brush_changed()
+	elif e.is_action_pressed("brush_down"):
+		brush = maxi(brush - 1, 0)
+		_on_brush_changed()
 	elif e.is_action_pressed("rotate"): prefab_rot = (prefab_rot + 1) % 4
 	elif e.is_action_pressed("snap"): snap = not snap
 	elif e.is_action_pressed("pick") and not target.is_empty():
@@ -621,15 +698,31 @@ func _unhandled_input(e: InputEvent) -> void:
 				select_hammer_block(idx)
 			else:
 				_set_tool(1)
-	elif tool == 4 and e.is_action_pressed("alt_use"):
-		if not _try_eat_active_food():
-			if placement != null and placement.active_type() != &"" and placement.try_use():
-				_use_cd = 0.35
-				model.swing()
-			else:
-				_plant_seed_at_target()
+	elif tool == 4 and (e.is_action_pressed("alt_use") or e.is_action_pressed("use")):
+		if _try_use_animal_whistle():
+			return
+		if e.is_action_pressed("alt_use"):
+			if not _try_eat_active_food():
+				if placement != null and placement.active_type() != &"" and placement.try_use():
+					_use_cd = 0.35
+					model.swing()
+				else:
+					_plant_seed_at_target()
 	elif tool == 3:
 		_handle_fishing_input(e)
+
+
+func _try_use_animal_whistle() -> bool:
+	var active: ItemSlot = inventory.get_active_item()
+	if active and not active.is_empty() and active.item_id == &"animal_whistle":
+		var main_node: Node = entities.main if (entities != null and entities.main != null) else get_parent()
+		var livestock: Node = main_node.get("livestock_mgr") if main_node != null else null
+		if livestock != null and livestock.has_method("sound_whistle"):
+			var count: int = livestock.sound_whistle(position)
+			if hud != null:
+				hud.show_toast("♪ *Shepherd's Whistle shrills!* Alerted %d livestock." % count)
+			return true
+	return false
 
 
 func _try_eat_active_food() -> bool:
@@ -645,6 +738,32 @@ func _try_eat_active_food() -> bool:
 					hud.show_toast("Ate %s. Satiety: %d/3 meals" % [meal_name, vitality.get_active_meals().size()])
 				return true
 	return false
+
+
+func cycle_brush_size(step: int = 1) -> void:
+
+	brush = posmod(brush + step, BRUSHES.size())
+
+	_on_brush_changed()
+
+
+
+
+
+func _on_brush_changed() -> void:
+
+	var r: int = BRUSHES[clampi(brush, 0, BRUSHES.size() - 1)]
+
+	var dim: int = r * 2 + 1
+
+	var sz_str := "%dx%d" % [dim, dim] if r > 0 else "1x1 (Single)"
+
+	if hud != null:
+
+		hud.show_toast("Placement Size: %s" % sz_str)
+
+
+
 
 
 func _cycle(d: int) -> void:
@@ -920,6 +1039,8 @@ func _use_tool() -> void:
 
 			var r: int = BRUSHES[brush]
 			if _brush_hits_self(c, r):
+				if hud != null:
+					hud.show_toast("Too close to player to place!")
 				return
 			# Survival: placing costs materials (1 item per 4 voxels, like digging yields).
 			var cost := BuildCosts.brush_cost(world, c, r, current_material())
@@ -941,9 +1062,11 @@ func _use_tool() -> void:
 		4:
 			_use_farm_tool(cell)
 			_use_cd = 0.25
-	model.swing()
+	if model != null:
+		model.swing()
 	swing_count += 1
-	facing = rig.yaw + PI
+	if rig != null:
+		facing = rig.yaw + PI
 
 
 func _resolve_farm_plot_cell(cell: Vector3i) -> Vector3i:
@@ -1047,47 +1170,62 @@ func _pay_or_warn(cost: Dictionary) -> bool:
 		return true
 	if not BuildCosts.can_afford(inventory, cost):
 		if hud:
-			hud.show_toast("Need " + BuildCosts.describe_missing(inventory, cost))
+			var hint := " (or resize with Z/RMB)" if (tool == 1 and brush > 0) else ""
+			hud.show_toast("Need " + BuildCosts.describe_missing(inventory, cost) + hint)
 		return false
 	BuildCosts.pay(inventory, cost)
 	return true
 
 
 func _brush_hits_self(c: Vector3i, r: int) -> bool:
-	var lo := Vector3(c - Vector3i.ONE * r) * VS
-	var hi := Vector3(c + Vector3i.ONE * (r + 1)) * VS
 	var plo := position - Vector3(HW, 0, HW)
 	var phi := position + Vector3(HW, H, HW)
-	return lo.x < phi.x and hi.x > plo.x and lo.y < phi.y and hi.y > plo.y and lo.z < phi.z and hi.z > plo.z
+	var r2 := r * r + r
+	for y in range(-r, r + 1):
+		for z in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if x * x + y * y + z * z > r2:
+					continue
+				var px := c.x + x
+				var py := c.y + y
+				var pz := c.z + z
+				# If voxel is already solid in the world, placing won't modify it:
+				if world != null and world.get_voxel(px, py, pz) != 0:
+					continue
+				var vlo := Vector3(px, py, pz) * VS
+				var vhi := Vector3(px + 1, py + 1, pz + 1) * VS
+				if vlo.x < phi.x and vhi.x > plo.x and vlo.y < phi.y and vhi.y > plo.y and vlo.z < phi.z and vhi.z > plo.z:
+					return true
+	return false
 
 
 func _setup_fishing_visuals() -> void:
+	# A chunky red-and-white float with a little antenna: readable from 20 m away.
 	_bobber = Node3D.new()
 	_bobber.top_level = true
 	_bobber.visible = false
 	add_child(_bobber)
-
-	var top_mesh := MeshInstance3D.new()
-	var top_box := BoxMesh.new()
-	top_box.size = Vector3(0.11, 0.08, 0.11)
-	var red_mat := StandardMaterial3D.new()
-	red_mat.albedo_color = Color(0.92, 0.22, 0.18)
-	red_mat.roughness = 0.4
-	top_box.material = red_mat
-	top_mesh.mesh = top_box
-	top_mesh.position = Vector3(0, 0.04, 0)
-	_bobber.add_child(top_mesh)
-
-	var bot_mesh := MeshInstance3D.new()
-	var bot_box := BoxMesh.new()
-	bot_box.size = Vector3(0.11, 0.08, 0.11)
-	var white_mat := StandardMaterial3D.new()
-	white_mat.albedo_color = Color(0.95, 0.94, 0.90)
-	white_mat.roughness = 0.4
-	bot_box.material = white_mat
-	bot_mesh.mesh = bot_box
-	bot_mesh.position = Vector3(0, -0.04, 0)
-	_bobber.add_child(bot_mesh)
+	var parts := [
+		# [size, y offset, colour, glow]
+		[Vector3(0.22, 0.12, 0.22), 0.06, Color(0.95, 0.20, 0.15), 0.35],
+		[Vector3(0.22, 0.12, 0.22), -0.06, Color(0.96, 0.95, 0.90), 0.0],
+		[Vector3(0.04, 0.16, 0.04), 0.20, Color(1.0, 0.85, 0.25), 0.6],
+	]
+	for part: Array in parts:
+		var mi := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = part[0]
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = part[2]
+		mat.roughness = 0.4
+		if float(part[3]) > 0.0:
+			mat.emission_enabled = true
+			mat.emission = part[2]
+			mat.emission_energy_multiplier = float(part[3])
+		box.material = mat
+		mi.mesh = box
+		mi.position = Vector3(0, float(part[1]), 0)
+		_bobber.add_child(mi)
 
 	_fishing_line = MeshInstance3D.new()
 	_fishing_line.top_level = true
@@ -1105,9 +1243,21 @@ func _launch_bobber(power: float) -> void:
 	var dir := Vector3(sin(facing), 0.0, cos(facing)).normalized()
 	var dist := 4.5 + clampf(power, 0.1, 1.0) * 9.5
 	_bobber_start = position + Vector3(0, 1.38, 0) + dir * 0.65
+	# Land the lure on the farthest open water along the cast (it drops short of a far
+	# shore instead of failing). Water is tested just below the surface.
+	var found := world == null
+	var d := dist
+	while not found and d >= 1.5:
+		var probe := position + dir * d
+		probe.y = water_level - 0.25
+		if world.is_water_at(probe, water_level):
+			found = true
+			dist = d
+		else:
+			d -= 0.5
 	_bobber_target = position + dir * dist
-	_bobber_target.y = water_level + 0.02
-	if world != null and not world.is_water_at(_bobber_target, water_level):
+	_bobber_target.y = water_level
+	if not found:
 		if hud != null:
 			hud.show_toast("No water there to fish!")
 		if fishing != null:

@@ -80,6 +80,8 @@ var _speed := 0.0
 var _check := ""
 var _bind_delay := 1.0
 var _stuck_t := 0.0
+var _tracker_tween: Tween
+var _hud_tracker_pinned := false
 
 
 func setup(p_main: Node) -> void:
@@ -195,12 +197,19 @@ func _process(delta: float) -> void:
 
 func _bind() -> void:
 	_bound = true
-	main.quests.quest_progressed.connect(func(_q2: Variant, _s: Variant) -> void: _refresh_tracker())
-	main.quests.quest_accepted.connect(func(_q2: Variant) -> void: _refresh_tracker())
+	main.quests.quest_progressed.connect(func(_q2: Variant, _s: Variant) -> void:
+		_refresh_tracker()
+		fade_tracker_after_delay(7.0)
+	)
+	main.quests.quest_accepted.connect(func(_q2: Variant) -> void:
+		_refresh_tracker()
+		fade_tracker_after_delay(7.0)
+	)
 	main.quests.quest_completed.connect(_on_quest_completed)
 	if not is_finished():
 		_spawn_wren(main.player)
 	_refresh_tracker()
+	fade_tracker_after_delay(10.0)
 	if _check != "":
 		_run_check()
 
@@ -246,10 +255,13 @@ func _ground(p: Vector3) -> Vector3:
 func _update_wren(delta: float, p: Player) -> void:
 	var i := current()
 	# Marker: "!" new mission to give, "?" ready to hand in, nothing while working.
-	if not is_started() or (i >= 0 and _ready_to_turn_in(i)):
+	var is_paused: bool = (i >= 0 and main.get("quests") != null and main.quests.paused_reward_quests.has(MISSIONS[i].id))
+	if not is_started() or (i >= 0 and (_ready_to_turn_in(i) or is_paused)):
 		_marker.text = "!" if not is_started() else "?"
 	else:
 		_marker.text = ""
+	if _marker != null and _marker.text != "":
+		_marker.position.y = 2.55 + sin(Time.get_ticks_msec() / 1000.0 * 3.0) * 0.06
 	if _leaving:
 		var away := (wren.position - p.position)
 		away.y = 0
@@ -338,6 +350,15 @@ func talk() -> void:
 		dialogue.say(NPC_NAME, "Fair winds! Build something worth sailing home to.")
 		return
 	if _ready_to_turn_in(i):
+		var qd: QuestDef = _q().active_quests[MISSIONS[i].id]
+		if main.player != null and main.player.inventory != null and not _q().can_accept_rewards(main.player.inventory, qd):
+			dialogue.say(NPC_NAME, "Good work! I've got your reward right here, but your pack is completely full.\n\nMake some room in your bag and talk to me again so I can hand it over.", [["I'll make room", dialogue.close]])
+			if not _q().paused_reward_quests.has(qd.id):
+				_q().paused_reward_quests.append(qd.id)
+			_refresh_tracker()
+			return
+		if _q().paused_reward_quests.has(qd.id):
+			_q().paused_reward_quests.erase(qd.id)
 		_q().notify_event(QuestDef.ObjectiveType.TALK_TO, NPC_ID, 1, main.player.inventory)
 		return   # _on_quest_completed continues the conversation
 	var qd: QuestDef = _q().active_quests[MISSIONS[i].id]
@@ -426,6 +447,14 @@ func _refresh_tracker() -> void:
 		t.add_theme_font_size_override("font_size", 18)
 		t.text = qd.title
 		v.add_child(t)
+		if _q().paused_reward_quests.has(qd.id):
+			var l := Label.new()
+			l.theme_type_variation = &"Small"
+			l.add_theme_font_size_override("font_size", 15)
+			l.text = "•  Rewards Paused  (Pack Full - Make Room)"
+			l.add_theme_color_override("font_color", Color(1.0, 0.72, 0.45))
+			v.add_child(l)
+			continue
 		for s in qd.steps:
 			if s.is_completed:
 				continue
@@ -435,6 +464,53 @@ func _refresh_tracker() -> void:
 			l.text = "•  " + s.description + ("  (%d/%d)" % [s.current_count, s.target_count] if s.target_count > 1 else "")
 			v.add_child(l)
 			break   # show the next step only
+
+
+func fade_tracker_after_delay(delay: float = 10.0) -> void:
+	if _tracker_root == null or _hud_tracker_pinned:
+		return
+	if _tracker_tween != null and _tracker_tween.is_valid():
+		_tracker_tween.kill()
+	_tracker_root.visible = true
+	_tracker_root.modulate.a = 1.0
+	_tracker_tween = create_tween()
+	_tracker_tween.tween_interval(delay)
+	_tracker_tween.tween_property(_tracker_root, "modulate:a", 0.0, 1.5)
+	_tracker_tween.tween_callback(func() -> void:
+		if not _hud_tracker_pinned:
+			_tracker_root.visible = false
+	)
+
+
+func show_tracker(pinned: bool = false) -> void:
+	if _tracker_tween != null and _tracker_tween.is_valid():
+		_tracker_tween.kill()
+	_hud_tracker_pinned = pinned
+	if _tracker_root != null:
+		_tracker_root.visible = true
+		_tracker_root.modulate.a = 1.0
+	if not pinned:
+		fade_tracker_after_delay(8.0)
+
+
+func hide_tracker() -> void:
+	if _tracker_tween != null and _tracker_tween.is_valid():
+		_tracker_tween.kill()
+	_hud_tracker_pinned = false
+	if _tracker_root != null:
+		_tracker_root.visible = false
+		_tracker_root.modulate.a = 0.0
+
+
+func toggle_tracker() -> void:
+	if _tracker_root != null and _tracker_root.visible and _tracker_root.modulate.a > 0.05:
+		hide_tracker()
+	else:
+		show_tracker(true)
+
+
+func is_tracker_pinned() -> bool:
+	return _hud_tracker_pinned
 
 
 # ---------------------------------------------------------------- dev check

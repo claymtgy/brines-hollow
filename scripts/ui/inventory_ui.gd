@@ -197,6 +197,25 @@ func _input(e: InputEvent) -> void:
 	# Number keys 1-8 assign hovered (or selected) slot directly to Hotbar 0-7
 	if e is InputEventKey and e.pressed and not e.echo:
 		var kc: int = e.physical_keycode if e.physical_keycode != 0 else e.keycode
+		if kc == KEY_Q or kc == KEY_DELETE:
+			var target_slot: int = -1
+			if _held_slot_idx >= 0:
+				target_slot = _held_slot_idx
+			elif _hovered_slot_idx >= 0:
+				target_slot = _hovered_slot_idx
+			elif _selected_slot_idx >= 0:
+				target_slot = _selected_slot_idx
+			if target_slot >= 0 and player != null:
+				var drop_cnt := -1 if Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL) else 1
+				player.drop_item_from_inventory(target_slot, drop_cnt)
+				if player.inventory.slots[target_slot].is_empty():
+					if _held_slot_idx == target_slot:
+						_held_slot_idx = -1
+					if _selected_slot_idx == target_slot:
+						_selected_slot_idx = -1
+				refresh()
+				get_viewport().set_input_as_handled()
+				return
 		if kc >= KEY_1 and kc <= KEY_8:
 			var hb_idx: int = kc - KEY_1
 			var src_idx: int = _hovered_slot_idx if _hovered_slot_idx >= 0 else (_held_slot_idx if _held_slot_idx >= 0 else _selected_slot_idx)
@@ -222,10 +241,26 @@ func _build() -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(0.04, 0.08, 0.10, 0.58)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed:
+			var mb := ev as InputEventMouseButton
+			if _held_slot_idx >= 0 and player != null:
+				if mb.button_index == MOUSE_BUTTON_LEFT:
+					player.drop_item_from_inventory(_held_slot_idx, -1)
+					_held_slot_idx = -1
+					refresh()
+				elif mb.button_index == MOUSE_BUTTON_RIGHT:
+					player.drop_item_from_inventory(_held_slot_idx, 1)
+					if player.inventory.slots[_held_slot_idx].is_empty():
+						_held_slot_idx = -1
+					refresh()
+	)
 	_root.add_child(dim)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(center)
 
 	var outer := PanelContainer.new()
@@ -249,10 +284,19 @@ func _build() -> void:
 	head.add_child(_title_label)
 
 	var hint_lbl := Label.new()
-	hint_lbl.text = "Click: Move/Swap  ·  Shift+Click: Hotbar <-> Bag  ·  Keys 1-8: Assign Hotbar  ·  RMB: Equip/Use"
+	hint_lbl.text = "Click: Move/Swap  ·  Shift+Click: Transfer  ·  Q: Drop  ·  Keys 1-8: Hotbar  ·  RMB: Use"
 	hint_lbl.theme_type_variation = &"Small"
 	hint_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(hint_lbl)
+
+	var quest_btn := Button.new()
+	quest_btn.text = "Quests (J)"
+	quest_btn.pressed.connect(func() -> void:
+		if main != null and "quest_log_ui" in main and main.quest_log_ui != null:
+			close()
+			main.quest_log_ui.open()
+	)
+	head.add_child(quest_btn)
 
 	var sort_btn := Button.new()
 	sort_btn.text = "Sort Bag"
@@ -865,6 +909,34 @@ func _refresh_inspector(inv: Inventory) -> void:
 				refresh()
 		)
 		_inspect_actions.add_child(eat_btn)
+
+	# Drop buttons
+	var drop_row := HBoxContainer.new()
+	drop_row.add_theme_constant_override("separation", 6)
+	_inspect_actions.add_child(drop_row)
+
+	var drop_one_btn := Button.new()
+	drop_one_btn.text = "Drop 1"
+	drop_one_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	drop_one_btn.pressed.connect(func() -> void:
+		if player != null and _selected_slot_idx >= 0:
+			player.drop_item_from_inventory(_selected_slot_idx, 1)
+			if _selected_slot_idx >= inv.capacity or inv.slots[_selected_slot_idx].is_empty():
+				_selected_slot_idx = -1
+			refresh()
+	)
+	drop_row.add_child(drop_one_btn)
+
+	var drop_all_btn := Button.new()
+	drop_all_btn.text = "Drop All"
+	drop_all_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	drop_all_btn.pressed.connect(func() -> void:
+		if player != null and _selected_slot_idx >= 0:
+			player.drop_item_from_inventory(_selected_slot_idx, -1)
+			_selected_slot_idx = -1
+			refresh()
+	)
+	drop_row.add_child(drop_all_btn)
 
 
 func _get_nearby_stations() -> Array[StationEntity]:

@@ -101,6 +101,18 @@ static func register_type(id: StringName, factory: Variant, def: Dictionary = {}
 		_aliases[a] = id
 
 
+## Removes a registered type (mods unloading, tests cleaning up). Script-defined
+## factories hold their script alive, so drop them before that script is freed.
+static func unregister_type(id: StringName) -> void:
+	var d: Dictionary = _types.get(id, {})
+	_types.erase(id)
+	if not d.is_empty() and _item_types.get(d.item, &"") == id:
+		_item_types.erase(d.item)
+	for a: StringName in _aliases.keys():
+		if _aliases[a] == id:
+			_aliases.erase(a)
+
+
 static func ensure_types() -> void:
 	if _types.is_empty():
 		Placeables.register_builtin()
@@ -585,6 +597,7 @@ func spawn_starter() -> void:
 		[&"workbench", Vector3i(5, 0, 2)], [&"campfire", Vector3i(7, 0, -3)],
 		[&"hearth_pot", Vector3i(3, 0, 7)], [&"driftwood_chest", Vector3i(-5, 0, 2)],
 		[&"fisher_bed", Vector3i(-6, 0, -5)], [&"barber_mirror", Vector3i(5, 0, -6)],
+		[&"feed_trough", Vector3i(8, 0, 4)], [&"poultry_coop", Vector3i(-8, 0, 6)],
 	]
 	for e: Array in layout:
 		var c: Vector3i = sp + (e[1] as Vector3i)

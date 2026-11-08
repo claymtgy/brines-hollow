@@ -23,6 +23,7 @@ var invert_y := false
 var controller_look_speed := 2.6     # rad/s at full stick
 var fov := 66.0
 var shoulder_right := true
+var camera_side_offset := 1.05
 var camera_distance := 5.5
 var foliage_fade := true
 var first_person := false
@@ -35,6 +36,7 @@ var aa := AA.FXAA
 var shadows := Shadows.MEDIUM
 var view_distance := 10              # full-detail radius in chunk columns (~5.8 m each)
 var glow := 1                        # 0 off, 1 night only, 2 always
+var fog := true
 var vsync := true
 var max_fps := 0
 var window_mode := WindowMode.WINDOWED
@@ -62,8 +64,8 @@ const PRESETS := {
 var pixel_budget := 1.4
 
 const SAVED_FIELDS := ["mouse_sensitivity", "invert_y", "controller_look_speed", "fov", "shoulder_right",
-	"camera_distance", "foliage_fade", "preset", "render_scale", "pixel_budget", "upscaler", "aa", "shadows",
-	"view_distance", "glow", "vsync", "max_fps", "window_mode", "ui_scale",
+	"camera_side_offset", "camera_distance", "foliage_fade", "preset", "render_scale", "pixel_budget", "upscaler", "aa", "shadows",
+	"view_distance", "glow", "fog", "vsync", "max_fps", "window_mode", "ui_scale",
 	"master_volume", "ambience_volume", "effects_volume", "first_person"]
 
 
@@ -130,7 +132,7 @@ func apply(main: Node) -> void:
 		rig.invert_y = invert_y
 		rig.controller_look_speed = controller_look_speed
 		rig.foliage_fade = foliage_fade
-		rig.shoulder = absf(rig.shoulder) * (1.0 if shoulder_right else -1.0)
+		rig.shoulder = camera_side_offset * (1.0 if shoulder_right else -1.0)
 		rig.dist = camera_distance
 		rig.set_first_person(first_person)
 		if rig.cam != null:
@@ -171,6 +173,8 @@ func apply(main: Node) -> void:
 				sun.directional_shadow_max_distance = 70.0
 				RenderingServer.directional_shadow_atlas_set_size(4096, true)
 		sky.glow_mode = glow
+		if sky.env != null:
+			sky.env.fog_enabled = fog
 	# --- view distance
 	var world: VoxelWorld = main.world
 	if world != null and world.mesh_radius != view_distance:

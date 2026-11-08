@@ -20,6 +20,9 @@ var state := State.IDLE
 var state_t := 0.0
 var hp := 10.0
 var max_hp := 10.0
+var poise: float = CombatMath.DEFAULT_CREATURE_POISE
+var max_poise: float = CombatMath.DEFAULT_CREATURE_POISE
+var poise_regen_cd: float = 0.0
 var hostile := false
 var damageable := true
 var home := Vector3.ZERO
@@ -121,6 +124,11 @@ func on_hit(damage: float, from: Vector3, power: float, attacker: int) -> bool:
 		hp -= damage
 		var kb := CombatMath.knockback(from, position, power * 0.6)
 		vel += Vector3(kb.x, 0.0, kb.z)
+		poise -= power * CombatMath.POISE_PER_STAGGER_POINT
+		poise_regen_cd = 3.0
+		if poise <= 0.0 and state != State.STAGGER and state != State.DEAD:
+			set_state(State.STAGGER)
+			poise = max_poise
 	if hp <= 0.0 and damageable:
 		set_state(State.DEAD)
 	return true
@@ -129,6 +137,7 @@ func on_hit(damage: float, from: Vector3, power: float, attacker: int) -> bool:
 ## Host: our attack was parried. Default: stagger.
 func on_parried() -> void:
 	if state != State.DEAD:
+		poise = 0.0
 		set_state(State.STAGGER)
 
 
@@ -138,6 +147,8 @@ func set_state(s: int) -> void:
 	if state != s:
 		state = s
 		state_t = 0.0
+		if s == State.STAGGER:
+			poise = max_poise
 
 
 func is_staggered() -> bool:
@@ -166,6 +177,13 @@ func nearest_player(ctx: Dictionary) -> Dictionary:
 		best = best.duplicate()
 		best["dist"] = bd
 	return best
+
+
+func tick_poise(dt: float) -> void:
+	if poise_regen_cd > 0.0:
+		poise_regen_cd = maxf(0.0, poise_regen_cd - dt)
+	elif poise < max_poise:
+		poise = minf(max_poise, poise + dt * 8.0)
 
 
 func solid_at(p: Vector3) -> bool:
@@ -236,6 +254,7 @@ func flash() -> void:
 
 func _process(delta: float) -> void:
 	state_t += delta if not authority else 0.0
+	tick_poise(delta)
 	if not authority:
 		position = position.lerp(_net_pos, 1.0 - exp(-delta * 12.0))
 		yaw = lerp_angle(yaw, _net_yaw, 1.0 - exp(-delta * 12.0))

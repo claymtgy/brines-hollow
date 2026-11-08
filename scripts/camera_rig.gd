@@ -17,8 +17,8 @@ var sensitivity := 0.0026
 var invert_y := false
 var controller_look_speed := 2.6
 var foliage_fade := true
-var shoulder := 0.65        # metres to the side (positive = right shoulder)
-var _cur_shoulder := 0.65
+var shoulder := 1.05        # metres to the side (positive = right shoulder)
+var _cur_shoulder := 1.05
 var extra_dist := 0.0       # added distance (e.g. pulled back while rowing)
 var _cur_extra := 0.0
 var _cur_dist := 5.5

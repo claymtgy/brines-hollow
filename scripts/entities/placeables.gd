@@ -29,7 +29,19 @@ const BUILTIN := {
 	&"furnace":         ["Smelting Furnace",       {&"stone": 8, &"driftwood": 4},      &"ground", 5],
 	&"anvil":           ["Blacksmith's Anvil",     {&"iron_ingot": 2, &"stone": 4},     &"ground", 5],
 	&"pine_sapling":    ["Pine Sapling",           {&"leaves": 2, &"driftwood": 1},     &"soil", 20],
+	&"feed_trough":     ["Livestock Trough",       {&"wood_plank": 6, &"stone": 2},     &"ground", 5],
+	&"poultry_coop":    ["Shore Poultry Coop",     {&"wood_plank": 8, &"driftwood": 4}, &"ground", 5],
+	&"lantern_post":    ["Kelp-Oil Lantern Post",  {&"driftwood": 3, &"kelp_frond": 2, &"stone": 1}, &"ground", 10],
+	&"pen_gate":        ["Latched Pen Gate",       {&"wood_plank": 6, &"driftwood": 2}, &"ground", 10],
+	&"live_trap":       ["Live-Capture Trap",      {&"driftwood": 4, &"wood_plank": 2, &"kelp_frond": 2}, &"ground", 5],
+	&"dog_kennel":      ["Guard Dog Kennel",       {&"wood_plank": 10, &"driftwood": 4, &"silver_mackerel": 2}, &"ground", 1],
+	&"cat_basket":      ["Dock Cat's Basket",      {&"kelp_frond": 6, &"driftwood": 2, &"silver_mackerel": 1}, &"ground", 1],
+	&"scarecrow":       ["Oilskin Scarecrow",      {&"driftwood": 4, &"leaves": 4, &"wood_plank": 2}, &"ground", 5],
+	&"pantry_barrel":   ["Sealed Pantry Barrel",   {&"wood_plank": 6, &"kelp_frond": 2, &"stone": 1}, &"ground", 10],
 }
+
+const TroughEntityClass := preload("res://scripts/entities/trough_entity.gd")
+const CoopEntityClass := preload("res://scripts/entities/coop_entity.gd")
 
 const BAIT_ITEMS := [&"kelp_frond", &"silver_mackerel", &"tidepool_flounder", &"shore_crab"]
 
@@ -63,6 +75,15 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"crab_pot", CrabPotEntity, {"rule": &"intertidal"})
 	EntityManager.register_type(&"salt_pan", SaltPanEntity, {"rule": &"intertidal"})
 	EntityManager.register_type(&"pine_sapling", TreeSaplingEntity, {"rule": &"soil", "aliases": [&"sapling"]})
+	EntityManager.register_type(&"feed_trough", TroughEntityClass, {"aliases": [&"trough"]})
+	EntityManager.register_type(&"poultry_coop", CoopEntityClass, {"aliases": [&"coop"]})
+	EntityManager.register_type(&"lantern_post", LanternEntity, {"aliases": [&"lantern"]})
+	EntityManager.register_type(&"pen_gate", GateEntity, {"aliases": [&"gate"]})
+	EntityManager.register_type(&"live_trap", LiveTrapEntity, {"aliases": [&"trap"]})
+	EntityManager.register_type(&"dog_kennel", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_kennel(c), {"aliases": [&"kennel", &"dog"]})
+	EntityManager.register_type(&"cat_basket", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_cat_basket(c), {"aliases": [&"cat"]})
+	EntityManager.register_type(&"scarecrow", ScarecrowEntity)
+	EntityManager.register_type(&"pantry_barrel", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_pantry_barrel(c), {"aliases": [&"pantry"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]
 		add_item(type, b[0], b[1], b[3])

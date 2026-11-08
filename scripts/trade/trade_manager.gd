@@ -36,6 +36,28 @@ func _ready() -> void:
 	ui = TradeUI.new()
 	ui.trade = self
 	add_child(ui)
+	if main != null and main.get("session") != null:
+		main.session.register_state(&"trade", _save_state, _load_state)
+
+
+## Persistence: the visit count (which merchant comes next) and, while a ship is docked,
+## its stock, prices and contracts, so reloading mid-visit doesn't restock the ship.
+func _save_state() -> Dictionary:
+	var d := {"visits": _visits}
+	if merchant != null and is_docked():
+		d["merchant"] = TradeRules.serialize_merchant(merchant)
+	return d
+
+
+func _load_state(d: Variant) -> void:
+	if not (d is Dictionary):
+		return
+	_visits = int(d.get("visits", _visits))
+	if d.get("merchant") is Dictionary:
+		merchant = TradeRules.deserialize_merchant(d.merchant)
+		_was_docked = true   # this visit already happened: don't spawn a fresh ship
+		if ship != null:
+			_apply_ship_label()
 
 
 func is_authority() -> bool:
@@ -171,6 +193,16 @@ func _build_ship() -> Node3D:
 	lbl.pixel_size = 0.005
 	lbl.text = "Merchant"
 	root.add_child(lbl)
+	var qlbl := Label3D.new()
+	qlbl.name = "QuestMarker"
+	qlbl.position = Vector3(0, 8.8, 0)
+	qlbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	qlbl.font_size = 110
+	qlbl.outline_size = 18
+	qlbl.pixel_size = 0.005
+	qlbl.modulate = UiTheme.BRASS
+	qlbl.no_depth_test = true
+	root.add_child(qlbl)
 	return root
 
 
@@ -340,6 +372,35 @@ func _broadcast_stock() -> void:
 func _apply_ship_label() -> void:
 	if ship != null and merchant != null:
 		(ship.get_node("Name") as Label3D).text = merchant.merchant_name
+		var qmarker := ship.get_node_or_null("QuestMarker") as Label3D
+		if qmarker != null:
+			qmarker.text = _get_merchant_quest_marker()
+
+
+func _get_merchant_quest_marker() -> String:
+	if main == null or main.quests == null or merchant == null:
+		return ""
+	var qm: QuestManager = main.quests
+	var m_name := merchant.merchant_name.to_lower()
+	for qd in qm.active_quests.values():
+		if qm.paused_reward_quests.has(qd.id) and qd.giver_name.to_lower().contains(m_name):
+			return "?"
+		var all_other_done := true
+		var talk_found := false
+		for s in qd.steps:
+			if not s.is_completed:
+				if s.type == QuestDef.ObjectiveType.TALK_TO and m_name.contains(String(s.target_id).to_lower()):
+					talk_found = true
+				else:
+					all_other_done = false
+		if talk_found and all_other_done:
+			return "?"
+	for qd in qm.available_quests.values():
+		if qd.giver_name.to_lower().contains("barnaby") and m_name.contains("barnaby"):
+			return "!"
+		if m_name.contains(qd.giver_name.to_lower()):
+			return "!"
+	return ""
 
 
 func _on_peer_connected(id: int) -> void:

@@ -140,6 +140,9 @@ static func _register_crops_and_farming() -> void:
 		# Animal & Farm Products
 		ItemDef.new(&"salt_milk", "Salt-Goat Milk", ItemDef.Category.FOOD, 20, -1, [&"dairy", &"cooking"]),
 		ItemDef.new(&"sea_wool", "Shore-Sheep Wool", ItemDef.Category.MATERIAL, 99, -1, [&"textile", &"crafting"]),
+		ItemDef.new(&"sea_egg", "Shore-Duck Egg", ItemDef.Category.FOOD, 20, -1, [&"food", &"egg", &"cooking"]),
+		ItemDef.new(&"down_feather", "Down Feather", ItemDef.Category.MATERIAL, 99, -1, [&"feather", &"crafting", &"textile"]),
+		ItemDef.new(&"goat_cheese", "Salt-Goat Cheese", ItemDef.Category.FOOD, 20, -1, [&"food", &"meal", &"dairy", &"cheese"]),
 		ItemDef.new(&"marsh_honey", "Marsh Honey", ItemDef.Category.FOOD, 50, -1, [&"sweet", &"cooking"]),
 
 		# Cooked Meals & Gourmet Provisions
@@ -170,6 +173,9 @@ static func _register_crops_and_farming() -> void:
 		&"pickled_samphire_jar": {"hp_bonus": 22, "stamina_bonus": 30, "regen_hp_sec": 1.0, "duration_sec": 1080.0},
 		&"peppermint_kelp_tea": {"hp_bonus": 10, "stamina_bonus": 15, "stamina_regen_mult": 1.75, "duration_sec": 600.0},
 		&"roasted_chicory_brew": {"hp_bonus": 10, "stamina_bonus": 20, "stamina_regen_mult": 1.75, "duration_sec": 600.0},
+		&"salt_milk": {"hp_bonus": 15, "stamina_bonus": 20, "regen_hp_sec": 0.8, "duration_sec": 600.0},
+		&"sea_egg": {"hp_bonus": 12, "stamina_bonus": 15, "regen_hp_sec": 0.5, "duration_sec": 600.0},
+		&"goat_cheese": {"hp_bonus": 35, "stamina_bonus": 30, "regen_hp_sec": 1.2, "duration_sec": 1200.0},
 	}
 	for c: ItemDef in crops:
 		if food_buffs.has(c.id):
@@ -225,6 +231,9 @@ static func _register_tools_and_weapons() -> void:
 		ItemDef.new(&"iron_shovel", "Iron Shovel", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shovel"]),
 		ItemDef.new(&"stone_hoe", "Stone Hoe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hoe"]),
 		ItemDef.new(&"iron_hoe", "Iron Hoe", ItemDef.Category.TOOL, 1, -1, [&"tool", &"hoe"]),
+		ItemDef.new(&"shearing_shears", "Shearing Shears", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shears"]),
+		ItemDef.new(&"wooden_bucket", "Wooden Pail", ItemDef.Category.TOOL, 1, -1, [&"tool", &"bucket", &"pail"]),
+		ItemDef.new(&"animal_whistle", "Shepherd's Whistle", ItemDef.Category.TOOL, 1, -1, [&"tool", &"whistle"]),
 	]
 
 	# Tool properties

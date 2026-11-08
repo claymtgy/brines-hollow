@@ -31,6 +31,13 @@ var rod_tier: int = 1
 var cast_power: float = 0.0
 var line_distance: float = 0.0      ## Distance in metres remaining to reel in
 var line_tension: float = 0.25      ## 0.0 (slack) to 1.0 (snap!)
+var cast_distance: float = 0.0      ## Line length at the moment of the cast
+## 0.0 = fish still where the lure landed, 1.0 = fish at the rod.
+var reel_progress: float:
+	get:
+		if cast_distance <= 0.0:
+			return 0.0
+		return clampf(1.0 - line_distance / cast_distance, 0.0, 1.0)
 var fish_stamina_left: float = 0.0
 
 # Timers
@@ -83,6 +90,7 @@ func release_cast(
 	var r: RandomNumberGenerator = rng if rng != null else RandomNumberGenerator.new()
 	cast_power = clampf(power, 0.1, 1.0)
 	line_distance = 6.0 + cast_power * 14.0 # 6m to 20m cast distance
+	cast_distance = line_distance
 	cast_started.emit(cast_power)
 	bobber_landed.emit(line_distance)
 

@@ -194,6 +194,25 @@ func find_exit_spot() -> Variant:
 	return null
 
 
+## Open water beside the hull to slip into and swim from, when there is no floor nearby.
+func find_swim_exit_spot() -> Variant:
+	var water := water_y()
+	var y := water - Player.H * 0.6   # head and shoulders above the surface
+	for r in [1.4, 1.8, 2.3, 2.9]:
+		# Starboard and port first (over the gunwale), working round to bow and stern.
+		for k in [0, 8, 1, 15, 7, 9, 2, 14, 6, 10, 3, 13, 5, 11, 4, 12]:
+			var d: Vector2 = Vector2(cos(yaw), -sin(yaw)).rotated(TAU * float(k) / 16.0) * float(r)
+			var p := Vector3(position.x + d.x, y, position.z + d.y)
+			var lo := Vector3(p.x - Player.HW, y, p.z - Player.HW)
+			var hi := Vector3(p.x + Player.HW, y + Player.H, p.z + Player.HW)
+			if world.aabb_collides(lo, hi):
+				continue
+			if EntityManager.current != null and EntityManager.current.blocks(lo, hi, world):
+				continue
+			return p
+	return null
+
+
 # ---------------------------------------------------------------- simulation
 
 ## Authority-side physics step. f: -1..1 row, t: -1..1 turn (+ = left), hard: Shift.

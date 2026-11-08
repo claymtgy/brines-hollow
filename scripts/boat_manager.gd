@@ -173,7 +173,9 @@ func interact() -> void:
 			main.controller.reset_triggers()
 		var spot = p.boat.find_exit_spot()
 		if spot == null:
-			main.hud.show_toast("Row closer to land or a dock to step off")
+			spot = p.boat.find_swim_exit_spot()   # no floor nearby: slip over the side
+		if spot == null:
+			main.hud.show_toast("No room to step off here")
 			return
 		_pending_exit = spot
 		if _is_host():

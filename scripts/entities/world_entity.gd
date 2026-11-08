@@ -119,6 +119,11 @@ func tick(_delta: float) -> void:
 	pass
 
 
+## Light sources (lanterns, fires) keep cave eels and farm raiders at bay.
+func emits_light() -> bool:
+	return false
+
+
 ## Authority only. `env` = {"tide_vox": float, "daylight": bool, "time": float}. Return true if
 ## state changed and should be broadcast.
 func server_tick(_delta: float, _env: Dictionary) -> bool:

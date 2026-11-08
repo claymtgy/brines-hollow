@@ -276,7 +276,7 @@ func collect_into_player(p_player: Player) -> int:
 			p_player.quests.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, item_id, added, p_player.inventory)
 		if p_player.hud != null:
 			var def: ItemDef = ItemDB.get_item(item_id)
-			var item_name: String = def.display_name if def else String(item_id)
+			var item_name: String = def.name if def != null else String(item_id)
 			p_player.hud.show_toast("+%d %s" % [added, item_name])
 		count -= added
 		if count <= 0:

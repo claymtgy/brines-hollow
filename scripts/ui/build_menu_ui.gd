@@ -28,7 +28,7 @@ var _grid_scroll: ScrollContainer
 var _items_grid: GridContainer
 var _footer_label: Label
 
-var current_tab: int = Tab.PREFABS
+var current_tab: int = Tab.BLOCKS
 var _expanded: bool = false
 
 
@@ -236,6 +236,7 @@ func _build() -> void:
 		b_btn.pressed.connect(func() -> void:
 			if player != null:
 				player.brush = bi
+				player._on_brush_changed()
 				refresh_catalogue()
 		)
 		_brush_row.add_child(b_btn)

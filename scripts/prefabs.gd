@@ -233,6 +233,16 @@ static func _build() -> void:
 	g.box(2, 2, 12, 5, 2, 12, Palette.DRIFTWOOD)
 	_add("Rowboat", g, Vector3i(4, 0, 10))
 
+	# 13: Pen Fence (appended last: prefab ids are saved in commands): boards right down to the ground (a rail fence lets ducks, foxes and stoats
+	# slip under its bottom rail; this one holds every pen animal and keeps raiders out).
+	g = Grid.new(WALL_W, RAIL_H + 1, 1)
+	g.box(0, 0, 0, WALL_W - 1, 2, 0, Palette.PLANK)
+	g.box(0, RAIL_H - 1, 0, WALL_W - 1, RAIL_H - 1, 0, Palette.DRIFTWOOD)
+	g.box(0, 3, 0, WALL_W - 1, 3, 0, Palette.DRIFTWOOD)
+	for x in [0, WALL_W / 2, WALL_W - 1]:
+		g.box(x, 0, 0, x, RAIL_H, 0, Palette.DARK_WOOD)
+	_add("Pen Fence", g, Vector3i(WALL_W / 2, 0, 0))
+
 
 static func _build_hut() -> void:
 	# Body x1..24 (4.3 m), z1..18 (3.2 m deep), floor y0, walls y1..WALL_H, gable roof, chimney.
@@ -308,3 +318,4 @@ static func _build_hut() -> void:
 	g.setv(d0 + DOOR_W + 2, 12, 0, Palette.LANTERN)
 	g.setv(d0 + DOOR_W + 2, 13, 0, Palette.DARK_WOOD)
 	_add("Fisher's Hut", g, Vector3i((X1 + 2) / 2, 0, (Z1 + 2) / 2), [Vector3i(d0 + DOOR_W + 2, 12, 0), Vector3i(lx, WALL_H + 1, ridge_z)], "solid")
+

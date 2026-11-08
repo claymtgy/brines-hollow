@@ -30,6 +30,8 @@ var menu_customizer: CharacterCustomizer = CharacterCustomizer.new()
 var skin_preset_select: OptionButton
 var _skin_labels: Dictionary = {}
 var _saved_worlds: Array[Dictionary] = []
+var delete_world_btn: Button
+var _delete_armed := false
 var _preview_model: CharacterModel = null
 
 # hud
@@ -71,6 +73,7 @@ var rested_label: Label
 var _toast_t := 0.0
 var _prompt_text := "\u0001"
 var _help_type := -2
+var _help_tween: Tween
 
 
 func _ready() -> void:
@@ -213,6 +216,11 @@ func _build_menu() -> void:
 	save_select = OptionButton.new()
 	save_select.item_selected.connect(_on_save_selected)
 	world_card.add_child(save_select)
+	delete_world_btn = Button.new()
+	delete_world_btn.text = "Delete World"
+	delete_world_btn.tooltip_text = "Moves the selected world's save to the recycle bin."
+	delete_world_btn.pressed.connect(_on_delete_world_pressed)
+	world_card.add_child(delete_world_btn)
 
 	var name_lbl := _label("World Name:", &"InkLabel", 14)
 	world_card.add_child(name_lbl)
@@ -437,6 +445,9 @@ func refresh_menu_saves_and_skin() -> void:
 func _on_save_selected(idx: int) -> void:
 	if world_name_edit == null or seed_edit == null:
 		return
+	_disarm_delete()
+	if delete_world_btn != null:
+		delete_world_btn.disabled = idx < 0 or idx >= _saved_worlds.size()
 	if idx >= 0 and idx < _saved_worlds.size():
 		var w: Dictionary = _saved_worlds[idx]
 		world_name_edit.text = String(w.get("id", "hollow"))
@@ -452,6 +463,28 @@ func _on_save_selected(idx: int) -> void:
 		seed_edit.text = str(randi_range(1000, 999999))
 		seed_edit.editable = true
 		save_info_label.text = "New world: customize name & seed above!"
+
+
+## Two-step delete: the first press arms the button, the second deletes.
+func _on_delete_world_pressed() -> void:
+	var idx := save_select.selected if save_select != null else -1
+	if idx < 0 or idx >= _saved_worlds.size():
+		return
+	var w: Dictionary = _saved_worlds[idx]
+	if not _delete_armed:
+		_delete_armed = true
+		delete_world_btn.text = "Really delete '%s'?" % w.get("name", w.get("id", "world"))
+		save_info_label.text = "Press again to delete this world. Press anything else to cancel."
+		return
+	var ok := Session.delete_world(String(w.get("id", "")))
+	refresh_menu_saves_and_skin()
+	save_info_label.text = ("Deleted '%s'." % w.get("name", "world")) if ok else "Could not delete that world."
+
+
+func _disarm_delete() -> void:
+	_delete_armed = false
+	if delete_world_btn != null:
+		delete_world_btn.text = "Delete World"
 
 
 func apply_menu_selections_to_main(main_node: Node) -> void:
@@ -721,11 +754,11 @@ func _rebuild_help() -> void:
 			[_glyph(&"use", "LMB"), "use tool / swing"], [_glyph(&"alt_use", "RMB"), "build menu / eat / parry"],
 			[_glyph(&"interact", "F"), "interact (hold: pick up)"], ["LB / RB", "hotbar slot"],
 			[_glyph(&"inventory_toggle", "I"), "inventory"], ["D-Pad", "cycle item / brush"],
-			[_glyph(&"rotate", "R"), "rotate"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
+			[_glyph(&"rotate", "R"), "rotate"], ["J", "quest log"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
 	else:
 		rows = [["WASD", "move"], ["Mouse", "look"], ["Space", "jump / swim up"], ["Shift", "sprint"],
 			["LMB", "use tool / swing"], ["RMB", "build menu / eat / parry"], ["F", "interact (hold: pick up)"],
-			["1-8", "hotbar slots"], ["I / Tab", "inventory"], ["B", "build menu (hammer)"],
+			["1-8", "hotbar slots"], ["I / Tab", "inventory"], ["J", "quest log"], ["B", "build menu (hammer)"],
 			["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
 			["C", "dodge"], ["Ctrl", "sneak"], ["V", "swap shoulder"], ["T", "fast-forward time"],
 			["F3", "stats"], ["Esc", "menu"]]
@@ -789,12 +822,34 @@ func set_loading(on: bool, text := "", frac := 0.0) -> void:
 
 func show_hud(on: bool) -> void:
 	hud_root.visible = on
+	if on:
+		_start_help_fade_timer(10.0)
+
+
+func _start_help_fade_timer(delay: float = 10.0) -> void:
+	if help == null:
+		return
+	if _help_tween != null and _help_tween.is_valid():
+		_help_tween.kill()
+	help.visible = true
+	help.modulate.a = 1.0
+	_help_tween = create_tween()
+	_help_tween.tween_interval(delay)
+	_help_tween.tween_property(help, "modulate:a", 0.0, 1.5)
+	_help_tween.tween_callback(func() -> void: help.visible = false)
 
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo:
 		if e.keycode == KEY_F1:
-			help.visible = not help.visible
+			if _help_tween != null and _help_tween.is_valid():
+				_help_tween.kill()
+			if help.visible and help.modulate.a > 0.05:
+				help.visible = false
+				help.modulate.a = 0.0
+			else:
+				help.visible = true
+				help.modulate.a = 1.0
 		elif e.keycode == KEY_F3:
 			fps_label.visible = not fps_label.visible
 
@@ -919,8 +974,13 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 				active_def.name if active_def else "Pickaxe", r * 2 + 1, size_btn, inv_btn]
 		1:
 			icon = ItemIcons.for_material(player.current_material())
-			text = "%s  ·  brush %d   (%s block, %s size, %s build menu)" % [
-				Palette.NAMES[player.current_material()], r * 2 + 1, cycle_btn, size_btn, alt_btn]
+			var dim_str := "%dx%d" % [r * 2 + 1, r * 2 + 1] if r > 0 else "1x1"
+			if player.is_hammer_equipped():
+				text = "%s  ·  Size: %s   (%s block, %s size, %s build menu)" % [
+					Palette.NAMES[player.current_material()], dim_str, cycle_btn, size_btn, alt_btn]
+			else:
+				text = "%s  ·  Size: %s   (%s place, %s resize [%s])" % [
+					Palette.NAMES[player.current_material()], dim_str, use_btn, alt_btn, size_btn]
 		2:
 			var pf: Dictionary = Prefabs.all()[player.prefab_id]
 			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.HAMMER)

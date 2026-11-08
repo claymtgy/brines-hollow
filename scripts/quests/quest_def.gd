@@ -94,3 +94,26 @@ func is_complete() -> bool:
 		if not s.is_completed:
 			return false
 	return true
+
+
+func get_reward_items() -> Array[Dictionary]:
+	var list: Array[Dictionary] = []
+	var brass: int = int(rewards.get("brass_guilder", 0))
+	if brass > 0:
+		list.append({"id": &"brass_guilder", "count": brass})
+	var scrip: int = int(rewards.get("tide_scrip", 0))
+	if scrip > 0:
+		list.append({"id": &"tide_scrip", "count": scrip})
+	var raw_items = rewards.get("items", [])
+	for it in raw_items:
+		if it is Dictionary:
+			var id := StringName(it.get("id", ""))
+			var cnt := int(it.get("count", 1))
+			if id != &"" and cnt > 0:
+				list.append({"id": id, "count": cnt})
+		elif it is Array and it.size() >= 2:
+			var id := StringName(it[0])
+			var cnt := int(it[1])
+			if id != &"" and cnt > 0:
+				list.append({"id": id, "count": cnt})
+	return list

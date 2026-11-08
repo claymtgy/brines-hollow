@@ -291,6 +291,7 @@ func _build_controls(v: VBoxContainer) -> void:
 	_slider(v, "Controller look speed", "controller_look_speed", 1.0, 5.0, 0.1, "%.1f")
 	_slider(v, "Field of view", "fov", 55.0, 90.0, 1.0, "%d°")
 	_slider(v, "Camera distance", "camera_distance", 2.0, 12.0, 0.25, "%.1f m")
+	_slider(v, "Camera side offset", "camera_side_offset", 0.0, 2.0, 0.05, "%.2f m")
 	_check(v, "Right shoulder (V swaps)", "shoulder_right")
 	_check(v, "Fade leaves in front of you", "foliage_fade")
 
@@ -310,6 +311,7 @@ func _build_graphics(v: VBoxContainer) -> void:
 	_option(v, "Shadows", "shadows", GameSettings.SHADOW_NAMES, true)
 	_slider(v, "View distance (full detail)", "view_distance", 5, 14, 1, "%d", true)
 	_option(v, "Glow / bloom", "glow", GameSettings.GLOW_NAMES, true)
+	_check(v, "Atmospheric fog", "fog", true)
 	_header(v, "Display")
 	_option(v, "Window", "window_mode", GameSettings.WINDOW_NAMES)
 	_check(v, "V-Sync", "vsync")

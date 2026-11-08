@@ -111,6 +111,24 @@ func remove_item(p_id: StringName, p_count: int) -> int:
 	return removed
 
 
+## Removes items specifically from `slot_idx`. If amount <= 0 or amount >= slot.count, clears the slot.
+## Returns the actual number of items removed.
+func remove_from_slot(slot_idx: int, amount: int = -1) -> int:
+	if slot_idx < 0 or slot_idx >= capacity:
+		return 0
+	var slot: ItemSlot = slots[slot_idx]
+	if slot.is_empty():
+		return 0
+	var p_id: StringName = slot.item_id
+	var to_remove: int = slot.count if (amount <= 0 or amount >= slot.count) else amount
+	slot.count -= to_remove
+	if slot.count <= 0:
+		slot.clear()
+	slot_changed.emit(slot_idx, slot)
+	item_removed.emit(p_id, to_remove)
+	return to_remove
+
+
 ## Checks whether inventory contains at least p_count of p_id.
 func has_item(p_id: StringName, p_count: int = 1) -> bool:
 	return get_item_count(p_id) >= p_count
@@ -142,6 +160,47 @@ func has_space_for(p_id: StringName, p_count: int = 1, p_custom_data: Dictionary
 				return true
 
 	return remaining <= 0
+
+
+## Simulates adding multiple items to determine if the inventory can fit all of them.
+## items_to_check: Array of Dictionary {"id": StringName, "count": int}
+func can_fit_items(items_to_check: Array) -> bool:
+	if items_to_check.is_empty():
+		return true
+	var sim_slots: Array = []
+	for s in slots:
+		sim_slots.append({"id": s.item_id, "count": s.count})
+	for it in items_to_check:
+		var p_id: StringName = StringName(it.get("id", ""))
+		var p_count: int = int(it.get("count", 1))
+		if p_count <= 0 or p_id == &"":
+			continue
+		var def := ItemDB.get_item(p_id)
+		var max_stk: int = def.max_stack if def != null else 999
+		var rem := p_count
+		# 1. Existing non-full matching slots
+		if max_stk > 1:
+			for s in sim_slots:
+				if s.id == p_id and s.count < max_stk:
+					var space: int = max_stk - s.count
+					var put: int = mini(rem, space)
+					s.count += put
+					rem -= put
+					if rem <= 0:
+						break
+		# 2. Empty slots
+		if rem > 0:
+			for s in sim_slots:
+				if s.id == &"" or s.count <= 0:
+					var put: int = mini(rem, max_stk)
+					s.id = p_id
+					s.count = put
+					rem -= put
+					if rem <= 0:
+						break
+		if rem > 0:
+			return false
+	return true
 
 
 ## Returns total quantity of p_id across all slots.

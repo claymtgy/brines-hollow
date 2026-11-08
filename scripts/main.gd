@@ -28,8 +28,10 @@ var settings: GameSettings
 var settings_menu: SettingsMenu
 var inventory_ui: InventoryUI
 var build_menu_ui: BuildMenuUI
+var quest_log_ui: QuestLogUI
 var village_mgr: VillageManager
 var trade: TradeManager
+var livestock_mgr: Node
 var controller: ControllerManager = ControllerManager.new()
 
 static var force_menu := false
@@ -144,6 +146,11 @@ func _ready() -> void:
 	add_child(build_menu_ui)
 	build_menu_ui.setup(self)
 
+	quest_log_ui = QuestLogUI.new()
+	quest_log_ui.name = "QuestLogUI"
+	add_child(quest_log_ui)
+	quest_log_ui.setup(self)
+
 	# --- Village & trade (agent B): drifters, homes, routines, merchant ships. Their RPC
 	# nodes (/root/Main/Village, /root/Main/Trade) must exist on every peer.
 	village_mgr = VillageManager.new()
@@ -152,6 +159,12 @@ func _ready() -> void:
 	trade = TradeManager.new()
 	trade.main = self
 	add_child(trade)
+
+	# --- Domestic livestock (pens, feed, yields, herding)
+	const LivestockManagerClass := preload("res://scripts/livestock/livestock_manager.gd")
+	livestock_mgr = LivestockManagerClass.new()
+	livestock_mgr.main = self
+	add_child(livestock_mgr)
 	# --- Starter tutorial (Wren the Wayfarer). Crafting lives in InventoryUI.
 	tutorial = Tutorial.new()
 	tutorial.name = "Tutorial"
@@ -171,6 +184,7 @@ func _ready() -> void:
 
 	if force_menu:
 		force_menu = false
+		_menu_launch = true   # the world picked in this menu must be the one that loads
 		hud.show_menu(true)
 	elif _args.has("server"):
 		session.start_dedicated(int(_args.server) if String(_args.server).is_valid_int() else PORT)
@@ -381,13 +395,27 @@ func _peers_text() -> String:
 func _unhandled_input(e: InputEvent) -> void:
 	if controller != null:
 		controller.track_input_event(e)
+	if e.is_action_pressed("quest_log_toggle") and player != null and not settings_menu.is_open():
+		if build_menu_ui != null and build_menu_ui.is_expanded():
+			build_menu_ui.close_catalogue()
+		if inventory_ui != null and inventory_ui.is_open():
+			inventory_ui.close()
+		if quest_log_ui != null:
+			quest_log_ui.toggle()
+		get_viewport().set_input_as_handled()
+		return
 	if e.is_action_pressed("inventory_toggle") and player != null and not settings_menu.is_open():
 		if build_menu_ui != null and build_menu_ui.is_expanded():
 			build_menu_ui.close_catalogue()
+		if quest_log_ui != null and quest_log_ui.is_open():
+			quest_log_ui.close()
 		inventory_ui.toggle()
 		get_viewport().set_input_as_handled()
 		return
 	if e.is_action_pressed("menu_toggle"):
+		if quest_log_ui != null and quest_log_ui.is_open():
+			quest_log_ui.close()
+			return
 		if inventory_ui != null and inventory_ui.is_open():
 			inventory_ui.close()
 			return
@@ -397,6 +425,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		settings_menu.toggle()
 	elif e is InputEventMouseButton and e.pressed and player != null and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED \
 			and not settings_menu.is_open() \
+			and (quest_log_ui == null or not quest_log_ui.is_open()) \
 			and (inventory_ui == null or not inventory_ui.is_open()) \
 			and (build_menu_ui == null or not build_menu_ui.is_expanded()):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

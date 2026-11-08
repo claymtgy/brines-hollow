@@ -284,6 +284,37 @@ static func _register_basic_and_tools() -> void:
 		&"hydrographic_sea_chart", 1, 2.0, [&"map", &"chart"]
 	))
 
+	# Livestock Husbandry & Tools
+	register_recipe(RecipeDef.new(
+		&"craft_shearing_shears", "Shearing Shears", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"stone", "count": 2}, {"item_id": &"driftwood", "count": 2}],
+		&"shearing_shears", 1, 2.0, [&"tool", &"shears", &"livestock"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_wooden_bucket", "Wooden Pail", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 4}, {"item_id": &"driftwood", "count": 1}],
+		&"wooden_bucket", 1, 2.0, [&"tool", &"bucket", &"livestock"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_animal_whistle", "Shepherd's Whistle", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 2}, {"item_id": &"sea_glass", "count": 1}],
+		&"animal_whistle", 1, 2.0, [&"tool", &"whistle", &"livestock"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_feed_trough", "Livestock Trough", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 6}, {"item_id": &"stone", "count": 2}],
+		&"feed_trough", 1, 3.0, [&"placeable", &"furniture", &"livestock"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_poultry_coop", "Shore Poultry Coop", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 8}, {"item_id": &"driftwood", "count": 4}],
+		&"poultry_coop", 1, 4.0, [&"placeable", &"furniture", &"livestock"]
+	))
+
 	# Hand-craftable starter stations (so you can build stations from inventory without a Hammer)
 	register_recipe(RecipeDef.new(
 		&"hand_craft_workbench", "Carpentry Workbench", RecipeDef.Category.BASIC, &"none",
@@ -417,6 +448,12 @@ static func _register_culinary_and_hearth() -> void:
 		&"roasted_flounder", 1, 4.0, [&"food", &"roasted", &"fish"]
 	))
 
+	register_recipe(RecipeDef.new(
+		&"cook_fried_sea_egg", "Skillet Shore-Egg", RecipeDef.Category.COOKING, &"campfire",
+		[{"item_id": &"sea_egg", "count": 1}, {"item_id": &"samphire", "count": 1}],
+		&"sea_egg", 1, 4.0, [&"food", &"egg", &"breakfast"]
+	))
+
 	# Hearth Pot / Cauldron
 	register_recipe(RecipeDef.new(
 		&"cook_clam_chowder", "Hearty Clam Chowder", RecipeDef.Category.COOKING, &"hearth_pot",
@@ -462,6 +499,12 @@ static func _register_smokehouse_and_saltery() -> void:
 		&"cure_pickled_samphire", "Pickled Samphire Jar", RecipeDef.Category.SALTERY, &"saltery",
 		[{"item_id": &"samphire", "count": 3}, {"item_id": &"sea_salt", "count": 2}],
 		&"pickled_samphire_jar", 1, 8.0, [&"food", &"pickled", &"cure"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"cure_goat_cheese", "Salt-Cured Goat Cheese", RecipeDef.Category.SALTERY, &"saltery",
+		[{"item_id": &"salt_milk", "count": 2}, {"item_id": &"sea_salt", "count": 1}],
+		&"goat_cheese", 1, 8.0, [&"food", &"dairy", &"cheese"]
 	))
 
 	register_recipe(RecipeDef.new(

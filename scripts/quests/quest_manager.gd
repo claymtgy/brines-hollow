@@ -5,9 +5,12 @@ extends RefCounted
 signal quest_accepted(quest: QuestDef)
 signal quest_progressed(quest: QuestDef, step: QuestDef.QuestStep)
 signal quest_completed(quest: QuestDef)
+signal quest_rewards_paused(quest: QuestDef)
 
 var active_quests: Dictionary = {}          ## quest_id -> QuestDef
 var completed_quests: Array[StringName] = []## Array of completed quest IDs
+var completed_quest_defs: Dictionary = {}   ## quest_id -> QuestDef
+var paused_reward_quests: Array[StringName] = []## Quest IDs whose rewards are paused due to full inventory
 var available_quests: Dictionary = {}        ## quest_id -> QuestDef (Notice board)
 
 
@@ -34,11 +37,25 @@ func _init_storyline_catalogue() -> void:
 	q2.rewards["items"] = [{"id": "blueprint_tide_mill", "count": 1}]
 	register_available_quest(q2)
 
-	# Notice Board Chores
+	# Notice Board & Villager Chores
 	var chore1 := QuestDef.new(&"chore_winter_kale", "Greens for the Kettle", "Town Cook Barnaby")
 	chore1.add_step("Harvest 4 Tide Kale", QuestDef.ObjectiveType.HARVEST_CROP, &"tide_kale", 4)
 	chore1.rewards["brass_guilder"] = 15
 	register_available_quest(chore1)
+
+	var chore2 := QuestDef.new(&"chore_mara_catch", "Mara's Tide Catch", "Mara")
+	chore2.add_step("Catch 2 Silver Mackerel", QuestDef.ObjectiveType.CATCH_FISH, &"silver_mackerel", 2)
+	chore2.add_step("Return to Mara", QuestDef.ObjectiveType.TALK_TO, &"Mara", 1)
+	chore2.rewards["brass_guilder"] = 20
+	chore2.rewards["items"] = [{"id": "bait_lugworm", "count": 3}]
+	register_available_quest(chore2)
+
+	var chore3 := QuestDef.new(&"chore_tobin_timber", "Tobin's Driftwood Reserve", "Tobin")
+	chore3.add_step("Collect 6 Driftwood", QuestDef.ObjectiveType.GATHER_ITEM, &"driftwood", 6)
+	chore3.add_step("Return to Tobin", QuestDef.ObjectiveType.TALK_TO, &"Tobin", 1)
+	chore3.rewards["brass_guilder"] = 20
+	chore3.rewards["items"] = [{"id": "plank", "count": 4}]
+	register_available_quest(chore3)
 
 
 func register_available_quest(q: QuestDef) -> void:
@@ -64,6 +81,23 @@ func is_quest_completed(quest_id: StringName) -> bool:
 	return quest_id in completed_quests
 
 
+func get_quest_def(quest_id: StringName) -> QuestDef:
+	if active_quests.has(quest_id):
+		return active_quests[quest_id]
+	if completed_quest_defs.has(quest_id):
+		return completed_quest_defs[quest_id]
+	if available_quests.has(quest_id):
+		return available_quests[quest_id]
+	return null
+
+
+func can_accept_rewards(inv: Inventory, q: QuestDef) -> bool:
+	if inv == null or q == null:
+		return true
+	var list := q.get_reward_items()
+	return inv.can_fit_items(list)
+
+
 # -------------------------------------------------------------------------
 # Event Hooks
 # -------------------------------------------------------------------------
@@ -84,11 +118,33 @@ func notify_event(type: QuestDef.ObjectiveType, target_id: StringName, amount: i
 					break
 
 		if q.is_complete():
-			finished_quests.append(q_id)
+			if inv != null and not can_accept_rewards(inv, q):
+				if not paused_reward_quests.has(q_id):
+					paused_reward_quests.append(q_id)
+				quest_rewards_paused.emit(q)
+				quest_progressed.emit(q, q.steps[-1] if not q.steps.is_empty() else null)
+			else:
+				if paused_reward_quests.has(q_id):
+					paused_reward_quests.erase(q_id)
+				finished_quests.append(q_id)
 
 	# Complete finished quests and payout rewards
 	for f_id in finished_quests:
 		_complete_quest(f_id, inv)
+
+
+func check_paused_rewards(inv: Inventory) -> Array[StringName]:
+	if inv == null:
+		return []
+	var ready_to_claim: Array[StringName] = []
+	for q_id in paused_reward_quests:
+		var q: QuestDef = active_quests.get(q_id)
+		if q != null and can_accept_rewards(inv, q):
+			ready_to_claim.append(q_id)
+	for q_id in ready_to_claim:
+		paused_reward_quests.erase(q_id)
+		_complete_quest(q_id, inv)
+	return ready_to_claim
 
 
 func _complete_quest(quest_id: StringName, inv: Inventory = null) -> void:
@@ -96,8 +152,12 @@ func _complete_quest(quest_id: StringName, inv: Inventory = null) -> void:
 	if not q:
 		return
 
+	if paused_reward_quests.has(quest_id):
+		paused_reward_quests.erase(quest_id)
+
 	active_quests.erase(quest_id)
 	completed_quests.append(quest_id)
+	completed_quest_defs[quest_id] = q
 
 	# Payout rewards into player inventory if provided
 	if inv != null:
@@ -139,19 +199,29 @@ func serialize() -> Dictionary:
 	for cid in completed_quests:
 		c_data.append(String(cid))
 
+	var p_data: Array = []
+	for pid in paused_reward_quests:
+		p_data.append(String(pid))
+
 	return {
 		"active": a_data,
-		"completed": c_data
+		"completed": c_data,
+		"paused": p_data
 	}
 
 
 func deserialize(data: Dictionary) -> void:
 	active_quests.clear()
 	completed_quests.clear()
+	paused_reward_quests.clear()
 
 	if data.has("completed"):
 		for cid in data["completed"]:
 			completed_quests.append(StringName(cid))
+
+	if data.has("paused"):
+		for pid in data["paused"]:
+			paused_reward_quests.append(StringName(pid))
 
 	if data.has("active"):
 		for q_dict in data["active"]:

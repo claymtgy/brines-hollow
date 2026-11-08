@@ -90,6 +90,30 @@ static func list_saved_worlds() -> Array[Dictionary]:
 	return out
 
 
+## Removes a saved world (to the OS recycle bin when possible, else permanently).
+static func delete_world(world_id: String) -> bool:
+	var id := world_id.validate_filename()
+	if id == "" or id != world_id:
+		return false
+	var path := "user://worlds/%s" % id
+	if not DirAccess.dir_exists_absolute(path):
+		return false
+	if OS.move_to_trash(ProjectSettings.globalize_path(path)) == OK:
+		print("[session] world '%s' moved to the recycle bin" % id)
+		return true
+	_remove_dir_recursive(path)
+	print("[session] world '%s' deleted" % id)
+	return not DirAccess.dir_exists_absolute(path)
+
+
+static func _remove_dir_recursive(path: String) -> void:
+	for d in DirAccess.get_directories_at(path):
+		_remove_dir_recursive(path + "/" + d)
+	for f in DirAccess.get_files_at(path):
+		DirAccess.remove_absolute(path + "/" + f)
+	DirAccess.remove_absolute(path)
+
+
 func configure_world(p_world_name: String, p_seed: int, create_new: bool = false) -> void:
 	world_name = p_world_name.validate_filename()
 	if world_name == "":
@@ -335,6 +359,8 @@ func capture_profile() -> Dictionary:
 	d["recipes"] = p.recipes.serialize()
 	d["pos"] = p.position
 	d["yaw"] = main.rig.yaw
+	if p.has_meta("respawn_point"):
+		d["bed"] = p.get_meta("respawn_point")
 	if main.quests != null:
 		d["quests"] = main.quests.serialize()
 	return d
@@ -355,6 +381,8 @@ func apply_profile(d: Dictionary) -> void:
 		p.recipes.deserialize(d.recipes)
 	if d.has("quests") and main.quests != null:
 		main.quests.deserialize(d.quests)
+	if d.get("bed") is Vector3:
+		p.set_meta("respawn_point", d.bed)
 	if d.has("pos"):
 		p.position = d.pos
 		main.rig.yaw = float(d.get("yaw", main.rig.yaw))

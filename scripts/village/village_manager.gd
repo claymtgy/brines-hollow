@@ -32,6 +32,7 @@ var _ceil_memo := {}
 var _ceil_cols := {}            # Vector2i -> [[y_lo, y_hi], ...] spans known to be roofed
 var _world_ver := 0
 var _prompt_npc: DrifterNPC = null
+var _quests_bound := false
 
 
 func _ready() -> void:
@@ -52,6 +53,7 @@ func _try_init() -> void:
 	_ready_done = true
 	_pather = VillagePath.new(_standable)
 	_build_roster()
+	_bind_quests()
 	_place_starter_bed()
 	if is_authority():
 		_ensure_columns(Vector3i(main.world.gen.starter.hut), 2)
@@ -169,9 +171,12 @@ func _process(delta: float) -> void:
 	_try_init()
 	if not _ready_done:
 		return
+	_bind_quests()
 	if is_authority():
 		_authority_tick(delta)
 	_update_prompt()
+	if Engine.get_process_frames() % 15 == 0:
+		_refresh_npc_markers()
 
 
 func _authority_tick(delta: float) -> void:
@@ -498,12 +503,49 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _talk(npc: DrifterNPC) -> void:
+	if main.quests != null and main.player != null:
+		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, npc.def.id)
+		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, StringName(npc.def.name))
+		main.quests.check_paused_rewards(main.player.inventory)
+
+	if main.quests != null:
+		var avail_q: QuestDef = _get_available_quest_for_npc(npc)
+		if avail_q != null:
+			main.quests.accept_quest(avail_q.id)
+			main.hud.show_toast("%s (%s): \"Here, take this task: %s\"" % [npc.def.name, npc.profession_name(), avail_q.title])
+			_refresh_npc_markers()
+			return
+
 	var routine: String = ["sleeping", "working", "having a meal", "chatting in the square"][clampi(int(npc.def.current_routine), 0, 3)]
 	var home := "no home yet"
 	var bed := _home_bed(npc)
 	if bed != Vector3i(-1, -1, -1):
 		home = "home quality %d" % int(main.village.rooms[npc.def.assigned_room_id].get("quality", 0))
 	main.hud.show_toast("%s (%s): %s - morale %d%%, %s" % [npc.def.name, npc.profession_name(), routine, int(npc.def.morale * 100), home])
+
+
+func _get_available_quest_for_npc(npc: DrifterNPC) -> QuestDef:
+	if main == null or main.quests == null:
+		return null
+	return npc.get_available_quest(main.quests)
+
+
+func _bind_quests() -> void:
+	if main == null or main.quests == null or _quests_bound:
+		return
+	_quests_bound = true
+	main.quests.quest_accepted.connect(func(_q: Variant) -> void: _refresh_npc_markers())
+	main.quests.quest_progressed.connect(func(_q: Variant, _s: Variant) -> void: _refresh_npc_markers())
+	main.quests.quest_completed.connect(func(_q: Variant) -> void: _refresh_npc_markers())
+	main.quests.quest_rewards_paused.connect(func(_q: Variant) -> void: _refresh_npc_markers())
+	_refresh_npc_markers()
+
+
+func _refresh_npc_markers() -> void:
+	if main == null or main.quests == null:
+		return
+	for npc in npcs:
+		npc.refresh_marker(main.quests)
 
 
 func _try_recruit(npc_idx: int, peer: int) -> void:
@@ -536,6 +578,7 @@ func _set_recruited(npc_idx: int) -> void:
 	var wreck := npc.get_node_or_null("Wreck")
 	if wreck != null:
 		wreck.queue_free()
+	_refresh_npc_markers()
 
 
 func _announce(text: String) -> void:
