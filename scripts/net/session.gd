@@ -82,6 +82,7 @@ static func list_saved_worlds() -> Array[Dictionary]:
 					"id": d,
 					"name": String(meta.get("name", d)),
 					"seed": int(meta.get("seed", 1106)),
+					"layout": int(meta.get("layout", 1)),
 					"saved_at": String(meta.get("saved_at", "")),
 				})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -127,6 +128,7 @@ func configure_world(p_world_name: String, p_seed: int, create_new: bool = false
 		var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir + "world.json"))
 		if meta is Dictionary and meta.has("seed"):
 			main.seed_value = int(meta.seed)
+		main.world_layout = int((meta as Dictionary).get("layout", 1)) if meta is Dictionary else 1
 		_loaded_state = _read_var(dir + "state.dat", {})
 		if _loaded_state.has("tod") and main.sky != null:
 			main.sky.time_of_day = float(_loaded_state.tod)
@@ -134,6 +136,7 @@ func configure_world(p_world_name: String, p_seed: int, create_new: bool = false
 			main.sky.weather.deserialize(_loaded_state.weather)
 	else:
 		main.seed_value = p_seed
+		main.world_layout = VoxelWorld.LAYOUT_NEW
 
 
 func save_skin_preference(cust_data: Dictionary) -> void:
@@ -175,12 +178,13 @@ func setup(p_main: Node, args: Dictionary) -> void:
 		var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir + "world.json"))
 		if meta is Dictionary and meta.has("seed"):
 			main.seed_value = int(meta.seed)
+		main.world_layout = int((meta as Dictionary).get("layout", 1)) if meta is Dictionary else 1
 		_loaded_state = _read_var(dir + "state.dat", {})
 		if _loaded_state.has("tod"):
 			main.sky.time_of_day = float(_loaded_state.tod)
 		if _loaded_state.has("weather") and main.sky.weather != null:  # [weather] day clock
 			main.sky.weather.deserialize(_loaded_state.weather)
-		print("[session] world '%s' found (seed %d)" % [world_name, main.seed_value])
+		print("[session] world '%s' found (seed %d, layout %d)" % [world_name, main.seed_value, main.world_layout])
 	main.multiplayer.peer_connected.connect(_on_peer_connected)
 	main.multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	main.multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -365,6 +369,8 @@ func capture_profile() -> Dictionary:
 		d["quests"] = main.quests.serialize()
 	if main.get("atlas") != null:
 		d["isles"] = main.atlas.serialize()
+	if main.get("npc_villages") != null:
+		d["villages"] = main.npc_villages.serialize()
 	return d
 
 
@@ -385,6 +391,8 @@ func apply_profile(d: Dictionary) -> void:
 		main.quests.deserialize(d.quests)
 	if d.has("isles") and main.get("atlas") != null:
 		main.atlas.deserialize(d.isles)
+	if d.has("villages") and main.get("npc_villages") != null:
+		main.npc_villages.deserialize(d.villages)
 	if d.get("bed") is Vector3:
 		p.set_meta("respawn_point", d.bed)
 	if d.has("pos"):
@@ -439,7 +447,7 @@ func save_all() -> void:
 		_profiles[player_key] = capture_profile()
 	for key: String in _profiles:
 		_write_var(dir + "players/%s.dat" % key.validate_filename(), _profiles[key])
-	var meta := {"name": world_name, "seed": main.seed_value, "version": SAVE_VERSION,
+	var meta := {"name": world_name, "seed": main.seed_value, "layout": VoxelWorld.layout, "version": SAVE_VERSION,
 		"saved_at": Time.get_datetime_string_from_system()}
 	var f := FileAccess.open(dir + "world.json", FileAccess.WRITE)
 	if f != null:

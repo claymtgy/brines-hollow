@@ -67,9 +67,11 @@ func _set_state(next_state: State) -> void:
 # -------------------------------------------------------------------------
 
 ## Starts holding the cast button.
+## Works from IDLE and straight after a catch or a lost fish (no reset needed).
 func start_cast() -> bool:
-	if current_state != State.IDLE:
+	if current_state not in [State.IDLE, State.CAUGHT, State.LOST]:
 		return false
+	active_fish = null
 	cast_power = 0.0
 	_set_state(State.CASTING)
 	return true
@@ -111,7 +113,11 @@ func release_cast(
 ## Strikes / sets the hook when the hook window is open.
 func strike_hook() -> bool:
 	if current_state != State.HOOK_WINDOW:
-		if current_state == State.WAITING_FOR_BITE or current_state == State.NIBBLING:
+		if current_state == State.WAITING_FOR_BITE:
+			# Nothing on the line yet: just reel the lure back in, ready to cast again.
+			reset()
+			return false
+		if current_state == State.NIBBLING:
 			# Early hook spooks the fish
 			_set_state(State.LOST)
 			fish_escaped.emit("Pulled hook too early! Fish spooked.")

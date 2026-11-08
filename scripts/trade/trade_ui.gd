@@ -19,7 +19,7 @@ func _ready() -> void:
 
 
 func open() -> void:
-	if trade.merchant == null:
+	if trade.current() == null:
 		return
 	visible = true
 	refresh()
@@ -121,7 +121,7 @@ func _column(parent: Control, title: String) -> VBoxContainer:
 func refresh() -> void:
 	if not visible or trade == null:
 		return
-	var m: MerchantBoat = trade.merchant
+	var m: MerchantBoat = trade.current()
 	if m == null:
 		close()
 		return

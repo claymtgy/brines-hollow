@@ -5,7 +5,9 @@
 2. **Hold** use (LMB / RT) to charge the cast, then let go. The further you charge, the
    further the lure flies. A red-and-white float lands and sits on the water where you can see it.
    If you aim at land, the lure drops at the furthest water along that line.
-3. Wait for a bite: the float bobs and dips. Press use to strike.
+3. Wait for a bite: the float bobs and dips. Press use to strike. Striking while it's only
+   nibbling spooks the fish. Pressing use before anything bites just reels the lure back in.
+   Either way you can cast again straight away.
 4. Reel by holding use. Ease off when the line goes tight or it'll snap.
 
 **Which fish bite** depends on where you are (open sea, shallows, tidal pools, river mouth,

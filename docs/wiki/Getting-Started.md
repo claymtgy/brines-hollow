@@ -1,8 +1,12 @@
 # Getting Started
 
-You wash ashore with a few rough tools. **Wren the Wayfarer**, a travelling fisher, walks up
-and teaches you the basics in seven short lessons. Each one ends back with Wren, who pays you
-and teaches you recipes. You can skip the tutorial when Wren first speaks to you.
+You wash ashore with a few rough tools. **Wren the Wayfarer**, a travelling fisher, is waiting
+on the pier by your hut (look for the **!** over his head). Walk up to him and he teaches you
+the basics in seven short lessons. Each one ends back with Wren on the pier, who pays you and
+teaches you recipes. You can skip the tutorial when Wren first speaks to you.
+
+Once you've finished (or skipped) the lessons, Wren walks to the end of the pier, climbs into
+his boat and rows off across the sea.
 
 | # | Lesson | What you do | Reward |
 |---|---|---|---|

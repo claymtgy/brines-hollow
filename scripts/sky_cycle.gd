@@ -119,12 +119,27 @@ func _ready() -> void:
 	water.mesh = pm
 	water.material_override = water_mat
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	water.position = Vector3(VoxelWorld.WX * 0.5, 0, VoxelWorld.WZ * 0.5) * VoxelWorld.VS
 	add_child(water)
+	fit_to_world()
 	weather = Weather.new()
 	weather.sky = self
 	add_child(weather)
 	_apply()
+
+
+## Centre the sea on the world and size it to reach past the edges (call after
+## VoxelWorld.apply_layout). Layout 1 keeps its original 2600 m plane.
+func fit_to_world() -> void:
+	water_level_vox = VoxelWorld.SEA_MID
+	if water == null:
+		return
+	var span := maxf(2600.0, maxf(VoxelWorld.WX, VoxelWorld.WZ) * VoxelWorld.VS + 1600.0)
+	var pm := water.mesh as PlaneMesh
+	if pm != null and not is_equal_approx(pm.size.x, span):
+		pm.size = Vector2(span, span)
+		pm.subdivide_width = int(300.0 * span / 2600.0)
+		pm.subdivide_depth = pm.subdivide_width
+	water.position = Vector3(VoxelWorld.WX * 0.5, 0, VoxelWorld.WZ * 0.5) * VoxelWorld.VS
 
 
 ## Tide: two cycles per day. Returns water level in voxels.

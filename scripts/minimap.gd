@@ -72,6 +72,7 @@ func bake_chart_texture(world: VoxelWorld) -> void:
 		return
 
 	var gen: WorldGen = world.gen
+	_texture_size = 256 if VoxelWorld.WX > 8000 else 128   # keep ~8-10 m per chart pixel
 	var img := Image.create(_texture_size, _texture_size, false, Image.FORMAT_RGBA8)
 
 	var wx: int = VoxelWorld.WX
@@ -230,6 +231,13 @@ func _draw() -> void:
 		var i_uv := _world_to_minimap(il.get("pos", Vector3.ZERO), map_center, map_radius)
 		if i_uv.distance_to(map_center) <= map_radius - 6.0:
 			var nm := String(il.get("name", ""))
+			if il.get("village", false):
+				# villages: a small hut mark with the name under it, in harbour blue
+				var vc := Color(0.12, 0.25, 0.42)
+				draw_rect(Rect2(i_uv + Vector2(-2, -2), Vector2(4, 3)), vc)
+				draw_colored_polygon(PackedVector2Array([i_uv + Vector2(-3, -2), i_uv + Vector2(3, -2), i_uv + Vector2(0, -5)]), vc)
+				draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 9), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, vc)
+				continue
 			var col := Color(0.55, 0.12, 0.10) if il.get("home", false) else Color(0.18, 0.12, 0.08)
 			draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 3), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 8, col)
 

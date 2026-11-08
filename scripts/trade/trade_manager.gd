@@ -29,6 +29,11 @@ var _visits := 0
 var _nonce := 0
 var _pending := {}                     # nonce -> escrow record (client side)
 var _near := false
+## Village traders (NpcVillages): key -> MerchantBoat, and where each one stands (metres).
+## `session_key` says who the trade window is open with: "" = the visiting ship.
+var traders := {}
+var trader_pos := {}
+var session_key := ""
 
 
 func _ready() -> void:
@@ -44,6 +49,10 @@ func _ready() -> void:
 ## its stock, prices and contracts, so reloading mid-visit doesn't restock the ship.
 func _save_state() -> Dictionary:
 	var d := {"visits": _visits}
+	var vt := {}
+	for k: String in traders:
+		vt[k] = TradeRules.serialize_merchant(traders[k])
+	d["villages"] = vt
 	if merchant != null and is_docked():
 		d["merchant"] = TradeRules.serialize_merchant(merchant)
 	return d
@@ -53,11 +62,60 @@ func _load_state(d: Variant) -> void:
 	if not (d is Dictionary):
 		return
 	_visits = int(d.get("visits", _visits))
+	if d.get("villages") is Dictionary:
+		for k: String in d.villages:
+			traders[k] = TradeRules.deserialize_merchant(d.villages[k])
 	if d.get("merchant") is Dictionary:
 		merchant = TradeRules.deserialize_merchant(d.merchant)
 		_was_docked = true   # this visit already happened: don't spawn a fresh ship
 		if ship != null:
 			_apply_ship_label()
+
+
+## The merchant the trade window is dealing with right now.
+func current() -> MerchantBoat:
+	return merchant if session_key == "" else traders.get(session_key)
+
+
+## Make sure a village trader exists (same starting wares on every peer; a save or the
+## host's stock replaces them).
+func ensure_trader(key: String, trader_name: String, style: int, pos: Vector3) -> void:
+	trader_pos[key] = pos
+	if not traders.has(key):
+		traders[key] = village_wares(trader_name, style, hash(key))
+
+
+static func village_wares(trader_name: String, style: int, h: int) -> MerchantBoat:
+	var m := MerchantBoat.new(trader_name, MerchantBoat.MerchantType.RAFT_PEDDLER)
+	m.stock = Inventory.new(16)
+	m.active_contracts.clear()
+	var common := [[&"wood_plank", 30], [&"kelp_frond", 20], [&"shore_hardtack", 6]]
+	var by_style := {
+		0: [[&"seed_shore_wheat", 12], [&"seed_root_potato", 8], [&"pine_sapling", 4]],
+		1: [[&"seed_samphire", 10], [&"smoked_fish_ration", 4], [&"seed_tide_kale", 8]],
+		2: [[&"seed_root_potato", 10], [&"pine_sapling", 6], [&"smoked_fish_ration", 3]],
+		3: [[&"copper_ore", 12], [&"iron_ingot", 4], [&"sea_brass_ingot", 1]],
+		4: [[&"iron_ingot", 5], [&"copper_ore", 8], [&"seed_shore_wheat", 6]],
+	}
+	var base_price := {
+		&"seed_shore_wheat": 2, &"seed_samphire": 3, &"seed_tide_kale": 3, &"seed_root_potato": 4,
+		&"wood_plank": 2, &"kelp_frond": 1, &"pine_sapling": 4, &"shore_hardtack": 6,
+		&"smoked_fish_ration": 14, &"copper_ore": 4, &"iron_ingot": 15, &"sea_brass_ingot": 25,
+	}
+	for it: Array in common + by_style.get(style, by_style[0]):
+		if ItemDB.get_item(it[0]) == null:
+			continue
+		m.stock.add_item(it[0], it[1])
+		m.selling_prices[it[0]] = base_price.get(it[0], 5)
+	return m
+
+
+## Open the trade window with a village trader (NpcVillages calls this on F).
+func open_village(key: String) -> void:
+	if not traders.has(key):
+		return
+	session_key = key
+	ui.open()
 
 
 func is_authority() -> bool:
@@ -109,7 +167,7 @@ func _process(_delta: float) -> void:
 	if docked and not _was_docked and is_authority():
 		_new_visit()
 	if not docked and _was_docked:
-		if ui.visible:
+		if ui.visible and session_key == "":
 			ui.close()
 		if is_authority():
 			merchant = null
@@ -225,6 +283,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if main.player == null or not main.player.input_enabled:
 		return
 	get_viewport().set_input_as_handled()
+	session_key = ""
 	ui.open()
 
 
@@ -239,8 +298,11 @@ func _toast_all(text: String) -> void:
 
 func request_buy(item: StringName, count: int) -> void:
 	var inv: Inventory = main.player.inventory
-	var cost := TradeRules.price_to_buy(merchant, item, count)
-	if cost <= 0 or not merchant.stock.has_item(item, count):
+	var m := current()
+	if m == null:
+		return
+	var cost := TradeRules.price_to_buy(m, item, count)
+	if cost <= 0 or not m.stock.has_item(item, count):
 		return
 	if not inv.has_item(&"brass_guilder", cost):
 		main.hud.show_toast("Not enough brass (need %d)" % cost)
@@ -251,7 +313,8 @@ func request_buy(item: StringName, count: int) -> void:
 
 func request_sell(item: StringName, count: int) -> void:
 	var inv: Inventory = main.player.inventory
-	if not merchant.buying_prices.has(item) or not inv.has_item(item, count):
+	var m := current()
+	if m == null or not m.buying_prices.has(item) or not inv.has_item(item, count):
 		return
 	inv.remove_item(item, count)                   # escrow
 	_send({"k": "sell", "item": item, "n": count})
@@ -259,7 +322,9 @@ func request_sell(item: StringName, count: int) -> void:
 
 func request_fulfill(contract_id: StringName) -> void:
 	var inv: Inventory = main.player.inventory
-	for c: TradeContract in merchant.active_contracts:
+	if current() == null:
+		return
+	for c: TradeContract in current().active_contracts:
 		if c.id == contract_id and not c.is_fulfilled:
 			if not c.can_fulfill(inv):
 				main.hud.show_toast("Missing goods for this manifest")
@@ -273,6 +338,7 @@ func request_fulfill(contract_id: StringName) -> void:
 func _send(req: Dictionary) -> void:
 	_nonce += 1
 	req["nonce"] = _nonce
+	req["v"] = session_key
 	_pending[_nonce] = req
 	if is_authority():
 		_server_handle(req, main.multiplayer.get_unique_id() if main.is_net else 1)
@@ -325,22 +391,25 @@ func _server_handle(req: Dictionary, peer: int) -> void:
 	var ok := false
 	var amount := 0
 	var scrip := 0
-	if merchant != null and is_docked() and _requester_near(peer):
+	var v := String(req.get("v", ""))
+	var m: MerchantBoat = merchant if v == "" else traders.get(v)
+	var open := is_docked() if v == "" else true
+	if m != null and open and _requester_near(peer, v):
 		var item := StringName(req.get("item", ""))
 		var n := int(req.get("n", 0))
 		match String(req.get("k", "")):
 			"buy":
-				var cost := TradeRules.server_buy(merchant, item, n)
+				var cost := TradeRules.server_buy(m, item, n)
 				# the client must have escrowed at least the real price
 				ok = cost >= 0 and int(req.get("paid", 0)) >= cost
 				if cost >= 0 and not ok:
-					merchant.stock.add_item(item, n)
+					m.stock.add_item(item, n)
 				amount = cost
 			"sell":
-				amount = TradeRules.server_sell(merchant, item, n)
+				amount = TradeRules.server_sell(m, item, n)
 				ok = amount >= 0
 			"fulfill":
-				var r := TradeRules.server_fulfill(merchant, item)
+				var r := TradeRules.server_fulfill(m, item)
 				ok = not r.is_empty()
 				amount = int(r.get("brass", 0))
 				scrip = int(r.get("scrip", 0))
@@ -350,19 +419,25 @@ func _server_handle(req: Dictionary, peer: int) -> void:
 	else:
 		trade_result.rpc_id(peer, nonce, ok, amount, scrip)
 	if ok:
-		_broadcast_stock()
+		_broadcast_stock(v)
 
 
-func _requester_near(peer: int) -> bool:
+func _requester_near(peer: int, v := "") -> bool:
 	var pos := Vector3.INF
 	if not main.is_net or peer == main.multiplayer.get_unique_id():
 		pos = main.player.position if main.player != null else Vector3.INF
 	elif main.remotes.has(peer):
 		pos = main.remotes[peer].position
-	return Vector2(pos.x - _moor.x, pos.z - _moor.z).length() <= TRADE_RANGE + 4.0
+	var at: Vector3 = _moor if v == "" else trader_pos.get(v, Vector3.INF)
+	return Vector2(pos.x - at.x, pos.z - at.z).length() <= TRADE_RANGE + 4.0
 
 
-func _broadcast_stock() -> void:
+func _broadcast_stock(v := "") -> void:
+	if v != "":
+		ui.refresh()
+		if main.is_net and main.multiplayer.multiplayer_peer != null and traders.has(v):
+			village_stock.rpc(v, TradeRules.serialize_merchant(traders[v]))
+		return
 	_apply_ship_label()
 	ui.refresh()
 	if main.is_net and main.multiplayer.multiplayer_peer != null and merchant != null:
@@ -406,6 +481,9 @@ func _get_merchant_quest_marker() -> String:
 func _on_peer_connected(id: int) -> void:
 	if main.multiplayer.is_server() and merchant != null and is_docked():
 		merchant_stock.rpc_id(id, TradeRules.serialize_merchant(merchant))
+	if main.multiplayer.is_server():
+		for k: String in traders:
+			village_stock.rpc_id(id, k, TradeRules.serialize_merchant(traders[k]))
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -423,6 +501,12 @@ func trade_result(nonce: int, ok: bool, amount: int, scrip: int) -> void:
 func merchant_stock(d: Dictionary) -> void:
 	merchant = TradeRules.deserialize_merchant(d)
 	_apply_ship_label()
+	ui.refresh()
+
+
+@rpc("authority", "call_remote", "reliable")
+func village_stock(k: String, d: Dictionary) -> void:
+	traders[k] = TradeRules.deserialize_merchant(d)
 	ui.refresh()
 
 

@@ -102,6 +102,7 @@ func _process(delta: float) -> void:
 		cam.global_transform = Transform3D(b, eye_pos)
 		if world != null and world.terrain_mat != null:
 			world.terrain_mat.set_shader_parameter("fade_enabled", false)
+			world.terrain_mat.set_shader_parameter("view_pos", eye_pos)
 		if target is Player and (target as Player).model != null:
 			(target as Player).model.visible = true
 			(target as Player).model.set_first_person_view(true)
@@ -137,6 +138,7 @@ func _process(delta: float) -> void:
 	if world != null and world.terrain_mat != null:
 		world.terrain_mat.set_shader_parameter("fade_enabled", foliage_fade)
 		world.terrain_mat.set_shader_parameter("fade_eye", cam.global_position)
+		world.terrain_mat.set_shader_parameter("view_pos", cam.global_position)
 		world.terrain_mat.set_shader_parameter("fade_target", _pivot)
 	# Hide the character when the camera is squeezed right up against it.
 	if target is Player and (target as Player).model != null:

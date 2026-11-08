@@ -71,13 +71,19 @@ func _run() -> void:
 	# -------------------------------------------------------------------------
 	# 3. Bites, Hook Window & Early Strike Penalty
 	# -------------------------------------------------------------------------
-	# Simulate early strike during WAITING_FOR_BITE (should fail and spook fish)
+	# Clicking before anything nibbles just reels the lure back in
 	var early_strike := controller.strike_hook()
-	assert_test.call("Early strike fails and sets state to LOST", not early_strike and controller.current_state == FishingController.State.LOST)
+	assert_test.call("Pulling in an empty line returns to IDLE", not early_strike and controller.current_state == FishingController.State.IDLE)
+	assert_test.call("and you can cast again straight away", controller.start_cast() and controller.current_state == FishingController.State.CASTING)
+	controller.release_cast(0.5, 0.6, true, false, false, rng)
 
-	# Reset and cast again
-	controller.reset()
-	controller.start_cast()
+	# Striking during a nibble spooks the fish, and you can recast without a reset
+	controller.tick(controller.bite_timer - 0.2)
+	if controller.current_state == FishingController.State.NIBBLING:
+		assert_test.call("Striking a nibble too early loses the fish", not controller.strike_hook() and controller.current_state == FishingController.State.LOST)
+	else:
+		controller._set_state(FishingController.State.LOST)
+	assert_test.call("Recast works after a lost fish", controller.start_cast() and controller.current_state == FishingController.State.CASTING)
 	controller.release_cast(0.5, 0.6, true, false, false, rng)
 
 	# Advance bite timer
@@ -111,6 +117,8 @@ func _run() -> void:
 
 	assert_test.call("Reeling completed and transitioned to CAUGHT", controller.current_state == FishingController.State.CAUGHT)
 	assert_test.call("Landed fish matches active fish", catch_result[0] != null and catch_result[0] == controller.active_fish and catch_result[1] > 0.0)
+	assert_test.call("Recast works straight after a catch", controller.start_cast() and controller.current_state == FishingController.State.CASTING)
+	controller.reset()
 
 	# -------------------------------------------------------------------------
 	# 5. Passive Crab Pot Trap

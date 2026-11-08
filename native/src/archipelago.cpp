@@ -140,10 +140,13 @@ float Simplex2::fbm(float x, float y) const {
 
 void ArchipelagoGen::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("configure", "seed", "size", "sea_mid", "tide_amp", "mats"), &ArchipelagoGen::configure);
+	ClassDB::bind_method(D_METHOD("set_layout", "params"), &ArchipelagoGen::set_layout);
 	ClassDB::bind_method(D_METHOD("column_height", "x", "z"), &ArchipelagoGen::column_height);
 	ClassDB::bind_method(D_METHOD("column_kind", "x", "z"), &ArchipelagoGen::column_kind);
 	ClassDB::bind_method(D_METHOD("column_island", "x", "z"), &ArchipelagoGen::column_island);
 	ClassDB::bind_method(D_METHOD("get_islands"), &ArchipelagoGen::get_islands);
+	ClassDB::bind_method(D_METHOD("get_cave_sites"), &ArchipelagoGen::get_cave_sites);
+	ClassDB::bind_method(D_METHOD("cave_near", "x", "z", "margin"), &ArchipelagoGen::cave_near);
 	ClassDB::bind_method(D_METHOD("land_regions", "region_vox"), &ArchipelagoGen::land_regions);
 	ClassDB::bind_method(D_METHOD("add_stamp", "data", "dims", "base", "foundation"), &ArchipelagoGen::add_stamp);
 	ClassDB::bind_method(D_METHOD("clear_stamps"), &ArchipelagoGen::clear_stamps);
@@ -152,6 +155,19 @@ void ArchipelagoGen::_bind_methods() {
 }
 
 // ------------------------------------------------------------------ configure
+
+void ArchipelagoGen::set_layout(const Dictionary &d) {
+	home_r = (float)d.get("home_r", home_r);
+	std_rmin = (float)d.get("std_rmin", std_rmin);
+	std_rmax = (float)d.get("std_rmax", std_rmax);
+	islet_rmin = (float)d.get("islet_rmin", islet_rmin);
+	islet_rmax = (float)d.get("islet_rmax", islet_rmax);
+	std_count = (int)d.get("std_count", std_count);
+	islet_count = (int)d.get("islet_count", islet_count);
+	vscale = (float)d.get("vscale", vscale);
+	floor_depth = (float)d.get("floor_depth", floor_depth);
+	caves_on = (bool)d.get("caves", caves_on);
+}
 
 void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_mid, float p_tide_amp, const PackedByteArray &mats) {
 	seed = splitmix((uint64_t)(int64_t)p_seed * 2654435761ull + 17);
@@ -174,7 +190,7 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 	const float W = (float)size.x, D = (float)size.z;
 
 	// Home island in the middle; R is the outer extent of the island profile (land ~0.6 R).
-	islands.push_back({ W * 0.5f, D * 0.5f, 1150.f, T_HOME, STYLE_FLAT_MEADOW, 0.0f, 0.28f, -0.35f, 0.0f, 0.12f, 0, 0.f });
+	islands.push_back({ W * 0.5f, D * 0.5f, home_r, T_HOME, STYLE_FLAT_MEADOW, 0.0f, 0.28f, -0.35f, 0.0f, 0.12f, 0, 0.f });
 
 	auto try_place = [&](int type, float rmin, float rmax, int count, int tries) {
 		int placed = 0;
@@ -202,8 +218,8 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 			placed++;
 		}
 	};
-	try_place(T_STANDARD, 380.f, 560.f, 5, 400);   // ~80-120 m of land
-	try_place(T_ISLET, 95.f, 190.f, 10, 600);       // ~20-40 m of land
+	try_place(T_STANDARD, std_rmin, std_rmax, std_count, 400);   // layout 1: ~80-120 m of land
+	try_place(T_ISLET, islet_rmin, islet_rmax, islet_count, 600); // layout 1: ~20-40 m of land
 
 	// Sea stacks near island coasts.
 	for (size_t i = 0; i < islands.size(); i++) {
@@ -213,7 +229,7 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 			float ang = rng.range(0.f, 6.2831853f);
 			float r = rng.range(0.78f, 0.92f) * is.R;
 			stacks.push_back({ is.cx + std::cos(ang) * r, is.cz + std::sin(ang) * r,
-					rng.range(5.f, 11.f), rng.range(sea_mid + 14.f, sea_mid + 34.f) });
+					rng.range(5.f, 11.f), rng.range(sea_mid + 14.f * vscale, sea_mid + 34.f * vscale) });
 		}
 	}
 
@@ -238,13 +254,17 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 			for (int gx = gx0; gx <= gx1; gx++) sgrid[gx + grid_w * gz].push_back((int)i);
 	}
 	plan_sea_cave();
+	caves.clear();
+	cave_sites.clear();
+	if (caves_on) plan_caves();
 }
 
 // ------------------------------------------------------------------ height field
 
 float ArchipelagoGen::height_f(int x, int z, int *island_out) const {
 	const float floor_n = n_detail.fbm((float)x, (float)z);
-	float h = 9.f + floor_n * 2.5f;
+	const float floor_y = sea_mid - floor_depth;   // layout 1: 9
+	float h = floor_y + floor_n * 2.5f;
 	int best = -1;
 	int gx = std::clamp(x / GRID, 0, grid_w - 1), gz = std::clamp(z / GRID, 0, grid_w - 1);
 	if (x >= 0 && z >= 0) {
@@ -260,12 +280,12 @@ float ArchipelagoGen::height_f(int x, int z, int *island_out) const {
 			if (isl <= 0.f) continue;
 			float hs = is.hill;
 			float hills = n_hill.fbm(sx, sz) * 0.5f + 0.5f;
-			float seafloor = 9.f + floor_n * 2.5f + isl * 6.f;
+			float seafloor = floor_y + floor_n * 2.5f + isl * 6.f;
 			float s = smoothstep(0.f, 1.f, isl);
-			float gentle = lerpf(seafloor, sea_mid + 8.f + hills * 14.f * hs + isl * isl * hills * 12.f * hs, s);
+			float gentle = lerpf(seafloor, sea_mid + 8.f + hills * 14.f * hs * vscale + isl * isl * hills * 12.f * hs * vscale, s);
 			float cliff_mask = smoothstep(0.02f, 0.30f, n_cliff.fbm(sx, sz) + is.cliff_bias);
-			float cliff_h = sea_mid + 18.f * std::min(1.f, hs + 0.35f) + hills * 18.f * hs + isl * isl * 10.f * hs;
-			if (is.style == STYLE_CLIFF_MESA) cliff_h = std::min(cliff_h, sea_mid + 22.f + hills * 3.f);
+			float cliff_h = sea_mid + 18.f * std::min(1.f, hs + 0.35f) * vscale + hills * 18.f * hs * vscale + isl * isl * 10.f * hs * vscale;
+			if (is.style == STYLE_CLIFF_MESA) cliff_h = std::min(cliff_h, sea_mid + 22.f * vscale + hills * 3.f);
 			float cl = lerpf(seafloor + 5.f, cliff_h, smoothstep(0.28f, 0.34f, isl));
 			float t = cl / 7.f;
 			cl = (std::floor(t) + smoothstep(0.3f, 0.7f, t - std::floor(t))) * 7.f;
@@ -422,6 +442,182 @@ void ArchipelagoGen::plan_sea_cave() {
 	}
 }
 
+// ------------------------------------------------------------------ cave systems (layout 2+)
+
+void ArchipelagoGen::finish_cave(CaveSys &c) {
+	c.lo = Vector3i(1 << 30, 1 << 30, 1 << 30);
+	c.hi = Vector3i(-(1 << 30), -(1 << 30), -(1 << 30));
+	for (const Blob &b : c.blobs) {
+		int r = (int)std::ceil(b.r) + 2, ry = (int)std::ceil(b.r * b.ys) + 2;
+		c.lo = Vector3i(std::min(c.lo.x, (int)b.x - r), std::min(c.lo.y, (int)b.y - ry), std::min(c.lo.z, (int)b.z - r));
+		c.hi = Vector3i(std::max(c.hi.x, (int)b.x + r), std::max(c.hi.y, (int)b.y + ry), std::max(c.hi.z, (int)b.z + r));
+	}
+}
+
+// Tidal sea caves bored into cliff faces (mouth at sea level: it floods at high tide and
+// opens at low tide), climbing to a sandy grotto; karst caverns of several chambers under
+// high ground, joined by passages, with one passage out to the hillside.
+void ArchipelagoGen::plan_caves() {
+	Rng rng(hcomb(seed, 0xCA7E5));
+	for (int i = 0; i < (int)islands.size(); i++) {
+		const Island &is = islands[i];
+		if (is.type == T_ISLET) continue;
+
+		// --- Tidal sea caves
+		int want = is.type == T_HOME ? 2 : 1, made = 0;
+		for (int attempt = 0; attempt < 240 && made < want; attempt++) {
+			float ang = rng.range(0.f, 6.2831853f);
+			float dx = std::cos(ang), dz = std::sin(ang);
+			float hx = NAN, hz = NAN;
+			for (float s = is.R * 0.95f; s > is.R * 0.15f; s -= 1.f) {
+				float px = is.cx + dx * s, pz = is.cz + dz * s;
+				int h = column_height((int)px, (int)pz);
+				if (h > sea_high + 10) { hx = px; hz = pz; break; }
+				if (h > sea_high + 3) break;   // a gentle shore, not a cliff
+			}
+			if (std::isnan(hx)) continue;
+			CaveSys c;
+			c.kind = CAVE_TIDAL;
+			c.island = i;
+			// The mouth opens onto water: start out where the seabed is below the passage floor
+			// (a cliff behind a high beach would otherwise leave the mouth buried in sand).
+			float out_d = -1.f;
+			for (float s = 2.f; s <= 40.f; s += 1.f) {
+				if (column_height((int)(hx + dx * s), (int)(hz + dz * s)) < sea_low - 1) { out_d = s + 2.f; break; }
+			}
+			if (out_d < 0.f) continue;
+			float px = hx + dx * out_d, py = sea_mid - 1.f, pz = hz + dz * out_d;
+			float hdx = -dx, hdz = -dz;
+			bool ok = true;
+			const int inside = (int)(out_d / 1.5f) + 6;   // steps before the passage is under the cliff
+			for (int k = 0; k < 38 + inside; k++) {
+				float r = 5.f + std::sin(k * 0.27f) * 0.8f;
+				c.blobs.push_back({ px, py, pz, r, 1.f });
+				if (k > inside && column_height((int)px, (int)pz) < py + r + 2) { ok = false; break; }
+				float rot = rng.range(-0.15f, 0.15f);
+				float nx = hdx * std::cos(rot) - hdz * std::sin(rot);
+				float nz = hdx * std::sin(rot) + hdz * std::cos(rot);
+				hdx = nx;
+				hdz = nz;
+				px += hdx * 1.5f;
+				pz += hdz * 1.5f;
+				if (k >= inside - 4) py += 0.26f;   // level until under the cliff, then climb
+			}
+			if (!ok) continue;
+			// Grotto: a wide, low chamber whose sandy floor the high tide just reaches.
+			float gr = rng.range(9.f, 12.f);
+			float gy = sea_high - 2.f + gr * 0.6f;
+			if (column_height((int)px, (int)pz) < gy + gr * 0.6f + 3.f) continue;
+			c.blobs.push_back({ px, gy, pz, gr, 0.6f });
+			cave_sites.push_back({ Vector3i((int)px, (int)std::ceil(gy), (int)pz), CAVE_TIDAL, i });
+			finish_cave(c);
+			caves.push_back(std::move(c));
+			made++;
+		}
+
+		// --- Karst caverns
+		int kwant = is.type == T_HOME ? 2 : 1, kmade = 0;
+		const float floor_y = (float)sea_high + 3.f;
+		auto fits = [&](float cx, float cz, float r, float ys) {
+			float top = floor_y + 2.f * r * ys;
+			for (int k = 0; k < 9; k++) {
+				float a = k * 0.785398f, rr = k == 8 ? 0.f : r * 0.85f;
+				if (column_height((int)(cx + std::cos(a) * rr), (int)(cz + std::sin(a) * rr)) < top + 6.f) return false;
+			}
+			return true;
+		};
+		for (int attempt = 0; attempt < 160 && kmade < kwant; attempt++) {
+			float ang = rng.range(0.f, 6.2831853f), dist = rng.range(0.f, 0.5f) * is.R;
+			float x = is.cx + std::cos(ang) * dist, z = is.cz + std::sin(ang) * dist;
+			float r0 = rng.range(10.f, 14.f);
+			if (!fits(x, z, r0, 0.55f)) continue;
+			CaveSys c;
+			c.kind = CAVE_KARST;
+			c.island = i;
+			std::vector<Blob> ch;
+			ch.push_back({ x, floor_y + r0 * 0.55f, z, r0, 0.55f });
+			int n = rng.irange(2, 3);
+			float dir = rng.range(0.f, 6.2831853f);
+			for (int k = 0; k < n; k++) {
+				const Blob prev = ch.back();
+				for (int t = 0; t < 8; t++) {
+					float a = dir + rng.range(-1.1f, 1.1f);
+					float r = rng.range(7.f, 11.f);
+					float d = prev.r + r + rng.range(6.f, 14.f);
+					float nx = prev.x + std::cos(a) * d, nz = prev.z + std::sin(a) * d;
+					if (!fits(nx, nz, r, 0.55f)) continue;
+					// Passage between the chambers, at walking height.
+					int steps = (int)(d / 1.2f);
+					for (int s = 0; s <= steps; s++) {
+						float f = (float)s / (float)std::max(1, steps);
+						c.blobs.push_back({ lerpf(prev.x, nx, f), floor_y + 3.f + std::sin(f * 3.14159f) * 1.5f, lerpf(prev.z, nz, f), 3.3f, 1.f });
+					}
+					ch.push_back({ nx, floor_y + r * 0.55f, nz, r, 0.55f });
+					dir = a;
+					break;
+				}
+			}
+			// Entrance: from the last chamber, climb outward until the passage breaks the surface.
+			const Blob last = ch.back();
+			float ex = last.x, ez = last.z, ey = floor_y + 3.f;
+			float edx = last.x - is.cx, edz = last.z - is.cz;
+			float el = std::sqrt(edx * edx + edz * edz);
+			if (el < 1.f) { edx = 1.f; edz = 0.f; el = 1.f; }
+			edx /= el;
+			edz /= el;
+			bool opened = false;
+			std::vector<Blob> tunnel;
+			for (int s = 0; s < 150; s++) {
+				tunnel.push_back({ ex, ey, ez, 3.4f, 1.f });
+				if (ey > column_height((int)ex, (int)ez) + 1.f) { opened = true; break; }
+				float rot = rng.range(-0.12f, 0.12f);
+				float nx = edx * std::cos(rot) - edz * std::sin(rot);
+				float nz = edx * std::sin(rot) + edz * std::cos(rot);
+				edx = nx;
+				edz = nz;
+				ex += edx * 1.3f;
+				ez += edz * 1.3f;
+				if (ey < column_height((int)ex, (int)ez) - 6.f) ey += 0.5f;   // climb while deep underground
+			}
+			if (!opened) continue;
+			for (const Blob &b : ch) c.blobs.push_back(b);
+			for (const Blob &b : tunnel) c.blobs.push_back(b);
+			// Stalactites (len > 0) and stalagmites (len < 0) in each chamber.
+			for (const Blob &b : ch) {
+				int nd = rng.irange(6, 12);
+				for (int k = 0; k < nd; k++) {
+					float a = rng.range(0.f, 6.2831853f), rr = std::sqrt(rng.f()) * b.r * 0.75f;
+					int len = rng.irange(2, 7);
+					if (rng.f() < 0.35f) len = -std::max(1, len / 2);
+					c.drips.push_back({ (int)(b.x + std::cos(a) * rr), (int)(b.z + std::sin(a) * rr), len, b.y });
+				}
+			}
+			cave_sites.push_back({ Vector3i((int)x, (int)std::ceil(ch[0].y), (int)z), CAVE_KARST, i });
+			finish_cave(c);
+			caves.push_back(std::move(c));
+			kmade++;
+		}
+	}
+}
+
+Array ArchipelagoGen::get_cave_sites() const {
+	Array out;
+	for (const CaveSite &s : cave_sites) {
+		Dictionary d;
+		d["pos"] = s.pos;
+		d["kind"] = s.kind;
+		d["island"] = s.island;
+		out.push_back(d);
+	}
+	return out;
+}
+
+bool ArchipelagoGen::cave_near(int x, int z, int margin) const {
+	for (const CaveSys &c : caves)
+		if (x >= c.lo.x - margin && x <= c.hi.x + margin && z >= c.lo.z - margin && z <= c.hi.z + margin) return true;
+	return false;
+}
+
 // ------------------------------------------------------------------ features
 
 void ArchipelagoGen::trees_in_cell(int fx, int fz, std::vector<Tree> &out) const {
@@ -525,10 +721,10 @@ void ArchipelagoGen::generate_column(int cx, int cz, std::vector<std::unique_ptr
 				uint32_t roll = (hh >> 10) % 100;
 				if (roll < 12) cb.at(x, h + 1, z) = M[M_FLOWER_Y];
 				else if (roll < 20) cb.at(x, h + 1, z) = M[M_FLOWER_P];
-				else if (roll < 75) cb.at(x, h + 1, z) = M[M_GRASS];
+				else if (roll < 75) cb.at(x, h + 1, z) = M[M_TUFT];
 				else {
-					cb.at(x, h + 1, z) = M[M_GRASS_DRY];
-					if ((hh >> 20) % 10 < 4) cb.at(x, h + 2, z) = M[M_GRASS_DRY];
+					cb.at(x, h + 1, z) = M[M_TUFT_DRY];
+					if ((hh >> 20) % 10 < 4) cb.at(x, h + 2, z) = M[M_TUFT_DRY];
 				}
 			}
 			if (h < sea_low - 6 && h >= 4 && hh % 1000 >= 990) {
@@ -595,51 +791,118 @@ void ArchipelagoGen::generate_column(int cx, int cz, std::vector<std::unique_ptr
 	}
 	for (const Tree &t : trees) {
 		if (t.x + FEATURE_MARGIN < x0 || t.x - FEATURE_MARGIN >= x0 + CS || t.z + FEATURE_MARGIN < z0 || t.z - FEATURE_MARGIN >= z0 + CS) continue;
-		auto trunk = [&](int tall) {
-			for (int k = 0; k < tall; k++)
-				for (int oz = 0; oz < 3; oz++)
-					for (int ox = 0; ox < 3; ox++) cb.set(t.x + ox, t.y + k, t.z + oz, M[M_TRUNK]);
+		// Every tree is its own shape: a seeded lean, a curving trunk, a lopsided crown.
+		Rng tr(hcomb(hcomb(hcomb(seed, 0x7A3E), t.x), t.z));
+		const float la = tr.f() * 6.2831853f;
+		const float lean = t.type == 0 ? tr.range(0.0f, 0.07f) : tr.range(0.06f, 0.24f);
+		const float ldx = std::cos(la) * lean, ldz = std::sin(la) * lean;
+		// Trunk offset at height k: bends more towards the top, capped to stay in the margin.
+		auto bend = [&](int k, int &ox, int &oz) {
+			float sc = (float)k * (1.f + (float)k * 0.03f);
+			ox = (int)std::lround(std::clamp(ldx * sc, -4.f, 4.f));
+			oz = (int)std::lround(std::clamp(ldz * sc, -4.f, 4.f));
 		};
-		if (t.type == 0) {
-			trunk(t.tall - 2);
-			int top = t.y + t.tall;
-			int layer = 0;
-			for (int yy = top; yy > t.y + 5; yy--) {
-				float r = (top - yy) * 0.33f + 1.5f;
-				if (layer % 4 == 3) r *= 0.7f;
-				layer++;
-				int ir = (int)std::ceil(r);
-				for (int dz = -ir; dz < ir + 3; dz++)
-					for (int dx = -ir; dx < ir + 3; dx++) {
-						float fx = dx - 1.f, fz = dz - 1.f;
-						if (fx * fx + fz * fz <= r * r) cb.set_air_only(t.x + dx, yy, t.z + dz, M[M_LEAVES_DARK]);
-					}
+		auto trunk = [&](int tall) {
+			for (int k = 0; k < tall; k++) {
+				int ox, oz;
+				bend(k, ox, oz);
+				const int w = (k > tall * 3 / 4 && t.type != 0) ? 2 : 3;   // tapers near the top
+				for (int dz = 0; dz < w; dz++)
+					for (int dx = 0; dx < w; dx++) cb.set(t.x + ox + dx, t.y + k, t.z + oz + dz, M[M_TRUNK]);
 			}
-		} else if (t.type == 1) {
-			trunk(t.tall);
-			float ccx = t.x + 1.f, ccy = (float)(t.y + t.tall + 3), ccz = t.z + 1.f;
-			int ir = (int)std::ceil(t.r);
+			// a root or two splaying out at the foot
+			const int roots = tr.irange(1, 3);
+			for (int rI = 0; rI < roots; rI++) {
+				const float a = tr.f() * 6.2831853f;
+				const int len = tr.irange(2, 3);
+				for (int k = 1; k <= len; k++)
+					cb.set(t.x + 1 + (int)std::lround(std::cos(a) * (1.5f + k)), t.y + (k == 1 ? 0 : -1), t.z + 1 + (int)std::lround(std::sin(a) * (1.5f + k)), M[M_TRUNK]);
+			}
+		};
+		// A wobbly, slightly squashed ball of leaves; darker leaves come in clumps.
+		auto blob = [&](float cx, float cy, float cz, float r, float squash, float wobble) {
+			const int ir = (int)std::ceil(r + wobble);
 			for (int dy = -ir; dy <= ir; dy++)
 				for (int dz = -ir; dz <= ir; dz++)
 					for (int dx = -ir; dx <= ir; dx++) {
-						int px = (int)ccx + dx, py = (int)ccy + dy, pz = (int)ccz + dz;
+						const int px = (int)std::floor(cx) + dx, py = (int)std::floor(cy) + dy, pz = (int)std::floor(cz) + dz;
 						if (!cb.in(px, py, pz)) continue;
-						float q = std::sqrt((float)(dx * dx) + dy * 1.25f * dy * 1.25f + (float)(dz * dz));
-						float wob = vnoise3(seed ^ 0x1EAF, px * 0.15f, py * 0.15f, pz * 0.15f) * 1.6f;
-						if (q <= t.r + wob) {
-							uint8_t m = vhash(seed, px, py, pz) % 4 != 0 ? M[M_LEAVES] : M[M_LEAVES_DARK];
-							cb.set_air_only(px, py, pz, m);
+						const float fy = (float)dy * (dy < 0 ? squash : 1.f);
+						const float q = std::sqrt((float)(dx * dx) + fy * fy + (float)(dz * dz));
+						const float wob = vnoise3(seed ^ 0x1EAF, px * 0.21f, py * 0.21f, pz * 0.21f) * wobble;
+						if (q > r + wob) continue;
+						const bool dark = vnoise3(seed ^ 0xDA4C, px * 0.17f, py * 0.17f, pz * 0.17f) < -0.12f;
+						cb.set_air_only(px, py, pz, dark ? M[M_LEAVES_DARK] : M[M_LEAVES]);
+					}
+		};
+		// A one-voxel branch from (ax, ay, az) to (bx, by, bz).
+		auto branch = [&](float ax, float ay, float az, float bx, float by, float bz) {
+			const float len = std::sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az));
+			const int n = std::max(1, (int)std::ceil(len * 1.5f));
+			for (int k = 0; k <= n; k++) {
+				const float f = (float)k / n;
+				cb.set((int)std::floor(ax + (bx - ax) * f), (int)std::floor(ay + (by - ay) * f), (int)std::floor(az + (bz - az) * f), M[M_TRUNK]);
+			}
+		};
+		if (t.type == 0) {
+			// Pine: tiers of ragged, off-centre discs around a slightly leaning trunk.
+			trunk(t.tall - 2);
+			const int top = t.y + t.tall;
+			int layer = 0;
+			float tier_k = tr.range(0.85f, 1.15f);
+			for (int yy = top; yy > t.y + 5; yy--) {
+				if (layer % 4 == 0) tier_k = tr.range(0.78f, 1.18f);   // each tier its own width
+				float r = ((top - yy) * 0.33f + 1.5f) * tier_k;
+				if (layer % 4 == 3) r *= 0.7f;
+				r = std::min(r, 12.0f);
+				layer++;
+				int ox, oz;
+				bend(yy - t.y, ox, oz);
+				const float jx = vnoise3(seed ^ 0x9E1, t.x * 0.3f, yy * 0.35f, t.z * 0.3f) * 1.3f;
+				const float jz = vnoise3(seed ^ 0x9E2, t.x * 0.3f, yy * 0.35f, t.z * 0.3f) * 1.3f;
+				const float ccx = t.x + 1.f + ox + jx, ccz = t.z + 1.f + oz + jz;
+				const int ir = (int)std::ceil(r * 1.2f);
+				for (int dz = -ir; dz <= ir; dz++)
+					for (int dx = -ir; dx <= ir; dx++) {
+						const int px = (int)std::floor(ccx) + dx, pz = (int)std::floor(ccz) + dz;
+						const float fx = px + 0.5f - ccx, fz = pz + 0.5f - ccz;
+						// ragged rim: the edge wanders in and out around the tier
+						const float rim = r * (1.f + 0.22f * vnoise3(seed ^ 0x5EED, px * 0.45f, yy * 0.6f, pz * 0.45f));
+						if (fx * fx + fz * fz <= rim * rim) {
+							const bool tip = fx * fx + fz * fz > (rim - 1.f) * (rim - 1.f) && vhash(seed, px, yy, pz) % 5 == 0;
+							cb.set_air_only(px, yy, pz, tip ? M[M_LEAVES] : M[M_LEAVES_DARK]);
 						}
 					}
-			cb.set(t.x - 1, t.y + t.tall - 3, t.z + 1, M[M_TRUNK]);
-			cb.set(t.x + 3, t.y + t.tall - 2, t.z + 1, M[M_TRUNK]);
+			}
+		} else if (t.type == 1) {
+			// Broadleaf: a leaning trunk, a main crown pushed off-centre, and two to four
+			// side clumps on branches at different heights.
+			trunk(t.tall);
+			int ox, oz;
+			bend(t.tall, ox, oz);
+			const float tx = t.x + 1.f + ox, tz = t.z + 1.f + oz, ty = (float)(t.y + t.tall);
+			const float mx = tx + tr.range(-1.5f, 1.5f), mz = tz + tr.range(-1.5f, 1.5f), my = ty + 3.f + tr.range(-1.f, 1.f);
+			const int lumps = tr.irange(2, 4);
+			float a = tr.f() * 6.2831853f;
+			for (int l = 0; l < lumps; l++) {
+				a += tr.range(1.3f, 2.6f);
+				const float dist = t.r * tr.range(0.45f, 0.75f);
+				const float lr = t.r * tr.range(0.42f, 0.62f);
+				const float lx = mx + std::cos(a) * dist, lz = mz + std::sin(a) * dist;
+				const float ly = my + tr.range(-0.45f, 0.2f) * t.r;
+				const float by = ty - tr.range(2.f, 6.f);
+				int bx, bz;
+				bend((int)(by - t.y), bx, bz);
+				branch(t.x + 1.f + bx, by, t.z + 1.f + bz, lx, ly - lr * 0.4f, lz);
+				blob(lx, ly, lz, lr, 1.4f, 1.3f);
+			}
+			blob(mx, my, mz, t.r * tr.range(0.82f, 0.95f), 1.3f, 1.7f);
 		} else {
-			float ccy = (float)(t.y + 1);
-			int ir = (int)std::ceil(t.r);
-			for (int dy = -ir; dy <= ir; dy++)
-				for (int dz = -ir; dz <= ir; dz++)
-					for (int dx = -ir; dx <= ir; dx++)
-						if (dx * dx + dy * dy + dz * dz <= t.r * t.r) cb.set_air_only(t.x + dx, (int)ccy + dy, t.z + dz, M[M_LEAVES]);
+			// Bush: a squat clump with a lopsided second lobe.
+			const float a = tr.f() * 6.2831853f;
+			const float cx = t.x + 0.5f, cz = t.z + 0.5f, cy = (float)(t.y + 1);
+			blob(cx, cy, cz, t.r, 1.6f, 0.9f);
+			blob(cx + std::cos(a) * t.r * 0.7f, cy - 0.5f, cz + std::sin(a) * t.r * 0.7f, t.r * tr.range(0.55f, 0.8f), 1.6f, 0.9f);
 		}
 	}
 
@@ -671,6 +934,86 @@ void ArchipelagoGen::generate_column(int cx, int cz, std::vector<std::unique_ptr
 					}
 					if (best >= 0.f && best < 1.3f) cb.at(x, y, z) = M[M_GLOW];
 				}
+	}
+
+	// Cave systems (layout 2+): carve, hang stalactites, then dress the walls with ore veins,
+	// glowing moss and (in tidal grottos) sand.
+	for (const CaveSys &c : caves) {
+		if (c.hi.x < x0 || c.lo.x >= x0 + CS || c.hi.z < z0 || c.lo.z >= z0 + CS) continue;
+		for (const Blob &b : c.blobs) {
+			int ir = (int)std::ceil(b.r), iry = (int)std::ceil(b.r * b.ys);
+			if (b.x + ir < x0 || b.x - ir >= x0 + CS || b.z + ir < z0 || b.z - ir >= z0 + CS) continue;
+			const float r2 = b.r * b.r, iys = 1.f / b.ys;
+			const int bx = (int)std::floor(b.x), by = (int)std::floor(b.y), bz = (int)std::floor(b.z);
+			for (int y = -iry; y <= iry; y++) {
+				int py = by + y;
+				if (py < 2 || py >= H) continue;
+				float fy = y * iys;
+				for (int z = -ir; z <= ir; z++) {
+					int pz = bz + z;
+					if (pz < z0 || pz >= z0 + CS) continue;
+					for (int x = -ir; x <= ir; x++) {
+						int px = bx + x;
+						if (px < x0 || px >= x0 + CS) continue;
+						if ((float)(x * x + z * z) + fy * fy > r2) continue;
+						cb.at(px, py, pz) = 0;
+					}
+				}
+			}
+		}
+		for (const Drip &d : c.drips) {
+			// The tip column plus a thicker base; each voxel column is scanned on its own so
+			// a formation that straddles two chunk columns comes out the same in both.
+			static const int OFF[5][2] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+			int full = d.len > 0 ? d.len : -d.len;
+			for (int o = 0; o < 5; o++) {
+				int x = d.x + OFF[o][0], z = d.z + OFF[o][1];
+				if (!cb.in(x, 1, z)) continue;
+				int len = o == 0 ? full : full / 3;
+				if (len <= 0) continue;
+				int y = (int)d.top;
+				if (y < 2 || y >= H - 1 || cb.at(x, y, z) != 0) continue;
+				if (d.len > 0) {
+					while (y < H - 1 && cb.at(x, y, z) == 0) y++;
+					if (y >= H - 1) continue;
+					for (int k = 1; k <= len && y - k > 1 && cb.at(x, y - k, z) == 0; k++) cb.at(x, y - k, z) = M[M_STONE];
+				} else {
+					while (y > 1 && cb.at(x, y, z) == 0) y--;
+					for (int k = 1; k <= len && y + k < H && cb.at(x, y + k, z) == 0; k++) cb.at(x, y + k, z) = M[M_STONE];
+				}
+			}
+		}
+	}
+	for (const CaveSys &c : caves) {
+		if (c.hi.x < x0 || c.lo.x >= x0 + CS || c.hi.z < z0 || c.lo.z >= z0 + CS) continue;
+		const int xa = std::max(x0, c.lo.x), xb = std::min(x0 + CS - 1, c.hi.x);
+		const int za = std::max(z0, c.lo.z), zb = std::min(z0 + CS - 1, c.hi.z);
+		const int ya = std::max(2, c.lo.y), yb = std::min(H - 2, c.hi.y);
+		const bool karst = c.kind == CAVE_KARST;
+		for (int z = za; z <= zb; z++)
+			for (int x = xa; x <= xb; x++) {
+				const int hcol = hp[(x - x0 + 2) + P * (z - z0 + 2)];
+				for (int y = ya; y <= std::min(yb, hcol - 2); y++) {
+					uint8_t &m = cb.at(x, y, z);
+					if (m == 0 || m == M[M_COPPER] || m == M[M_IRON] || m == M[M_GLOW]) continue;
+					bool up = cb.at(x, y + 1, z) == 0;
+					bool side = up || cb.at(x, y - 1, z) == 0 || (x > x0 && cb.at(x - 1, y, z) == 0) || (x < x0 + CS - 1 && cb.at(x + 1, y, z) == 0) ||
+							(z > z0 && cb.at(x, y, z - 1) == 0) || (z < z0 + CS - 1 && cb.at(x, y, z + 1) == 0);
+					if (!side) continue;
+					uint32_t hv = vhash(seed ^ 0xCA7E, x, y, z);
+					uint32_t cell = vhash(seed ^ 0x0E5E, x >> 2, y >> 2, z >> 2);
+					if ((int)(cell % 100) < (karst ? 16 : 8) && hv % 3 != 0) {
+						bool iron = (int)((cell >> 8) % 100) < (karst ? 40 : 15);
+						m = iron ? M[M_IRON] : M[M_COPPER];
+						continue;
+					}
+					if (!karst && up && y >= sea_low && y <= sea_high + 4) {
+						m = hv % 6 == 0 ? M[M_GRAVEL] : M[M_SAND];
+						continue;
+					}
+					if ((int)(hv % 100) < (karst ? (up ? 6 : 2) : 9)) m = M[M_GLOW];
+				}
+			}
 	}
 
 	// Starter structures and other registered stamps (last, so they win).

@@ -8,6 +8,9 @@
 
 - You have **3 meal slots**. Each meal adds health and stamina for a while and then wears off.
   Eat (alt use) different foods to fill all three.
+- You can't eat the same dish again while you're **still full of it** (more than half its time
+  left). The game tells you how long to wait and the food isn't used up. Once it's half
+  digested, eating it again refreshes it and gives its health and stamina boost again.
 - Cooked and preserved food is worth far more than raw. Some foods only ever spoil slowly.
 - If your health runs out you **faint**. You wake at your bunk if you've slept in one, or back
   at the landing if you haven't. On Cozy you can't take damage at all (see [Difficulty](Difficulty-Modes.md)).

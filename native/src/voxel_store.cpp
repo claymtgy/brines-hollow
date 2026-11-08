@@ -231,6 +231,11 @@ bool VoxelStore::set_raw(int x, int y, int z, uint8_t m) {
 	cell = m;
 	edited_cols.insert(ckey(floordiv32(x), floordiv32(z)));
 	mark_voxel(x, y, z);
+	if (!is_block(m)) {
+		for (int ay = y + 1; ay < size.y && is_plant(get_raw(x, ay, z)); ay++) {
+			set_raw(x, ay, z, 0);
+		}
+	}
 	return true;
 }
 
@@ -598,7 +603,7 @@ int VoxelStore::place_sphere(const Vector3i &c, int r, int m) {
 			for (int x = -r; x <= r; x++) {
 				if (x * x + y * y + z * z > r2) continue;
 				int px = c.x + x, py = c.y + y, pz = c.z + z;
-				if (get_raw(px, py, pz) == 0 && set_raw(px, py, pz, (uint8_t)m)) n++;
+				if (!is_block(get_raw(px, py, pz)) && set_raw(px, py, pz, (uint8_t)m)) n++;
 			}
 		}
 	}
@@ -662,7 +667,7 @@ Dictionary VoxelStore::raycast(const Vector3 &origin, const Vector3 &dir, float 
 	double t = 0.0;
 	while (t <= max_t) {
 		uint8_t m = get_raw(cell[0], cell[1], cell[2]);
-		if (m != 0 && !(see_through_foliage && (pal_flags.size() > m) && (pal_flags[m] & F_FOLIAGE))) {
+		if (is_block(m) && !(see_through_foliage && (pal_flags.size() > m) && (pal_flags[m] & F_FOLIAGE))) {
 			Dictionary hit;
 			hit["cell"] = Vector3i(cell[0], cell[1], cell[2]);
 			hit["normal"] = Vector3i(normal[0], normal[1], normal[2]);
@@ -690,7 +695,7 @@ bool VoxelStore::aabb_collides(const Vector3 &min_m, const Vector3 &max_m) const
 	for (int y = y0; y <= y1; y++) {
 		for (int z = z0; z <= z1; z++) {
 			for (int x = x0; x <= x1; x++) {
-				if (get_raw(x, y, z) != 0) return true;
+				if (is_block(get_raw(x, y, z))) return true;
 			}
 		}
 	}
@@ -727,7 +732,7 @@ Array VoxelStore::mesh_chunk(const Vector3i &c) const {
 			}
 		}
 	}
-	return build_mesh_greedy(P.data(), PS, PS, PS, vs);
+	return build_mesh_greedy(P.data(), PS, PS, PS, vs, gx0, gy0, gz0);
 }
 
 Array VoxelStore::mesh_grid(const PackedByteArray &data, const Vector3i &dims, float scale) {
@@ -818,7 +823,7 @@ Array VoxelStore::build_mesh(const uint8_t *P, int px, int py, int pz, float sca
 	return res;
 }
 
-Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, float scale) {
+Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, float scale, int wx, int wy, int wz) {
 	std::call_once(faces_once, init_faces);
 	const int ys = px * pz;
 	const int D[3] = { px - 2, py - 2, pz - 2 };
@@ -856,12 +861,12 @@ Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, fl
 					int i = (c[0] + 1) + px * ((c[2] + 1) + pz * (c[1] + 1));
 					uint8_t m = P[i];
 					uint32_t key = 0;
-					if (m != 0 && P[i + noff] == 0) {
+					if (is_block(m) && (!is_block(P[i + noff]) || is_leafy(P[i + noff]))) {
 						key = m;
 						for (int k = 0; k < 4; k++) {
-							int s1 = P[i + aooff[k * 3]] != 0;
-							int s2 = P[i + aooff[k * 3 + 1]] != 0;
-							int cc = P[i + aooff[k * 3 + 2]] != 0;
+							int s1 = is_block(P[i + aooff[k * 3]]);
+							int s2 = is_block(P[i + aooff[k * 3 + 1]]);
+							int cc = is_block(P[i + aooff[k * 3 + 2]]);
 							int ao = (s1 && s2) ? 0 : 3 - (s1 + s2 + cc);
 							key |= (uint32_t)ao << (8 + 2 * k);
 						}
@@ -897,7 +902,7 @@ Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, fl
 					float var = have_pal ? pal_variation[m] : 0.f;
 					// Vertex alpha = colour-variation amount; +0.5 flags foliage so the terrain
 					// shader can fade leaves that sit between the camera and the player.
-					if (have_pal && (pal_flags[m] & F_FOLIAGE)) var += 0.5f;
+					if (have_pal && (pal_flags[m] & F_FOLIAGE)) var += (pal_flags[m] & F_LEAFY) ? 0.75f : 0.5f;   // 0.75+: leaf block (holes)
 					int32_t bi = (int32_t)mb.v.size();
 					Vector3 nrm(fd.n[0], fd.n[1], fd.n[2]);
 					for (int k = 0; k < 4; k++) {
@@ -921,6 +926,61 @@ Array VoxelStore::build_mesh_greedy(const uint8_t *P, int px, int py, int pz, fl
 				}
 			}
 		}
+	}
+	// Plants: two crossed, double-sided quads per voxel (flowers get a green stem under a
+	// coloured head), jittered and sized per voxel from its world position.
+	if (have_pal) {
+		MeshBuf &mb = out[0];
+		const Vector3 up(0, 1, 0);
+		auto quad = [&](const Vector3 &a, const Vector3 &b, float y0, float y1, const Color &c) {
+			int32_t bi = (int32_t)mb.v.size();
+			mb.v.emplace_back(a.x, y0, a.z);
+			mb.v.emplace_back(b.x, y0, b.z);
+			mb.v.emplace_back(b.x, y1, b.z);
+			mb.v.emplace_back(a.x, y1, a.z);
+			for (int k = 0; k < 4; k++) {
+				mb.n.push_back(up);
+				mb.c.push_back(c);
+			}
+			const int32_t t[12] = { bi, bi + 1, bi + 2, bi, bi + 2, bi + 3, bi, bi + 2, bi + 1, bi, bi + 3, bi + 2 };
+			mb.i.insert(mb.i.end(), t, t + 12);
+		};
+		for (int y = 1; y < py - 1; y++)
+			for (int z = 1; z < pz - 1; z++) {
+				int i = 1 + px * (z + pz * y);
+				for (int x = 1; x < px - 1; x++, i++) {
+					const uint8_t m = P[i];
+					if (!is_plant(m)) continue;
+					const bool on_plant = is_plant(P[i - ys]);
+					if (!is_block(P[i - ys]) && !on_plant) continue;   // nothing to grow from
+					const uint32_t h = hash3(wx + x - 1, wy + y - 1, wz + z - 1);
+					const float jx = ((h & 255) / 255.f - 0.5f) * 0.35f, jz = (((h >> 8) & 255) / 255.f - 0.5f) * 0.35f;
+					const float hs = 0.75f + ((h >> 16) & 255) / 255.f * 0.45f;
+					const float cx = x - 1 + 0.5f + jx, cz = z - 1 + 0.5f + jz, y0 = (float)(y - 1);
+					const float w = 0.42f;
+					const Vector3 a1((cx - w) * scale, 0, (cz - w) * scale), b1((cx + w) * scale, 0, (cz + w) * scale);
+					const Vector3 a2((cx - w) * scale, 0, (cz + w) * scale), b2((cx + w) * scale, 0, (cz - w) * scale);
+					float b = 1.0f + (((h >> 4) & 0xFFFF) / 65535.f - 0.5f) * 2.f * pal_variation[m];
+					Color c = pal_colors[m];
+					c = Color(c.r * b, c.g * b, c.b * b, pal_variation[m] + 0.5f);   // +0.5: foliage fade
+					const bool flower = (pal_flags[m] & F_FOLIAGE) && pal_colors[m].r > pal_colors[m].g + 0.05f;
+					if (flower) {
+						const Color stem(0.40f, 0.56f, 0.32f, 0.6f);
+						const float top = y0 + hs, mid = y0 + hs * 0.55f;
+						quad(a1, b1, y0 * scale, mid * scale, stem);
+						quad(a2, b2, y0 * scale, mid * scale, stem);
+						const float hw = 0.6f;
+						const Vector3 ha1((cx - w * hw) * scale, 0, (cz - w * hw) * scale), hb1((cx + w * hw) * scale, 0, (cz + w * hw) * scale);
+						const Vector3 ha2((cx - w * hw) * scale, 0, (cz + w * hw) * scale), hb2((cx + w * hw) * scale, 0, (cz - w * hw) * scale);
+						quad(ha1, hb1, mid * scale, top * scale, c);
+						quad(ha2, hb2, mid * scale, top * scale, c);
+					} else {
+						const float top = y0 + hs * (on_plant ? 0.9f : 1.f);
+						quad(a1, b1, y0 * scale, top * scale, c);
+						quad(a2, b2, y0 * scale, top * scale, c);
+					}
+				}
+			}
 	}
 	Array res;
 	res.push_back(out[0].to_arrays());

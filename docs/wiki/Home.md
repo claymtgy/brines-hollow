@@ -12,6 +12,8 @@ flats, keep a little flock, and grow a fishing village out of the drifters who w
 - [Tides & Time](Tides-and-Time.md)
 - [Weather](Weather.md)
 - [Creatures & Wildlife](Creatures-and-Wildlife.md)
+- [Caves & Mining](Caves-and-Mining.md)
+- [Island Villages](Island-Villages.md)
 - [Difficulty Modes](Difficulty-Modes.md)
 
 ## Making a living

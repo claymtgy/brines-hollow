@@ -435,7 +435,8 @@ func _scan_homes() -> void:
 
 
 func _solid(p: Vector3i) -> bool:
-	return main.world.get_voxel(p.x, p.y, p.z) != 0
+	var m: int = main.world.get_voxel(p.x, p.y, p.z)
+	return m != 0 and not Palette.is_plant(m)
 
 
 func _ceiling(p: Vector3i) -> bool:

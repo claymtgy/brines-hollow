@@ -14,14 +14,42 @@ signal loading_progress(text: String, frac: float)
 
 const VS := 0.18           # voxel size in metres (~1/10 of player height)
 const CS := 32             # chunk size in voxels
-const NCX := 176
-const NCY := 4
-const NCZ := 176
-const WX := NCX * CS       # 5632 voxels = 1014 m (whole archipelago)
-const WY := NCY * CS       # 128 voxels = 23 m
-const WZ := NCZ * CS
-const SEA_MID := 30.0      # in voxels
 const TIDE_AMP := 7.0      # +-1.26 m tide
+
+## World layout, stored per world in world.json ("layout"). Worlds saved before layouts
+## existed are layout 1; new worlds use LAYOUT_NEW. The sizes below are set by
+## apply_layout() before a world is generated and stay fixed while it is played.
+##   layout 1: 5632 voxels (1014 m) across, 128 tall (23 m), sea at 30 (5.4 m)
+##   layout 2: 14336 voxels (2580 m) across, 256 tall (46 m), sea at 64 (11.5 m);
+##             home island ~700 m across, other islands 1.6x larger, land twice as tall
+const LAYOUT_NEW := 2
+static var layout := 1
+static var NCX := 176
+static var NCY := 4
+static var NCZ := 176
+static var WX := 5632      # NCX * CS
+static var WY := 128       # NCY * CS
+static var WZ := 5632
+static var SEA_MID := 30.0 # in voxels
+
+
+## Native generator parameters for a layout (ArchipelagoGen.set_layout). Layout 1 = defaults.
+static func layout_params(v: int) -> Dictionary:
+	if v >= 2:
+		return {"home_r": 2760.0, "std_rmin": 608.0, "std_rmax": 896.0, "islet_rmin": 152.0,
+			"islet_rmax": 304.0, "std_count": 8, "islet_count": 18, "vscale": 2.0, "floor_depth": 21.0, "caves": true}
+	return {}
+
+
+static func apply_layout(v: int) -> void:
+	layout = 2 if v >= 2 else 1
+	if layout == 2:
+		NCX = 448; NCY = 8; NCZ = 448; SEA_MID = 64.0
+	else:
+		NCX = 176; NCY = 4; NCZ = 176; SEA_MID = 30.0
+	WX = NCX * CS
+	WY = NCY * CS
+	WZ = NCZ * CS
 
 ## Streaming radii in chunk columns (1 column = 5.76 m).
 var mesh_radius := 10                  # full-detail meshes
@@ -93,7 +121,7 @@ static func push_palette() -> void:
 	var flags := PackedByteArray()
 	var vari := PackedFloat32Array()
 	for m in Palette.COLORS.size():
-		flags.append((1 if Palette.is_emissive(m) else 0) | (2 if Palette.is_foliage(m) else 0))
+		flags.append((1 if Palette.is_emissive(m) else 0) | (2 if Palette.is_foliage(m) else 0) | (4 if Palette.is_plant(m) else 0) | (8 if Palette.is_leafy(m) else 0))
 		vari.append(Palette.VARIATION[m])
 	VoxelStore.set_palette(Palette.COLORS, vari, flags)
 
@@ -116,6 +144,8 @@ uniform bool fade_enabled = true;
 uniform vec3 fade_eye = vec3(0.0);
 uniform vec3 fade_target = vec3(0.0);
 uniform float fade_radius = 1.6;
+uniform float leaf_holes = 0.34;   // fraction of each leaf face that's open
+uniform vec3 view_pos = vec3(0.0); // the player's camera (also used in the shadow pass)
 varying vec3 wpos;
 varying vec3 wnrm;
 vec3 to_linear(vec3 c) {
@@ -136,9 +166,19 @@ void vertex() {
 const float BAYER[16] = float[](0.0, 0.5, 0.125, 0.625, 0.75, 0.25, 0.875, 0.375,
 		0.1875, 0.6875, 0.0625, 0.5625, 0.9375, 0.4375, 0.8125, 0.3125);
 void fragment() {
-	// Vertex alpha = colour-variation amount, +0.5 when the voxel is foliage.
+	// Vertex alpha = colour-variation amount, +0.5 when the voxel is foliage, +0.75 for leaf blocks.
 	bool foliage = COLOR.a >= 0.5;
-	float variation = foliage ? COLOR.a - 0.5 : COLOR.a;
+	bool leafy = COLOR.a >= 0.75;
+	float variation = leafy ? COLOR.a - 0.75 : (foliage ? COLOR.a - 0.5 : COLOR.a);
+	if (leafy && leaf_holes > 0.0) {
+		// Leaves are partly see-through: a fixed scatter of small gaps (a quarter-voxel
+		// grid, anchored to the world so it doesn't swim), thinning out with distance so far
+		// trees read as solid. Shadows get the same gaps: dappled light under the trees.
+		vec3 lp = wpos / (voxel * 0.25) - wnrm * 0.1;
+		uint g = hash3(ivec3(floor(lp)) + ivec3(7, 131, 17));
+		float far_k = 1.0 - smoothstep(28.0, 60.0, length(wpos - view_pos));
+		if (float(g) / 65535.0 < leaf_holes * far_k) { discard; }
+	}
 	if (foliage && fade_enabled) {
 		vec3 ab = fade_target - fade_eye;
 		float t = dot(wpos - fade_eye, ab) / max(dot(ab, ab), 1e-4);
@@ -221,7 +261,8 @@ func set_voxel(x: int, y: int, z: int, m: int, _mark := true) -> void:
 
 
 func is_solid_at(p: Vector3) -> bool:
-	return store.get_voxel(floori(p.x / VS), floori(p.y / VS), floori(p.z / VS)) != 0
+	var m := store.get_voxel(floori(p.x / VS), floori(p.y / VS), floori(p.z / VS))
+	return m != 0 and not Palette.is_plant(m)
 
 
 func invalidate_water() -> void:
@@ -388,8 +429,13 @@ func generate(seed_value: int) -> void:
 	var t0 := Time.get_ticks_msec()
 	loading_progress.emit("Charting the archipelago...", 0.05)
 	await get_tree().process_frame
-	gen = WorldGen.new(seed_value, WX, WY, WZ, SEA_MID, TIDE_AMP)
+	store.setup(Vector3i(WX, WY, WZ), VS)   # the layout may have changed since _ready
+	if sky != null and sky.has_method("fit_to_world"):
+		sky.fit_to_world()
+	gen = WorldGen.new(seed_value, WX, WY, WZ, SEA_MID, TIDE_AMP, layout_params(layout))
 	gen.plan_starter()
+	if layout >= 2:
+		gen.plan_villages()
 	store.set_generator(gen.native)
 	for p: Vector3i in gen.stamp_lights:
 		_add_light(p, Palette.LANTERN)
@@ -788,7 +834,8 @@ func apply_command(cmd: Dictionary) -> void:
 			grow_tree_at(cmd.p, int(cmd.get("s", 1)))
 
 
-const STONE_MATS := [Palette.STONE, Palette.SANDSTONE_A, Palette.SANDSTONE_B, Palette.SANDSTONE_C, Palette.COBBLE]
+const STONE_MATS := [Palette.STONE, Palette.SANDSTONE_A, Palette.SANDSTONE_B, Palette.SANDSTONE_C, Palette.COBBLE,
+	Palette.COPPER_VEIN, Palette.IRON_VEIN]
 const WOOD_MATS := [Palette.TRUNK, Palette.PLANK, Palette.DARK_WOOD, Palette.ROOF_RED, Palette.ROOF_BLUE, Palette.SHUTTER]
 
 
@@ -862,6 +909,17 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 				tree_base_y = check_y
 			else:
 				break
+
+	# Ore veins in the dig get their own drops, even when most of the dig is plain stone.
+	var vein_counts := {}
+	if allow_stone:
+		for dz in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if dx * dx + dy * dy + dz * dz <= r * r:
+						var vm := store.get_voxel(c.x + dx, c.y + dy, c.z + dz)
+						if vm == Palette.COPPER_VEIN or vm == Palette.IRON_VEIN:
+							vein_counts[vm] = int(vein_counts.get(vm, 0)) + 1
 
 	if allow_stone and allow_wood:
 		var res_all: Dictionary = store.dig_sphere(c, r)
@@ -979,6 +1037,9 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 			_lights[p].queue_free()
 			_lights.erase(p)
 	dug.emit((Vector3(c) + Vector3.ONE * 0.5) * VS, res.mat, res.count)
+	for vm: int in vein_counts:
+		if vm != res.mat:
+			dug.emit((Vector3(c) + Vector3.ONE * 0.5) * VS, vm, int(vein_counts[vm]))
 	invalidate_water()
 
 
@@ -1019,26 +1080,43 @@ func grow_tree_at(origin: Vector3i, tree_seed: int = 1) -> void:
 	rng.seed = tree_seed
 	var trunk_h := rng.randi_range(17, 23)
 	var total_h := trunk_h + 5
-	var rad := 6
+	var rad := 8
 	var sx := rad * 2 + 1
 	var sz := rad * 2 + 1
 	var g := Prefabs.Grid.new(sx, total_h, sz)
 	var cx := rad
 	var cz := rad
+	# Each grown pine leans a little its own way, and its tiers are ragged and off-centre.
+	var lean_a := rng.randf() * TAU
+	var lean := rng.randf_range(0.0, 0.07)
+	var bend := func(y: int) -> Vector2i:
+		var sc := float(y) * (1.0 + float(y) * 0.03) * lean
+		return Vector2i(clampi(roundi(cos(lean_a) * sc), -2, 2), clampi(roundi(sin(lean_a) * sc), -2, 2))
 
 	# Tiered conical pine canopy
+	var tier_k := 1.0
 	for y in range(5, total_h):
+		if (y - 5) % 4 == 0:
+			tier_k = rng.randf_range(0.78, 1.18)
 		var frac := float(y - 5) / float(maxi(1, total_h - 6))
 		var tier_wave := 0.85 + 0.30 * (1.0 - fmod(float(y - 5), 4.0) / 3.5)
-		var max_r := lerpf(5.2, 0.8, frac) * tier_wave
-		var r_int := int(ceil(max_r))
+		var max_r := minf(lerpf(5.2, 0.8, frac) * tier_wave * tier_k, 5.8)
+		var off: Vector2i = bend.call(y)
+		var jx := rng.randf_range(-0.7, 0.7)
+		var jz := rng.randf_range(-0.7, 0.7)
+		var r_int := int(ceil(max_r * 1.2)) + 1
 		for dz in range(-r_int, r_int + 1):
 			for dx in range(-r_int, r_int + 1):
-				var dist := sqrt(float(dx * dx + dz * dz))
-				if dist <= max_r:
-					var is_outer := dist >= max_r - 0.85 or y >= total_h - 2
+				var px := off.x + dx
+				var pz := off.y + dz
+				if absi(px) > rad or absi(pz) > rad:
+					continue
+				var dist := Vector2(float(dx) - jx, float(dz) - jz).length()
+				var rim := max_r * (1.0 + 0.2 * sin(float(dx) * 1.7 + float(y) * 0.9 + float(dz) * 2.3 + float(tree_seed % 97)))
+				if dist <= rim:
+					var is_outer := dist >= rim - 0.85 or y >= total_h - 2
 					var leaf_mat := Palette.LEAVES if (is_outer and ((dx + y + dz) & 1) == 0) else Palette.LEAVES_DARK
-					g.setv(cx + dx, y, cz + dz, leaf_mat)
+					g.setv(cx + px, y, cz + pz, leaf_mat)
 
 	# Root flare and main trunk (overwrites inner leaves so the trunk core is solid)
 	for dz in range(-1, 2):
@@ -1047,12 +1125,13 @@ func grow_tree_at(origin: Vector3i, tree_seed: int = 1) -> void:
 				g.setv(cx + dx, 0, cz + dz, Palette.TRUNK)
 				g.setv(cx + dx, 1, cz + dz, Palette.TRUNK)
 	for y in range(0, trunk_h):
-		g.setv(cx, y, cz, Palette.TRUNK)
+		var o: Vector2i = bend.call(y)
+		g.setv(cx + o.x, y, cz + o.y, Palette.TRUNK)
 		if y < trunk_h - 3:
-			g.setv(cx + 1, y, cz, Palette.TRUNK)
-			g.setv(cx, y, cz + 1, Palette.TRUNK)
+			g.setv(cx + o.x + 1, y, cz + o.y, Palette.TRUNK)
+			g.setv(cx + o.x, y, cz + o.y + 1, Palette.TRUNK)
 			if y < trunk_h / 2:
-				g.setv(cx + 1, y, cz + 1, Palette.TRUNK)
+				g.setv(cx + o.x + 1, y, cz + o.y + 1, Palette.TRUNK)
 
 	var base := Vector3i(origin.x - cx, origin.y, origin.z - cz)
 	store.stamp(g.data, Vector3i(sx, total_h, sz), base)

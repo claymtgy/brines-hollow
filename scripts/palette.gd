@@ -12,6 +12,10 @@ enum {
 	FLOWER_Y, FLOWER_P, SHUTTER, GLOW_TEAL, DRIFTWOOD,
 	# character materials
 	SKIN, EYE, CHEEK, COAT_A, HAT_A, COAT_B, HAT_B, TROUSER, BOOT, METAL, HANDLE, BUTTON,
+	# ore veins in cave walls (appended so saved voxel ids never shift)
+	COPPER_VEIN, IRON_VEIN,
+	# walk-through plants drawn as little crossed sprites (flowers are plants too)
+	TUFT_GRASS, TUFT_DRY,
 	COUNT
 }
 
@@ -60,6 +64,10 @@ static var COLORS: PackedColorArray = PackedColorArray([
 	Color8(160, 166, 172),    # METAL
 	Color8(130, 96, 66),      # HANDLE
 	Color8(60, 50, 44),       # BUTTON
+	Color8(196, 112, 66),     # COPPER_VEIN (green-flecked copper)
+	Color8(150, 92, 80),      # IRON_VEIN (rusty red-brown)
+	Color8(120, 162, 92),     # TUFT_GRASS
+	Color8(186, 182, 112),    # TUFT_DRY
 ])
 
 ## How strongly each material's brightness varies voxel-to-voxel.
@@ -70,6 +78,8 @@ const VARIATION := [
 	0.06, 0.0, 0.18, 0.14, 0.16, 0.16, 0.13,
 	0.06, 0.06, 0.05, 0.0, 0.08,
 	0.0, 0.0, 0.0, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.0,
+	0.22, 0.20,
+	0.16, 0.14,
 ]
 
 const NAMES := [
@@ -79,6 +89,7 @@ const NAMES := [
 	"Buoy Orange", "Lantern Glow", "Cobble", "Kelp", "Leaves", "Dark Leaves", "Trunk",
 	"Yellow Flower", "Pink Flower", "Shutter Blue", "Sea Glow", "Driftwood",
 	"Skin", "Eye", "Cheek", "Coat", "Hat", "Coat", "Hat", "Trouser", "Boot", "Metal", "Handle", "Button",
+	"Copper Vein", "Brine-Iron Vein", "Grass Tuft", "Dry Grass Tuft",
 ]
 
 ## Materials offered in Build mode, in hotbar order.
@@ -93,4 +104,14 @@ static func is_emissive(m: int) -> bool:
 
 ## Things the camera can pass through (leaves, flowers, kelp).
 static func is_foliage(m: int) -> bool:
-	return m == LEAVES or m == LEAVES_DARK or m == FLOWER_Y or m == FLOWER_P or m == KELP
+	return m == LEAVES or m == LEAVES_DARK or m == FLOWER_Y or m == FLOWER_P or m == KELP or m == TUFT_GRASS or m == TUFT_DRY
+
+
+## Leaf blocks: drawn with small holes so you can see into and through a tree's crown.
+static func is_leafy(m: int) -> bool:
+	return m == LEAVES or m == LEAVES_DARK
+
+
+## Flowers and grass tufts: little sprites you walk through, not blocks.
+static func is_plant(m: int) -> bool:
+	return m == FLOWER_Y or m == FLOWER_P or m == TUFT_GRASS or m == TUFT_DRY

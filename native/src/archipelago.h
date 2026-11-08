@@ -45,6 +45,7 @@ public:
 	enum Mat {
 		M_BEDROCK, M_STONE, M_SA, M_SB, M_SC, M_SAND, M_WET, M_GRAVEL, M_DIRT, M_GRASS, M_GRASS_DRY,
 		M_KELP, M_LEAVES, M_LEAVES_DARK, M_TRUNK, M_FLOWER_Y, M_FLOWER_P, M_DRIFTWOOD, M_GLOW, M_COBBLE, M_DARK_WOOD,
+		M_COPPER, M_IRON, M_TUFT, M_TUFT_DRY,
 		M_COUNT
 	};
 
@@ -68,6 +69,17 @@ public:
 		int foundation; // 0 none, 1 solid, 2 posts
 	};
 	struct Tree { int x, y, z, type, tall; float r; };
+	// Cave systems (layout 2+): chains of flattened spheres (ys = vertical squash).
+	struct Blob { float x, y, z, r, ys; };
+	struct Drip { int x, z, len; float top; };   // stalactite (len > 0) hanging from the roof above y=top
+	enum CaveKind { CAVE_TIDAL = 0, CAVE_KARST = 1 };
+	struct CaveSys {
+		int kind, island;
+		std::vector<Blob> blobs;
+		std::vector<Drip> drips;
+		Vector3i lo, hi;
+	};
+	struct CaveSite { Vector3i pos; int kind, island; };
 
 private:
 	uint64_t seed = 1;
@@ -75,6 +87,15 @@ private:
 	float sea_mid = 30.f;
 	int sea_low = 23, sea_high = 37;
 	uint8_t M[M_COUNT] = {};
+
+	// World layout (set_layout before configure). Defaults reproduce layout 1 exactly.
+	float home_r = 1150.f;               // home island profile radius (land ~0.6 R)
+	float std_rmin = 380.f, std_rmax = 560.f;
+	float islet_rmin = 95.f, islet_rmax = 190.f;
+	int std_count = 5, islet_count = 10;
+	float vscale = 1.f;                  // height of land above the sea
+	float floor_depth = 21.f;            // open-sea floor, voxels below sea_mid
+	bool caves_on = false;               // tidal sea caves, karst caverns, ore veins
 
 	Simplex2 n_warp, n_shape, n_hill, n_cliff, n_detail;
 	std::vector<Island> islands;
@@ -87,6 +108,10 @@ private:
 	std::vector<Sphere> cave;
 	Vector3i cave_min, cave_max;
 	std::vector<Stamp> stamps;
+	std::vector<CaveSys> caves;
+	std::vector<CaveSite> cave_sites;
+	void plan_caves();
+	static void finish_cave(CaveSys &c);
 
 	float height_f(int x, int z, int *island) const;
 	int kind_at(int x, int z, int h, int island, const int *nb_h) const;
@@ -99,12 +124,15 @@ public:
 	static void _bind_methods();
 
 	void configure(int p_seed, const Vector3i &p_size, float p_sea_mid, float p_tide_amp, const PackedByteArray &mats);
+	void set_layout(const Dictionary &d);
 
 	// queries (thread-safe)
 	int column_height(int x, int z) const;
 	int column_kind(int x, int z) const;
 	int column_island(int x, int z) const;
 	Array get_islands() const;
+	Array get_cave_sites() const;   // [{pos: Vector3i (inside the chamber, above its floor), kind, island}]
+	bool cave_near(int x, int z, int margin) const;   // any cave system's bounds within margin
 	TypedArray<Vector2i> land_regions(int region_vox) const;
 
 	// starter structures etc. (call before streaming starts)

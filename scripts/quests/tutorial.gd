@@ -80,6 +80,14 @@ var _speed := 0.0
 var _check := ""
 var _bind_delay := 1.0
 var _stuck_t := 0.0
+## Wren keeps to the home pier: _pier is where he stands, _face_land which way he looks
+## when nobody's near. When the last lesson is done he rows off in his own boat.
+var _pier := Vector3.ZERO
+var _pier_end := Vector3.ZERO
+var _face_land := 0.0
+var _boat: Boat
+var _depart_t := 0.0
+var _hinted := false
 var _tracker_tween: Tween
 var _hud_tracker_pinned := false
 
@@ -240,9 +248,32 @@ func _spawn_wren(p: Player) -> void:
 	_marker.modulate = UiTheme.BRASS
 	_marker.no_depth_test = true
 	wren.add_child(_marker)
-	# New players: Wren walks up from along the beach. Returning players: he's nearby.
-	var away := Vector3(sin(main.rig.yaw), 0, cos(main.rig.yaw)) * (14.0 if not is_started() else 4.0)
-	wren.position = _ground(p.position + away + Vector3(2, 0, 0))
+	_find_pier(p)
+	wren.position = _pier
+	_model.rotation.y = _face_land
+	if not is_started() and main.hud != null:
+		_hinted = true
+		main.hud.show_toast("Someone is waving from the pier.")
+
+
+## Where Wren stands: a few steps out along the starter dock, looking back at the island.
+func _find_pier(p: Player) -> void:
+	var st: Dictionary = main.world.gen.starter if main.world != null and main.world.gen != null else {}
+	if st.is_empty():
+		_pier = _ground(p.position + Vector3(3, 0, 3))
+		_pier_end = _pier
+		return
+	var d: Vector2i = st.front
+	var o: Vector2i = st.dock_o
+	var top := float(int(st.dock_y) + 6) * VoxelWorld.VS
+	var at := func(s: int) -> Vector3:
+		var v := Vector2(o) + Vector2(d) * s + Vector2(0.5, 0.5)
+		return _ground(Vector3(v.x * VoxelWorld.VS, top, v.y * VoxelWorld.VS))
+	_pier = at.call(8)
+	_pier_end = at.call(26)
+	if _pier_end.y < main.sky.water_level_m() - 0.3:
+		_pier_end = at.call(18)
+	_face_land = atan2(-float(d.x), -float(d.y))
 
 
 func _ground(p: Vector3) -> Vector3:
@@ -262,32 +293,69 @@ func _update_wren(delta: float, p: Player) -> void:
 		_marker.text = ""
 	if _marker != null and _marker.text != "":
 		_marker.position.y = 2.55 + sin(Time.get_ticks_msec() / 1000.0 * 3.0) * 0.06
+	if not _leaving and is_finished() and not dialogue.is_open():
+		_leaving = true   # every lesson done (or skipped): time to go, however the last chat closed
 	if _leaving:
-		var away := (wren.position - p.position)
-		away.y = 0
-		_walk(delta, wren.position + away.normalized() * 3.0, 2.0)
-		if wren.position.distance_to(p.position) > 40.0:
-			wren.queue_free()
-			wren = null
+		_update_departure(delta)
 		return
-	# Walk up to the player (closer when there's something to say), wait at the water's edge.
+	# He waits on the pier: turns to greet whoever comes near, otherwise watches the island.
 	var d := wren.position.distance_to(p.position)
-	var want := 2.2 if _marker.text != "" else 5.0
-	if d > want and not p.is_seated() and d < 60.0:
-		_walk(delta, p.position, 3.2 if d > 10.0 else 2.2)
+	if wren.position.distance_to(_pier) > 0.4:
+		_walk(delta, _pier, 2.2)   # back to his spot (after a talk, or if nudged)
 	else:
 		_speed = lerpf(_speed, 0.0, 1.0 - exp(-delta * 8.0))
-		var to := p.position - wren.position
-		_model.rotation.y = lerp_angle(_model.rotation.y, atan2(to.x, to.z), 1.0 - exp(-delta * 6.0))
+		var look := _face_land
+		if d < 12.0:
+			var to := p.position - wren.position
+			look = atan2(to.x, to.z)
+		_model.rotation.y = lerp_angle(_model.rotation.y, look, 1.0 - exp(-delta * 4.0))
 	_model.animate(delta, _speed, true, false)
-	if d > 80.0:
-		wren.position = _ground(p.position + Vector3(4, 0, 4))   # don't lose the player
-	# First meeting starts on its own.
-	if not _greeted and not is_started() and d < 2.6 and not dialogue.is_open():
+	# First meeting starts on its own once you walk up to him.
+	if not _greeted and not is_started() and d < 2.8 and not dialogue.is_open():
 		_greeted = true
 		_intro()
 	if d < TALK_RANGE and not dialogue.is_open() and is_started():
 		main.hud.set_prompt("F  Talk to Wren")
+
+
+## All lessons done: walk to the end of the pier, step into his boat and row out to sea.
+func _update_departure(delta: float) -> void:
+	_depart_t += delta
+	if _boat == null:
+		if wren.position.distance_to(_pier_end) > 0.6 and _depart_t < 12.0:
+			_walk(delta, _pier_end, 2.0)
+			_model.animate(delta, _speed, true, false)
+			return
+		_boat = Boat.new()
+		_boat.name = "WrensBoat"
+		main.add_child(_boat)
+		var out := Vector3(-sin(_face_land), 0, -cos(_face_land))   # out to sea
+		var side := Vector3(out.z, 0, -out.x)
+		var bp := _pier_end + side * 1.6
+		bp.y = main.sky.water_level_m()
+		_boat.setup(-77, main.world, main.sky, bp, atan2(out.x, out.z))
+		_depart_t = 0.0
+		if main.hud != null:
+			main.hud.show_toast("Wren casts off. Fair winds, Wren!")
+	var fw := Vector3(sin(_boat.yaw), 0, cos(_boat.yaw))
+	var spd := minf(2.6, 0.4 + _depart_t * 0.5)
+	_boat.position += fw * spd * delta
+	_boat.position.y = _boat.water_y()
+	_boat.vel = Vector2(fw.x, fw.z) * spd
+	_boat.row_power = 1.0
+	_boat.row_phase += delta * 4.0
+	var st := _boat.seat_transform(0)
+	wren.position = st.origin
+	_model.position = Vector3.ZERO
+	_model.rotation = st.basis.get_euler()
+	_model.animate_seated(delta, _boat.row_phase, 1.0)
+	_marker.text = ""
+	if _depart_t > 40.0 or _boat.position.distance_to(_pier_end) > 70.0:
+		_boat.queue_free()
+		_boat = null
+		wren.queue_free()
+		wren = null
+		_leaving = false
 
 
 func _walk(delta: float, goal: Vector3, speed: float) -> void:
@@ -315,11 +383,9 @@ func _walk(delta: float, goal: Vector3, speed: float) -> void:
 	_stuck_t = 0.0 if moved > 0.0 else _stuck_t + delta
 	_model.rotation.y = lerp_angle(_model.rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-delta * 8.0))
 	if _stuck_t > 4.0:
-		# Truly blocked (cliff, water): pop up beside the player instead of standing there.
+		# Truly blocked (something built on the pier?): step straight to where he's going.
 		_stuck_t = 0.0
-		var p: Player = main.player
-		var side := Vector3(cos(main.rig.yaw), 0, -sin(main.rig.yaw)) * 2.5
-		wren.position = _ground(p.position + side)
+		wren.position = goal
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -523,7 +589,8 @@ func _run_check() -> void:
 		var dir := _check.trim_prefix("shots:")
 		DirAccess.make_dir_recursive_absolute(dir)
 		main.hud.help.visible = false
-		for k in 40:   # let Wren walk up and greet
+		p.position = wren.position + Vector3(1.5, 0, 0)   # walk up to him on the pier
+		for k in 40:
 			if dialogue.is_open():
 				break
 			await get_tree().process_frame
@@ -544,7 +611,7 @@ func _run_check() -> void:
 			p.inventory.get_item_count(&"brass_guilder")])
 		get_tree().quit()
 		return
-	print("[tutorial] wren spawned=%s started=%s" % [wren != null, is_started()])
+	print("[tutorial] wren spawned=%s started=%s at_pier=%s" % [wren != null, is_started(), wren != null and wren.position.distance_to(_pier) < 0.5])
 	_offer(0)
 	dialogue.close()
 	var feed := [
@@ -570,6 +637,18 @@ func _run_check() -> void:
 		p.recipes.knows(&"place_smokehouse"), p.inventory.get_item_count(&"brass_guilder")])
 	if _check == "save":
 		main.session.save_all()
+	if _check == "depart":
+		var t0 := Time.get_ticks_msec()
+		print("[tutorial] depart start: wren=%s pier_end=%s water=%.2f" % [wren.position.snapped(Vector3.ONE * 0.1), _pier_end.snapped(Vector3.ONE * 0.1), main.sky.water_level_m()])
+		var boarded := false
+		var max_out := 0.0
+		while wren != null and Time.get_ticks_msec() - t0 < 60000:
+			await get_tree().process_frame
+			if _boat != null:
+				boarded = true
+				max_out = maxf(max_out, _boat.position.distance_to(_pier_end))
+		print("[tutorial] depart: pier=%s boarded=%s rowed_out=%.1f m gone=%s after %.1f s" % [
+			_pier.snapped(Vector3.ONE * 0.1), boarded, max_out, wren == null, (Time.get_ticks_msec() - t0) / 1000.0])
 	get_tree().quit()
 
 

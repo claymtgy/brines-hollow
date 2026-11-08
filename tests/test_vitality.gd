@@ -68,11 +68,20 @@ func _init() -> void:
 	assert_test.call("Max breath expanded to 90s (30 + 60)", vit.get_max_breath() == 90.0)
 	assert_test.call("Stomach holds exactly 3 distinct meals", vit.get_active_meals().size() == 3)
 
-	# Re-eating same food refreshes duration instead of overflowing
+	# Re-eating a dish you're still full of is refused and doesn't use it up
 	vit.tick(100.0, false, false) # burn 100s of digestion
+	var fish_left := inv.get_item_count(&"smoked_fish_ration")
+	var check_full := vit.is_full_of(&"smoked_fish_ration")
+	assert_test.call("Still full of a freshly eaten dish", check_full and not vit.can_eat_food(&"smoked_fish_ration"))
+	assert_test.call("Eating it again is refused", not vit.eat_food(&"smoked_fish_ration", inv))
+	assert_test.call("and the meal isn't wasted", inv.get_item_count(&"smoked_fish_ration") == fish_left)
+	# Once half digested, eating it again refreshes it and tops up health
+	vit.active_meals[0].remaining_sec = vit.active_meals[0].duration_sec * 0.3
 	var prev_rem: float = vit.get_active_meals()[0].remaining_sec
-	vit.eat_food(&"smoked_fish_ration", inv)
+	vit.current_hp = 10.0
+	assert_test.call("Half digested: it can be eaten again", vit.eat_food(&"smoked_fish_ration", inv))
 	assert_test.call("Re-eating smoked fish refreshed duration", vit.get_active_meals()[0].remaining_sec > prev_rem)
+	assert_test.call("and gave its instant heal", vit.current_hp >= 10.0 + 25.0 - 0.01)
 	assert_test.call("Stomach still holds 3 meals", vit.get_active_meals().size() == 3)
 
 	# 4th meal replacement: eating peppermint tea replaces meal with lowest remaining time

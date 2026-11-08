@@ -10,6 +10,9 @@ const PORT := 24565
 const VS := VoxelWorld.VS
 
 var seed_value := 1106
+## World layout (VoxelWorld.apply_layout): new worlds get LAYOUT_NEW; a saved world keeps
+## the layout in its world.json (1 when missing); a joining client takes the host's.
+var world_layout := VoxelWorld.LAYOUT_NEW
 var sky: SkyCycle
 var world: VoxelWorld
 var player: Player
@@ -32,6 +35,7 @@ var quest_log_ui: QuestLogUI
 var village_mgr: VillageManager
 var trade: TradeManager
 var livestock_mgr: Node
+var npc_villages: NpcVillages
 var atlas := IslandAtlas.new()   # island names + which ones this player has found
 var _atlas_gen: Object = null
 var _atlas_t := 0.0
@@ -62,6 +66,8 @@ func _ready() -> void:
 		_args[kv[0]] = kv[1] if kv.size() > 1 else ""
 	if _args.has("seed"):
 		seed_value = int(_args.seed)
+	if _args.has("layout"):
+		world_layout = int(_args.layout)
 
 	sky = SkyCycle.new()
 	add_child(sky)
@@ -162,6 +168,10 @@ func _ready() -> void:
 	trade = TradeManager.new()
 	trade.main = self
 	add_child(trade)
+	# --- NPC villages on the other islands (big archipelago worlds)
+	npc_villages = NpcVillages.new()
+	npc_villages.main = self
+	add_child(npc_villages)
 
 	# --- Domestic livestock (pens, feed, yields, herding)
 	const LivestockManagerClass := preload("res://scripts/livestock/livestock_manager.gd")
@@ -175,6 +185,8 @@ func _ready() -> void:
 	tutorial.setup(self)
 	if _args.has("villagecheck"):
 		village_mgr.call_deferred("run_check", String(_args.villagecheck))
+	elif _args.has("villagescheck"):
+		npc_villages.call_deferred("run_check")
 	elif _args.has("tradecheck"):
 		trade.call_deferred("run_check")
 	# --- end village & trade
@@ -278,7 +290,7 @@ func _find_clear_spawn(sp: Vector3i) -> Vector3:
 				var x := sp.x + dx
 				var z := sp.z + dz
 				var y := VoxelWorld.WY - 1
-				while y > 0 and world.get_voxel(x, y, z) == 0:
+				while y > 0 and (world.get_voxel(x, y, z) == 0 or Palette.is_plant(world.get_voxel(x, y, z))):
 					y -= 1
 				if ground.has(world.get_voxel(x, y, z)) and y + 1 > VoxelWorld.SEA_MID + VoxelWorld.TIDE_AMP:
 					return Vector3(x + 0.5, y + 1, z + 0.5)
@@ -295,6 +307,8 @@ func _begin_world() -> void:
 		hud.apply_menu_selections_to_main(self)
 	hud.show_menu(false)
 	hud.set_loading(true, "Starting...", 0.0)
+	VoxelWorld.apply_layout(world_layout)
+	print("[world] layout %d: %d x %d x %d voxels, sea at %d" % [VoxelWorld.layout, VoxelWorld.WX, VoxelWorld.WY, VoxelWorld.WZ, int(VoxelWorld.SEA_MID)])
 	await world.generate(seed_value)
 	session.on_world_generated()  # saved / host terrain first, then buffered live edits
 	for cmd in _pending_cmds:
@@ -367,7 +381,7 @@ func _tick_atlas(delta: float) -> void:
 		_atlas_gen = world.gen
 		var n: ArchipelagoGen = world.gen.native
 		atlas.setup(world.gen.islands, seed_value, n.column_height, n.column_island, VoxelWorld.SEA_MID)
-	hud.chart_islands = atlas.chart_labels()
+	hud.chart_islands = atlas.chart_labels() + (npc_villages.chart_labels() if npc_villages != null else [])
 	_atlas_t -= delta
 	if _atlas_t > 0.0 or player.is_seated():
 		return
@@ -507,10 +521,25 @@ func _on_dug(pos: Vector3, mat: int, count: int) -> void:
 			var active_def := player.get_active_item_def()
 			if active_def != null:
 				tool_tier = int(active_def.tool_data.get("tier", 1))
-			if count >= 6 or randf() < 0.45:
-				spawn_item_drop(pos, &"copper_ore", 1)
-			if tool_tier >= 2 and (count >= 10 or randf() < 0.35):
-				spawn_item_drop(pos, &"sea_iron_ore", 1)
+			if mat == Palette.COPPER_VEIN:
+				spawn_item_drop(pos, &"copper_ore", maxi(1, (count + 1) / 2))
+			elif mat == Palette.IRON_VEIN:
+				if tool_tier >= 2:
+					spawn_item_drop(pos, &"sea_iron_ore", maxi(1, (count + 1) / 2))
+				elif hud != null:
+					hud.show_toast("Brine-iron is too hard for this pick. You need a better one.")
+			elif VoxelWorld.layout < 2:
+				# Classic worlds have no ore veins: plain stone still turns up ore now and then.
+				if count >= 6 or randf() < 0.45:
+					spawn_item_drop(pos, &"copper_ore", 1)
+				if tool_tier >= 2 and (count >= 10 or randf() < 0.35):
+					spawn_item_drop(pos, &"sea_iron_ore", 1)
+			else:
+				# The big archipelago keeps its ore in the cave veins; stone only rarely has a nugget.
+				if randf() < 0.08:
+					spawn_item_drop(pos, &"copper_ore", 1)
+				if tool_tier >= 2 and randf() < 0.05:
+					spawn_item_drop(pos, &"sea_iron_ore", 1)
 
 
 func spawn_item_drop(drop_pos: Vector3, item_id: StringName, drop_count: int) -> DroppedItem:
@@ -676,8 +705,9 @@ func do_command(cmd: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func welcome(p_seed: int, edits: Array, tod: float, assigned_spawn_idx: int = -1) -> void:
+func welcome(p_seed: int, edits: Array, tod: float, assigned_spawn_idx: int = -1, p_layout: int = 1) -> void:
 	seed_value = p_seed
+	world_layout = p_layout
 	sky.time_of_day = tod
 	_assigned_spawn_idx = assigned_spawn_idx
 	_pending_cmds = edits + _pending_cmds
@@ -705,7 +735,7 @@ func _on_peer_connected(id: int) -> void:
 	if multiplayer.is_server():
 		# Distribute joining peers to separate coastal sectors around the starter island
 		var spawn_idx := posmod(id * 3 + 1, world.gen.starter_spawns.size()) if world.gen != null and not world.gen.starter_spawns.is_empty() else 0
-		welcome.rpc_id(id, seed_value, [], sky.time_of_day, spawn_idx)
+		welcome.rpc_id(id, seed_value, [], sky.time_of_day, spawn_idx, VoxelWorld.layout)
 		var sp_name: String = world.gen.get_spawn_by_index(spawn_idx).get("name", "distant shore") if world.gen != null else "shore"
 		if hud != null and player != null:
 			hud.show_toast("A friend washed ashore at %s (player %d)" % [sp_name, id])

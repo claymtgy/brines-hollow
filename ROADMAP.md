@@ -37,7 +37,7 @@ Goal: Tech de-risking and the fundamental data models that every gameplay layer 
 |---|---|---|---|
 | **C++ voxel core** (GDExtension: storage, meshing, raycast, collision, brushes, fill) | GDScript meshing was ~10 ms/chunk; Steam Deck needs headroom | M | ✅ Complete |
 | **Archipelago world** — seeded island placement, varied island sizes/biomes, open sea between | Core world shape | L | ✅ Complete (home island + 5 larger islands in distinct styles: meadow, atoll, hills, crags, mesa + ~10 islets + sea stacks; seeded names every player shares; landfall banner and per-character discoveries named on the sea chart) |
-| **Expanded Island Scale & Vertical Depth** — Starter Island scaled to ~600m–800m diameter; world height increased from 23m (4 chunks) to 46m–69m (8–12 chunks) | Fits expansive multi-tier village, agricultural fields, and deep subterranean cave networks | M | Planned |
+| **Expanded Island Scale & Vertical Depth** — Starter Island scaled to ~600m–800m diameter; world height increased from 23m (4 chunks) to 46m–69m (8–12 chunks) | Fits expansive multi-tier village, agricultural fields, and deep subterranean cave networks | M | ✅ Complete (new worlds: 2.6 km archipelago, ~700 m home island, other islands 1.6x larger and more of them, 46 m world height (8 chunks), land twice as tall, sea raised with rock under the seabed; saved worlds keep the original layout via a per-world layout version) |
 | **Chunk streaming + LOD** — load/unload chunks around players, low-detail distant islands | Memory and GPU scaling | L | ✅ Complete |
 | **Dedicated server** — headless Linux build, world persistence, admin config | Villages live on when players log off | L | ✅ Complete (headless `--server`, autosave 30 s) |
 | **Chunk-diff sync** — server sends edited chunks on demand instead of replaying an edit log | Scalable network sync | M | ✅ Complete (edited columns at join, then live commands) |
@@ -182,6 +182,7 @@ Life on the islands beyond the player: some of it ambient, some of it hungry. Pr
 - **Co-op:** ✅ host/server simulates wildlife and livestock; livestock poses stream to clients (~10 Hz), clients' petting/feeding/shearing and herding reach the host; raid alerts go to everyone. Befriended otters are remembered per player profile and find their friend again after a reload or rejoin. ✅ Harbour Bell: rings by itself when a raid starts within 90 m (alert with direction and distance for every player, 3D toll, light-shaft beacon over the raid); ring it by hand to call everyone and scare off raiders within 25 m.
 
 ### 8. Subterranean World & Cave Networks
+- ✅ **Done (big archipelago):** tidal sea caves in every larger island's cliffs (mouth floods at high tide, sandy grotto with a barnacled chest), karst caverns of 2–4 chambers under high ground (stalactites, stalagmites, glowing moss, a passage out to the hillside, a chest), and copper / brine-iron ore veins on cave walls (iron needs a tier-2 pick). Still to come: freshwater aquifers and wells, brass mines, flooded sumps.
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
 - **Karst Limestone Caverns:** Multi-chamber caverns beneath island plateaus featuring stalactites, glowing moss patches, and subterranean freshwater aquifers that supply village wells.
 - **Abandoned Brass Mines & Catacombs:** Ancient pre-deluge extraction tunnels with rickety timber shoring, ore veins (copper, iron, tin), rusted minecarts, and forgotten subterranean workbenches.
@@ -241,6 +242,7 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
 - **Selling to Traders:**
   - *Raft Peddler (Early game):* Casual beach trader exchanging tools, cloth, and basic seeds.
   - *Visiting Merchant Galleons (Mid game):* Scheduled trade ships that dock at deep-water piers with lighthouses; buy bulk crates of cured fish, crops, and brass.
+  - *Island village traders ✅ (built):* every NPC village on the other islands has a trader with island-flavoured stock (seeds and timber on meadows, copper and iron on the crags), shared by the world and synced in co-op. See the wiki's Island Villages page.
   - *Village Market Stalls:* Assign an NPC as Town Purser to sell surplus village products automatically to visitors.
 - **Currencies & Barter:** Early barter evolves into *Brass Guilders* (general goods) and *Tide Scrip* (earned via overseas export contracts to buy rare blueprints and charts).
 
@@ -250,6 +252,7 @@ Goal: Connect the village to the wider world through trade, storytelling, and op
   - *Old Man Corin (Blind Lighthouse Keeper):* Folklore, tide anomalies, secrets of ancient bells.
   - *Cartographer Vane:* Island charting, landmark exploration, sea stack beacons.
   - *Town Notice Board & Villagers:* Dynamic procedural requests and chores from villagers (e.g. Mara's tide catch, Tobin's timber reserve, Barnaby's kettle kale).
+- **NPC island villages ✅ (built, big archipelago):** two or three seeded villages on the larger islands (cottages, a pier, lanterns, a wheat field), each named on the sea chart once found. Five named villagers walk between home and work on the day clock (indoors overnight); a trader; and an elder with a seeded run of five delivery requests (per-player quests paid in brass).
 - **Starter quest — Wren the Wayfarer ✅ (built):** A travelling fisher walks up to new players when they wash ashore and teaches the basics in seven short missions: dig, place blocks with the hammer, craft, set a crab pot, fish, eat, and row out. Each mission ends by returning to Wren for rewards and new recipes. Per player (local in co-op), saved with the profile, skippable ("I know my way"). Building tutorial uses individual block placement with auto-selected bag materials (blocks rather than fabrications). Objectives display in an auto-fading HUD quest tracker (fades after 10s on login and 7s on objective progress).
 - **Wayfarer's Journal / Quest Log System ✅ (built):**
   - Full interactive Quest Log UI toggled with `J` or `L`, or via a dedicated button in the Inventory screen.

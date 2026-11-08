@@ -628,7 +628,8 @@ func _snap_to_ground(main: Node) -> void:
 		# Column top: scan down for the first solid voxel (only for fresh spawns / big drops).
 		var gy := -1
 		for y in range(VoxelWorld.WY - 1, 0, -1):
-			if main.world.get_voxel(vx, y, vz) != 0:
+			var gm: int = main.world.get_voxel(vx, y, vz)
+			if gm != 0 and not Palette.is_plant(gm):
 				gy = y + 1
 				break
 		if gy <= 0:

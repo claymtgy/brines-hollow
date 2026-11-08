@@ -811,6 +811,9 @@ func _on_slot_gui_input(ev: InputEvent, idx: int) -> void:
 		if def != null:
 			if def.equip_slot != &"":
 				inv.equip_item_from_slot(idx)
+			elif def.category == ItemDef.Category.FOOD and player.vitality.is_full_of(def.id):
+				if player.hud:
+					player.hud.show_toast("Still full of %s. Try another dish." % def.name)
 			elif def.category == ItemDef.Category.FOOD and player.vitality.can_eat_food(def.id):
 				player.vitality.eat_food(def.id, inv)
 				if player.hud:
@@ -902,6 +905,8 @@ func _refresh_inspector(inv: Inventory) -> void:
 		var eat_btn := Button.new()
 		eat_btn.text = "Eat"
 		eat_btn.disabled = not player.vitality.can_eat_food(def.id)
+		if player.vitality.is_full_of(def.id):
+			eat_btn.text = "Still full (%d min)" % maxi(1, ceili(player.vitality.reeat_wait_sec(def.id) / 60.0))
 		eat_btn.pressed.connect(func() -> void:
 			if player.vitality.eat_food(def.id, inv):
 				if player.hud:

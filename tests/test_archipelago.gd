@@ -120,5 +120,53 @@ func _init() -> void:
 	ev = b.update(spot1)
 	check(not ev.get("new", true), "and a reload doesn't rediscover them")
 
+	print("-- layout 2: bigger islands, deeper world")
+	check(VoxelWorld.layout == 1 and VoxelWorld.WX == 5632 and VoxelWorld.SEA_MID == 30.0, "worlds default to the original layout")
+	var t0 := Time.get_ticks_msec()
+	var g1 := WorldGen.new(1106, 5632, 128, 5632, 30.0, VoxelWorld.TIDE_AMP)
+	VoxelWorld.apply_layout(2)
+	check(VoxelWorld.WX == 14336 and VoxelWorld.WY == 256 and VoxelWorld.SEA_MID == 64.0, "layout 2 is 2.6 km across and 46 m tall")
+	var g2 := WorldGen.new(1106, VoxelWorld.WX, VoxelWorld.WY, VoxelWorld.WZ, VoxelWorld.SEA_MID, VoxelWorld.TIDE_AMP, VoxelWorld.layout_params(2))
+	print("   layout 2 configure: %d ms" % (Time.get_ticks_msec() - t0))
+	var a2 := IslandAtlas.new()
+	a2.setup(g2.islands, 1106, g2.native.column_height, g2.native.column_island, VoxelWorld.SEA_MID)
+	# Land extent of the home island along 8 rays from its centre.
+	var hc: Vector2 = g2.islands[0].center
+	var reach := 0.0
+	for k in 8:
+		var dir := Vector2.from_angle(TAU * k / 8.0)
+		var last_land := 0.0
+		for s in range(0, 4000, 8):
+			var p := hc + dir * s
+			if g2.native.column_height(int(p.x), int(p.y)) >= VoxelWorld.SEA_MID and g2.native.column_island(int(p.x), int(p.y)) == 0:
+				last_land = s
+		reach += last_land / 8.0
+	var across_m := reach * 2.0 * VoxelWorld.VS
+	check(across_m > 600.0 and across_m < 800.0, "the home island is ~700 m across (%d m)" % int(across_m))
+	var t2 := g2.islands.filter(func(i: Dictionary) -> bool: return int(i.type) == 1)
+	var t1 := g1.islands.filter(func(i: Dictionary) -> bool: return int(i.type) == 1)
+	var avg := func(arr: Array) -> float: return arr.reduce(func(acc: float, i: Dictionary) -> float: return acc + float(i.radius), 0.0) / maxf(1.0, arr.size())
+	check(float(avg.call(t2)) > float(avg.call(t1)) * 1.4, "the other islands are larger too (%d vs %d voxels)" % [int(avg.call(t2)), int(avg.call(t1))])
+	check(t2.size() >= 6, "and there are more of them to find (%d)" % t2.size())
+	var top1 := 0
+	var top2 := 0
+	for z in range(0, 5632, 23):
+		for x in range(0, 5632, 23):
+			top1 = maxi(top1, g1.native.column_height(x, z))
+	for z in range(0, 14336, 41):
+		for x in range(0, 14336, 41):
+			top2 = maxi(top2, g2.native.column_height(x, z))
+	check(float(top2 - 64) > float(top1 - 30) * 1.5, "the land stands much taller above the sea (%d vs %d voxels)" % [top2 - 64, top1 - 30])
+	check(top2 < VoxelWorld.WY - 10, "and still fits under the sky (%d of %d)" % [top2, VoxelWorld.WY])
+	var floor2 := g2.native.column_height(40, 40)
+	check(floor2 >= 64 - 26 and floor2 <= 64 - 16, "the open sea is as deep as before, with rock under it (%d)" % floor2)
+	check(a2.name_of(0) == IslandAtlas.HOME_NAME and a2.islands.size() == g2.islands.size(), "islands are named in the big layout too")
+	var spot := land_spot(g2, a2, 1)
+	check(spot != Vector3.INF and a2.update(spot).get("new", false), "and landfall works there")
+	g2.plan_starter()
+	check(not g2.starter.is_empty(), "the starter hut and dock find a site on the big home island")
+	VoxelWorld.apply_layout(1)
+	check(VoxelWorld.WX == 5632 and VoxelWorld.WY == 128 and VoxelWorld.SEA_MID == 30.0, "switching back restores layout 1")
+
 	print("Archipelago suite: %d / %d tests passed!" % [passed, total])
 	quit(0 if passed == total else 1)

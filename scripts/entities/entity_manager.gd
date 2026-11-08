@@ -37,6 +37,7 @@ static var _item_types: Dictionary = {} # item id -> entity type id
 var entities: Dictionary = {}
 var main: Node = null
 var starter_done := false
+var caves_stocked := false   # barnacled chests placed in the world's caves (layout 2+)
 var sleeping_peers: Dictionary = {}  # peer_id (int) -> bed grid_coord (Vector3i)
 
 
@@ -452,12 +453,13 @@ func deserialize(data: Array) -> void:
 
 ## Session state hooks (saved in state.dat, sent to joining players).
 func save_state() -> Dictionary:
-	return {"list": serialize(), "starter_done": starter_done}
+	return {"list": serialize(), "starter_done": starter_done, "caves_stocked": caves_stocked}
 
 
 func load_state(d: Dictionary) -> void:
 	deserialize(d.get("list", []))
 	starter_done = bool(d.get("starter_done", false))
+	caves_stocked = bool(d.get("caves_stocked", false))
 
 
 ## Called by Main with the Session once both exist.
@@ -585,6 +587,35 @@ func _grab(path: String) -> void:
 func _on_world_ready(_is_new: bool) -> void:
 	if is_authority() and not starter_done:
 		spawn_starter()
+	if is_authority() and not caves_stocked:
+		stock_caves()
+
+
+## One barnacled chest in each tidal grotto and karst cavern. Authority only, once per world.
+func stock_caves() -> void:
+	caves_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var sites: Array = main.world.gen.cave_sites()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0xBA4AC1E
+	var placed := 0
+	for s: Dictionary in sites:
+		var p: Vector3i = s.pos
+		var col := Vector2i(p.x >> 5, p.z >> 5)
+		if not main.world.store.is_column_generated(col):
+			main.world.store.generate_column(col)
+		var y := _ground_y(p.x, p.z, p.y + 2)
+		if y <= 0:
+			continue
+		var c := Vector3i(p.x, y, p.z)
+		var ent := _authority_place(&"barnacled_chest", c, rng.randi_range(0, 3), 1)
+		if ent is ChestEntity:
+			for it: Array in ChestEntity.cave_loot(int(s.kind), rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			placed += 1
+	if not sites.is_empty():
+		print("[caves] %d cave systems, %d barnacled chests placed" % [sites.size(), placed])
 
 
 ## The homestead's starter furniture. Authority only, once per world (saved flag).

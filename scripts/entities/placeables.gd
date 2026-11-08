@@ -85,6 +85,7 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"cat_basket", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_cat_basket(c), {"aliases": [&"cat"]})
 	EntityManager.register_type(&"scarecrow", ScarecrowEntity)
 	EntityManager.register_type(&"village_bell", VillageBellEntity, {"aliases": [&"bell"]})
+	EntityManager.register_type(&"barnacled_chest", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_barnacled(c), {"item": &""})
 	EntityManager.register_type(&"pantry_barrel", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_pantry_barrel(c), {"aliases": [&"pantry"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]

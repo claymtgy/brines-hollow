@@ -435,7 +435,7 @@ func _physics_process(delta: float) -> void:
 	position.x = clampf(position.x, 0.5, lim - 0.5)
 	position.z = clampf(position.z, 0.5, lim - 0.5)
 	if position.y < -5.0:
-		position.y = 30.0
+		position.y = (VoxelWorld.WY - 2) * VS
 
 	horizontal_speed = Vector2(vel.x, vel.z).length()
 	if rig != null and rig.first_person:
@@ -729,6 +729,12 @@ func _try_eat_active_food() -> bool:
 	var active: ItemSlot = inventory.get_active_item()
 	if active and not active.is_empty():
 		var item_id: StringName = active.item_id
+		if vitality.is_full_of(item_id):
+			if hud:
+				var d: ItemDef = ItemDB.get_item(item_id)
+				hud.show_toast("Still full of %s. Try another dish, or wait %d min." % [
+					d.name if d != null else String(item_id), maxi(1, ceili(vitality.reeat_wait_sec(item_id) / 60.0))])
+			return true
 		if vitality.can_eat_food(item_id):
 			if vitality.eat_food(item_id, inventory):
 				quest_event(QuestDef.ObjectiveType.EAT_FOOD, item_id)
@@ -813,7 +819,9 @@ func _handle_fishing_input(e: InputEvent) -> void:
 					if hud:
 						hud.show_toast("HOOKED! Hold and pulse [LMB] to reel!")
 			FishingController.State.WAITING_FOR_BITE:
-				fishing.strike_hook()
+				fishing.strike_hook()   # nothing on yet: reels the lure in
+				if hud:
+					hud.show_toast("Reeled in. Click again to cast.")
 	elif e.is_action_released("use"):
 		if fishing.current_state == FishingController.State.CASTING:
 			var tide_frac: float = 0.5
@@ -1190,7 +1198,7 @@ func _brush_hits_self(c: Vector3i, r: int) -> bool:
 				var py := c.y + y
 				var pz := c.z + z
 				# If voxel is already solid in the world, placing won't modify it:
-				if world != null and world.get_voxel(px, py, pz) != 0:
+				if world != null and world.get_voxel(px, py, pz) != 0 and not Palette.is_plant(world.get_voxel(px, py, pz)):
 					continue
 				var vlo := Vector3(px, py, pz) * VS
 				var vhi := Vector3(px + 1, py + 1, pz + 1) * VS

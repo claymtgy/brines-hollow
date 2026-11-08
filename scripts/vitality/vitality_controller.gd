@@ -127,11 +127,32 @@ func has_cold_immunity() -> bool:
 # 3-MEAL SATIETY STOMACH & NOURISHMENT
 # =============================================================================
 
+## Share of a meal's digestion that must have passed before the same dish can be eaten
+## again. Until then you're "still full" of it and eating is refused (nothing is used up).
+const REEAT_AFTER := 0.5
+
+
 func can_eat_food(item_id: StringName) -> bool:
 	if not ItemDB.has_item(item_id):
 		return false
 	var def: ItemDef = ItemDB.get_item(item_id)
-	return def.category == ItemDef.Category.FOOD and not def.food_data.is_empty()
+	return def.category == ItemDef.Category.FOOD and not def.food_data.is_empty() and not is_full_of(item_id)
+
+
+## True while the same dish is still mostly undigested (eating it again would do nothing).
+func is_full_of(item_id: StringName) -> bool:
+	for meal in active_meals:
+		if meal.item_id == item_id:
+			return float(meal.remaining_sec) > float(meal.duration_sec) * REEAT_AFTER
+	return false
+
+
+## Seconds until `item_id` can be eaten again (0 if it can be now).
+func reeat_wait_sec(item_id: StringName) -> float:
+	for meal in active_meals:
+		if meal.item_id == item_id:
+			return maxf(0.0, float(meal.remaining_sec) - float(meal.duration_sec) * REEAT_AFTER)
+	return 0.0
 
 
 func eat_food(item_id: StringName, inv: Inventory = null) -> bool:
@@ -142,6 +163,8 @@ func eat_food(item_id: StringName, inv: Inventory = null) -> bool:
 	var def: ItemDef = ItemDB.get_item(item_id)
 	if def.category != ItemDef.Category.FOOD or def.food_data.is_empty():
 		return false
+	if is_full_of(item_id):
+		return false   # still full of this dish: don't waste it
 
 	if inv != null:
 		if not inv.has_item(item_id, 1):
@@ -189,8 +212,8 @@ func eat_food(item_id: StringName, inv: Inventory = null) -> bool:
 			active_meals[lowest_idx] = meal_entry
 		else:
 			active_meals.append(meal_entry)
-		# Provide immediate sustenance by granting the HP bonus
-		current_hp = minf(get_max_hp(), current_hp + float(hp_bon))
+	# Immediate sustenance (a refreshed dish tops you up too)
+	current_hp = minf(get_max_hp(), current_hp + float(hp_bon))
 
 	current_stamina = minf(get_max_stamina(), current_stamina + float(sta_bon))
 	stomach_updated.emit(active_meals)

@@ -30,5 +30,11 @@ The blueprints list has two fences, and they behave differently:
 
 Every structure and its size: [Furniture & Placeables](generated/placeables.md).
 
+
+## Flowers and grass
+Wildflowers and grass tufts aren't blocks. You walk straight through them, your aim passes
+over them, and placing a block where one grows simply replaces it. Dig out the ground under
+them and they go too.
+
 ---
 [Home](Home.md) · [Livestock & Pens](Livestock-and-Pens.md) · [FAQ](FAQ.md)

@@ -441,7 +441,8 @@ func refresh_menu_saves_and_skin() -> void:
 	save_select.clear()
 	_saved_worlds = Session.list_saved_worlds()
 	for w: Dictionary in _saved_worlds:
-		save_select.add_item("%s  (Seed %d)" % [w.get("name", "world"), int(w.get("seed", 1106))])
+		save_select.add_item("%s  (Seed %d%s)" % [w.get("name", "world"), int(w.get("seed", 1106)),
+				", classic size" if int(w.get("layout", 1)) < VoxelWorld.LAYOUT_NEW else ""])
 	save_select.add_item("+ Create New World...")
 	save_select.select(0)
 	_on_save_selected(0)

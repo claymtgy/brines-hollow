@@ -47,6 +47,29 @@ static func make_sea_barrel(coord: Vector3i) -> ChestEntity:
 	return c
 
 
+## Barnacle-crusted chest found in cave grottos and caverns. Can't be picked up.
+## `loot` is filled once by the host when the world's caves are first stocked.
+static func make_barnacled(coord: Vector3i) -> ChestEntity:
+	var c := ChestEntity.new("Barnacled Chest", coord, 9)
+	c.entity_id = &"barnacled_chest"
+	c.style = &"chest"
+	c.sealed = true
+	return c
+
+
+## Loot for a cave chest: sea glass and copper in the tidal grottos, more iron in caverns.
+static func cave_loot(kind: int, rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"sea_glass", rng.randi_range(2, 5)], [&"copper_ore", rng.randi_range(3, 6)]]
+	if kind == 1:
+		out.append([&"sea_iron_ore", rng.randi_range(2, 4)])
+		if rng.randf() < 0.5:
+			out.append([&"iron_ingot", 1])
+	else:
+		if rng.randf() < 0.6:
+			out.append([&"sea_brass_ingot", 1])
+	return out
+
+
 ## Tar-sealed pantry barrel: holds any food and keeps shore rats out.
 static func make_pantry_barrel(coord: Vector3i) -> ChestEntity:
 	var c := ChestEntity.new("Sealed Pantry Barrel", coord, 16)

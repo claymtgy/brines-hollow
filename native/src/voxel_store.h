@@ -36,7 +36,14 @@ public:
 	static constexpr int PS = CS + 2;           // padded edge
 	static constexpr uint8_t CLEAR = 255;       // prefab marker: carve to air
 	static constexpr uint8_t BEDROCK = 1;
-	enum MatFlags { F_EMISSIVE = 1, F_FOLIAGE = 2 };
+	enum MatFlags { F_EMISSIVE = 1, F_FOLIAGE = 2, F_PLANT = 4, F_LEAFY = 8 };
+	// Plants (flowers, grass tufts) are drawn as small crossed sprites, not blocks: no
+	// collision, raycasts pass through them, and they don't hide neighbouring faces.
+	static inline bool is_plant(uint8_t m) { return m != 0 && m < pal_flags.size() && (pal_flags[m] & F_PLANT); }
+	static inline bool is_block(uint8_t m) { return m != 0 && !is_plant(m); }
+	// Leaf blocks are drawn with holes (terrain shader), so they don't hide the faces
+	// of whatever is next to them: you see branches and deeper leaves through a crown.
+	static inline bool is_leafy(uint8_t m) { return m != 0 && m < pal_flags.size() && (pal_flags[m] & F_LEAFY); }
 
 private:
 	Vector3i size = Vector3i(512, 128, 512);   // world bounds in voxels
@@ -132,7 +139,7 @@ public:
 	static Array mesh_grid(const PackedByteArray &data, const Vector3i &dims, float scale);
 	static Array build_mesh(const uint8_t *P, int px, int py, int pz, float scale, int wx, int wy, int wz);
 	// Greedy-merged faces; colour variation is left to the shader (vertex alpha = variation amount).
-	static Array build_mesh_greedy(const uint8_t *P, int px, int py, int pz, float scale);
+	static Array build_mesh_greedy(const uint8_t *P, int px, int py, int pz, float scale, int wx = 0, int wy = 0, int wz = 0);
 };
 
 } // namespace godot
