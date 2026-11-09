@@ -14,6 +14,14 @@ const ROSTER := [
 	["Elsie", DrifterDef.Profession.FARMER], ["Corwin", DrifterDef.Profession.SMOKER_CHEF],
 	["Wren", DrifterDef.Profession.LAMPLIGHTER], ["Hollis", DrifterDef.Profession.TRADER],
 ]
+## Castaways trapped in beached shipwrecks on the outer islands (big archipelago): pinned
+## under fallen timbers, so they can only be freed at low water. Recruited, they sail home
+## on their own once nobody is watching.
+const CASTAWAYS := [
+	["Ansel", DrifterDef.Profession.CARPENTER], ["Petra", DrifterDef.Profession.FISHER],
+	["Noll", DrifterDef.Profession.TRADER],
+]
+const VOYAGE_DIST := 160.0      # metres: farther than this from home, a villager sails rather than walks
 const INTERACT_RANGE := 2.6
 const STATE_HZ := 8.0
 const WATCH_RANGE := 90.0       # metres: farther than this from every player, NPCs skip walking
@@ -87,7 +95,54 @@ func _build_roster() -> void:
 		if not recruited:
 			_add_wreck_prop(npc)
 		npcs.append(npc)
+	_add_castaways()
 
+
+## Which wrecks hold a castaway: every other one, from the second nearest out.
+static func castaway_wrecks(wreck_count: int) -> Array:
+	var out: Array = []
+	for k in range(1, wreck_count, 2):
+		if out.size() < CASTAWAYS.size():
+			out.append(k)
+	if out.is_empty() and wreck_count > 0:
+		out.append(0)
+	return out
+
+
+## Where a castaway is pinned inside wreck record `w` (voxel cell, feet).
+static func castaway_cell(w: Dictionary) -> Vector3i:
+	var c: Vector3i = w.center
+	var al: Vector2i = w.get("along", Vector2i(absi((w.dir as Vector2i).y), absi((w.dir as Vector2i).x)))
+	var d: Vector2i = w.dir
+	return Vector3i(c.x - al.x * 6 - d.x, c.y + 1, c.z - al.y * 6 - d.y)
+
+
+func _add_castaways() -> void:
+	var gen: WorldGen = main.world.gen
+	var picks := castaway_wrecks(gen.wrecks.size())
+	for k in picks.size():
+		var w: Dictionary = gen.wrecks[picks[k]]
+		var i := npcs.size()
+		var id := StringName("castaway_%d" % k)
+		var def: DrifterDef = main.village.get_drifter(id)
+		var recruited := def != null
+		if def == null:
+			def = DrifterDef.new(id, CASTAWAYS[k][0], CASTAWAYS[k][1])
+		var npc := DrifterNPC.new()
+		npc.name = "Castaway%d" % k
+		npc.castaway = true
+		add_child(npc)
+		npc.setup(i, def, (Vector3(castaway_cell(w)) + Vector3(0.5, 0.0, 0.5)) * VS, gen.seed_value * 37 + k * 131)
+		npc.recruited = recruited
+		npc.refresh_label()
+		var d: Vector2i = w.dir
+		npc.facing = atan2(d.x, d.y)
+		npcs.append(npc)
+
+
+## Low water: below half tide a castaway's timbers are clear of the sea and can be shifted.
+func tide_low() -> bool:
+	return main.sky.water_level_m() < VoxelWorld.SEA_MID * VS
 
 ## Deterministic beach spot on the home island, roughly `radius` voxels from the hut.
 func _find_wreck_spot(hut: Vector3i, rng: RandomNumberGenerator, taken: Array, radius: int) -> Vector3i:
@@ -179,7 +234,63 @@ func _process(delta: float) -> void:
 		_refresh_npc_markers()
 
 
+var _cond_t := 0.0
+var _tier_bound: SettlementManager = null
+
+
+## Host: a Tide Hearth now holds the town's heart.
+func on_hearth_founded(first: bool) -> void:
+	if first:
+		_announce("%s is founded! The Tide Hearth marks the heart of your town." % main.village.settlement_name)
+	sync_village()
+
+
+func sync_village() -> void:
+	_sync_village()
+
+
+## Host: what the town has in store and how safe it is (for villager morale).
+func _measure_town() -> void:
+	var v: SettlementManager = main.village
+	var foods := {}
+	for s: ItemSlot in v.town_depot.inventory.slots:
+		if s != null and not s.is_empty():
+			var it: ItemDef = ItemDB.get_item(s.item_id)
+			if it != null and it.category == ItemDef.Category.FOOD:
+				foods[s.item_id] = true
+	var lights := 0
+	var bell := false
+	var r_vox := v.territory_radius_m / VS
+	if main.entities != null:
+		for ent: WorldEntity in main.entities.entities.values():
+			if Vector2(ent.grid_coord.x - v.hearth_pos.x, ent.grid_coord.z - v.hearth_pos.z).length() > r_vox:
+				continue
+			if ent is ChestEntity and ent.entity_id == &"pantry_barrel":
+				for s: ItemSlot in (ent as ChestEntity).container.inventory.slots:
+					if s != null and not s.is_empty():
+						var it: ItemDef = ItemDB.get_item(s.item_id)
+						if it != null and it.category == ItemDef.Category.FOOD:
+							foods[s.item_id] = true
+			elif ent.entity_id == &"village_bell":
+				bell = true
+			elif ent.emits_light():
+				lights += 1
+	v.food_kinds = foods.size()
+	v.safety = clampf(0.35 + 0.06 * lights + (0.25 if bell else 0.0), 0.0, 1.0)
+
+
 func _authority_tick(delta: float) -> void:
+	if _tier_bound != main.village:
+		_tier_bound = main.village
+		main.village.town_tier_upgraded.connect(func(t: int) -> void:
+			if t > 0:
+				_announce("%s has grown into a %s! The town's bounds reach %d m." % [main.village.settlement_name,
+					SettlementManager.TIER_NAMES[clampi(t, 0, 3)], int(main.village.territory_radius_m)])
+			_sync_village())
+	_cond_t -= delta
+	if _cond_t <= 0.0:
+		_cond_t = 5.0
+		_measure_town()
 	# Home scans: debounced after nearby edits, and when beds appear / move.
 	_bed_poll_t -= delta
 	if _bed_poll_t <= 0.0:
@@ -200,6 +311,12 @@ func _authority_tick(delta: float) -> void:
 		_route(npcs[_path_queue.pop_front()])
 	var watchers := _watch_points()
 	for npc in npcs:
+		if npc.voyage:
+			if not _watched(npc, watchers):
+				npc.voyage = false
+				npc.teleport_to_goal()
+				npc.refresh_label()
+			continue
 		npc.simulate(delta)
 		if not npc.path.is_empty() and not _watched(npc, watchers):
 			npc.teleport_to_goal()
@@ -258,9 +375,9 @@ func _choose_target(npc: DrifterNPC) -> void:
 			DrifterDef.Routine.WORK:
 				cell = _work_spot(npc)
 			DrifterDef.Routine.EAT:
-				cell = _entity_cell([&"hearth_pot", &"campfire"], main.village.hearth_pos) + Vector3i(npc.idx % 3 - 1, 0, 2)
+				cell = _entity_cell([&"tide_hearth", &"hearth_pot", &"campfire"], main.village.hearth_pos) + Vector3i(npc.idx % 3 - 1, 0, 2)
 			_:
-				var a := npc.idx * TAU / ROSTER.size()
+				var a := npc.idx * TAU / maxi(1, npcs.size())
 				cell = Vector3i(main.world.gen.spawn) + Vector3i(int(cos(a) * 6), 0, int(sin(a) * 6))
 		key = "%d@%s" % [r, cell]
 	if key == npc.target_key:
@@ -274,6 +391,12 @@ func _choose_target(npc: DrifterNPC) -> void:
 func _route(npc: DrifterNPC) -> void:
 	var goal: Vector3i = npc.get_meta("goal_cell", Vector3i((npc.position / VS).floor()))
 	var start := Vector3i((npc.position / VS).floor())
+	if Vector2(goal.x - start.x, goal.z - start.z).length() * VS > VOYAGE_DIST:
+		# Across the sea: no walking route. They sail home when nobody is looking.
+		npc.set_path([], (Vector3(goal) + Vector3(0.5, 0.0, 0.5)) * VS, npc.target_key)
+		npc.voyage = true
+		npc.refresh_label()
+		return
 	_ensure_between(start, goal)
 	if _pather._stand_memo.size() > 150000:
 		_pather.clear_cache()
@@ -482,6 +605,10 @@ func _update_prompt() -> void:
 	var key: String = main.controller.get_action_glyph(&"interact") if main.controller != null and main.controller.has_method("get_action_glyph") else "F"
 	if _prompt_npc.recruited:
 		main.hud.set_prompt("%s  Talk to %s" % [key, _prompt_npc.def.name])
+	elif _prompt_npc.castaway and not tide_low():
+		main.hud.set_prompt("%s is pinned under the timbers. Free them at low water." % _prompt_npc.def.name)
+	elif _prompt_npc.castaway:
+		main.hud.set_prompt("%s  Free %s the %s and offer a home in Brine's Hollow" % [key, _prompt_npc.def.name, _prompt_npc.profession_name()])
 	else:
 		main.hud.set_prompt("%s  Invite %s the %s to Brine's Hollow" % [key, _prompt_npc.def.name, _prompt_npc.profession_name()])
 
@@ -559,14 +686,23 @@ func _try_recruit(npc_idx: int, peer: int) -> void:
 			(main.remotes[peer].position if main.remotes.has(peer) else Vector3.INF)
 	if who.distance_to(npc.position) > INTERACT_RANGE + 3.0:
 		return
+	if npc.castaway and not tide_low():
+		_tell(peer, "The sea is still over the timbers pinning %s. Come back at low water." % npc.def.name)
+		return
 	if main.village.get_vacant_room_id() < 0:
-		_tell(peer, "%s says: \"I'd come, but I need a home - a roofed room with a bed, a light and a doorway.\"" % npc.def.name)
+		if npc.castaway:
+			_tell(peer, "%s says: \"Thank you! But where would I live? Build a roofed room with a bed, a light and a doorway, then come back for me.\"" % npc.def.name)
+		else:
+			_tell(peer, "%s says: \"I'd come, but I need a home - a roofed room with a bed, a light and a doorway.\"" % npc.def.name)
 		return
 	main.village.recruit_drifter(npc.def)
 	_set_recruited(npc_idx)
 	if main.is_net and main.multiplayer.multiplayer_peer != null:
 		npc_recruited.rpc(npc_idx)
-	_announce("%s the %s joined Brine's Hollow!" % [npc.def.name, npc.profession_name()])
+	if npc.castaway:
+		_announce("You freed %s the %s from the wreck! They'll patch a boat and sail for Brine's Hollow." % [npc.def.name, npc.profession_name()])
+	else:
+		_announce("%s the %s joined Brine's Hollow!" % [npc.def.name, npc.profession_name()])
 	_sync_village()
 
 

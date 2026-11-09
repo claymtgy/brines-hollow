@@ -39,6 +39,9 @@ var starter := {}
 ## [{island, center, front, side, cottages: [{origin, door}], dock_end, field, spots: {role: Vector3}}]
 ## Positions are in voxel units (feet height for spots and doors).
 var villages: Array = []
+## Mud-Claw camps on the outer islands (big archipelago only; see plan_camps), voxel units:
+## [{island, center: Vector3 (feet), chest: Vector3i, gate: Vector2, domes: [Vector3 feet]}]
+var camps: Array = []
 
 
 ## `layout` holds the native layout parameters (VoxelWorld.layout_params); empty = layout 1.
@@ -185,6 +188,7 @@ func plan_starter() -> void:
 	# Boat entity (spawned by the boat system): near the dock end, bow toward open water.
 	boat_spawns = [_find_mooring(dock_o, d, side)]
 	starter = {"hut": origin, "hut_r": hut_r, "front": d, "side": side, "dock_o": dock_o, "dock_y": sea_high + 3}
+	_place_lighthouse(Vector2i(best.x, best.z), d, side, dock_o, rack, lamp)
 	var sp := Vector2i(best.x, best.z) + d * 24
 	spawn_yaw = atan2(float(d.x), float(d.y))
 	spawn = Vector3(sp.x + 0.5, col_h(sp.x, sp.y) + 2, sp.y + 0.5)
@@ -383,6 +387,145 @@ func plan_villages(max_villages := 3) -> void:
 	print("[gen] %d NPC villages planned" % villages.size())
 
 
+## A lighthouse on the coast near the starter hut: on the highest open spot close to the
+## water, clear of the hut, pier and yard. Its footprint stays inside one 32-voxel terrain
+## column, so a column the player has already built in (which keeps its saved voxels) either
+## has the whole lighthouse or none of it. Sets starter.lighthouse (the lantern, in voxels).
+const LH_R := 7          # footprint half-width (15 x 15 plinth)
+const LH_H := 80         # plinth to the weather vane (~14 m)
+const LH_LAMP_Y := 68    # lantern room centre, above the base
+
+
+func _place_lighthouse(hut: Vector2i, d: Vector2i, side: Vector2i, dock_o: Vector2i, rack: Vector2i, lamp: Vector2i) -> void:
+	var avoid: Array = [[hut, 30], [rack, 14], [lamp, 12], [hut + d * 24, 12]]
+	for k in range(-4, 36, 4):
+		avoid.append([dock_o + d * k, 14])
+	var best := _lighthouse_search(hut, avoid, 170, 7, 28, sea_high + 1)
+	if best.is_empty():
+		# Small or steep home islands (the classic map): look further and accept rougher
+		# ground; a rubble foundation fills in under the plinth.
+		best = _lighthouse_search(hut, avoid, 260, 16, 44, sea_high - 1)
+	if best.is_empty():
+		print("[gen] no lighthouse site near the hut")
+		return
+	var c: Vector2i = best.c
+	if int(best.y) - int(best.lo) > 1:
+		var fh: int = int(best.y) - int(best.lo) + 1
+		var fg := Prefabs.Grid.new(LH_R * 2 + 1, fh, LH_R * 2 + 1)
+		for z in LH_R * 2 + 1:
+			for x in LH_R * 2 + 1:
+				for y in fh:
+					fg.setv(x, y, z, Palette.COBBLE if (x + y + z) % 3 != 0 else Palette.STONE)
+		native.add_stamp(fg.data, Vector3i(LH_R * 2 + 1, fh, LH_R * 2 + 1), Vector3i(c.x - LH_R, int(best.lo) - 1, c.y - LH_R), 1)
+	var base := Vector3i(c.x - LH_R, int(best.y), c.y - LH_R)
+	var toward := Vector2(hut - c).normalized()
+	native.add_stamp(_lighthouse_grid(toward), Vector3i(LH_R * 2 + 1, LH_H, LH_R * 2 + 1), base, 1)
+	var lantern := base + Vector3i(LH_R, LH_LAMP_Y, LH_R)
+	stamp_lights.append(lantern)
+	starter["lighthouse"] = lantern
+	print("[gen] lighthouse at %s (%.0f m from the hut)" % [lantern, Vector2(c - hut).length() * 0.18])
+
+
+func _lighthouse_search(hut: Vector2i, avoid: Array, max_r: int, rough: int, max_coast: int, min_lo: int) -> Dictionary:
+	var best := {}
+	for r in range(40, max_r, 6):
+		for k in 48:
+			var a := TAU * k / 48.0
+			var c := hut + Vector2i(roundi(cos(a) * r), roundi(sin(a) * r))
+			# keep the whole footprint inside one terrain column
+			var lx := posmod(c.x, 32)
+			var lz := posmod(c.y, 32)
+			c += Vector2i(clampi(lx, LH_R + 1, 30 - LH_R) - lx, clampi(lz, LH_R + 1, 30 - LH_R) - lz)
+			var bad := false
+			for av: Array in avoid:
+				if Vector2(c - (av[0] as Vector2i)).length() < float(av[1]):
+					bad = true
+					break
+			if bad or _near_cave(c.x, c.y):
+				continue
+			var lo := 999
+			var hi := -999
+			for dz in range(-LH_R, LH_R + 1, 2):
+				for dx in range(-LH_R, LH_R + 1, 2):
+					var h := col_h(c.x + dx, c.y + dz)
+					lo = mini(lo, h)
+					hi = maxi(hi, h)
+			if lo < min_lo or hi - lo > rough or hi > sea_high + 45:
+				continue
+			# on the coast: open water within ~5 m
+			var coast := 99
+			for j in 16:
+				var dir := Vector2(cos(TAU * j / 16.0), sin(TAU * j / 16.0))
+				for t in range(LH_R + 2, 30, 2):
+					var q := c + Vector2i(roundi(dir.x * t), roundi(dir.y * t))
+					if col_h(q.x, q.y) < sea_low:
+						coast = mini(coast, t)
+						break
+			if coast > max_coast:
+				continue
+			var score := float(hi) * 1.0 - float(coast) * 0.4 - float(r) * 0.05 - float(hi - lo) * 0.5
+			if best.is_empty() or score > best.score:
+				best = {"c": c, "y": hi + 1, "lo": lo, "score": score}
+	return best
+
+
+## Whitewashed round tower with red bands, a door facing the hut, a gallery, a glazed
+## lantern room with the light, and a red cap.
+static func _lighthouse_grid(door_dir: Vector2) -> PackedByteArray:
+	var n := LH_R * 2 + 1
+	var g := Prefabs.Grid.new(n, LH_H, n)
+	var cx := LH_R
+	g.box(0, 0, 0, n - 1, 2, n - 1, Palette.COBBLE)                       # plinth
+	var top := LH_LAMP_Y - 5                                               # gallery floor
+	for y in range(3, top):
+		var t := float(y - 3) / float(top - 3)
+		var ro := lerpf(5.6, 3.9, t)
+		var band := ((y - 3) / 9) % 2 == 1
+		for z in n:
+			for x in n:
+				var dd := Vector2(x - cx, z - cx).length()
+				if dd <= ro and dd > ro - 1.3:
+					g.setv(x, y, z, Palette.ROOF_RED if band else Palette.WHITEWASH)
+				elif dd <= ro - 1.3:
+					g.setv(x, y, z, Palette.CLEAR)                     # hollow inside
+	# door facing the hut, and a few small windows up the tower
+	var dx := roundi(door_dir.x * 5.0)
+	var dz := roundi(door_dir.y * 5.0)
+	for y in range(3, 3 + 13):
+		for w in range(-2, 3):
+			var px := cx + dx + (w if absi(dz) >= absi(dx) else 0)
+			var pz := cx + dz + (w if absi(dx) > absi(dz) else 0)
+			g.setv(px, y, pz, Palette.CLEAR)
+			g.setv(cx + roundi(door_dir.x * 4.0) + (w if absi(dz) >= absi(dx) else 0), y, cx + roundi(door_dir.y * 4.0) + (w if absi(dx) > absi(dz) else 0), Palette.CLEAR)
+	for wy in [24, 40, 54]:
+		g.setv(cx - roundi(door_dir.x * 4.6), wy, cx - roundi(door_dir.y * 4.6), Palette.SHUTTER)
+	# gallery: a wooden deck all round with a metal rail
+	for z in n:
+		for x in n:
+			var dd := Vector2(x - cx, z - cx).length()
+			if dd <= 6.6:
+				g.setv(x, top, z, Palette.DARK_WOOD)
+			if dd <= 6.6 and dd > 5.7:
+				g.setv(x, top + 1, z, Palette.METAL)
+				if (x + z) % 2 == 0:
+					g.setv(x, top + 2, z, Palette.METAL)
+	# lantern room: corner posts, the great lamp, a red cap and a vane
+	for y in range(top + 1, LH_LAMP_Y + 5):
+		for p: Vector2i in [Vector2i(-3, -3), Vector2i(3, -3), Vector2i(-3, 3), Vector2i(3, 3)]:
+			g.setv(cx + p.x, y, cx + p.y, Palette.DARK_WOOD)
+	g.box(cx - 1, LH_LAMP_Y - 2, cx - 1, cx + 1, LH_LAMP_Y + 2, cx + 1, Palette.LANTERN)
+	g.box(cx - 2, top + 1, cx - 2, cx + 2, top + 2, cx + 2, Palette.METAL)  # lamp pedestal
+	for y in range(LH_LAMP_Y + 5, LH_H - 3):
+		var rr := 4.6 * (1.0 - float(y - (LH_LAMP_Y + 5)) / float(LH_H - 3 - (LH_LAMP_Y + 5)))
+		for z in n:
+			for x in n:
+				if Vector2(x - cx, z - cx).length() <= rr + 0.3:
+					g.setv(x, y, z, Palette.ROOF_RED)
+	g.box(cx, LH_H - 3, cx, cx, LH_H - 1, cx, Palette.METAL)
+	g.setv(cx + 1, LH_H - 2, cx, Palette.METAL)
+	return g.data
+
+
 func _find_village_site(rng: RandomNumberGenerator, isl: Dictionary) -> Dictionary:
 	var hc: Vector2 = isl.center
 	var hr: float = isl.radius
@@ -513,3 +656,950 @@ func _build_village(site: Dictionary, island_idx: int) -> Dictionary:
 	return {"island": island_idx, "center": _feet(c + d * 24), "front": d, "side": side,
 		"cottages": homes, "dock_end": dock_end, "field": field, "spots": spots}
 
+
+
+# ---------------------------------------------------------------- Mud-Claw camps
+
+const CAMP_R := 34              # palisade radius (voxels, ~6 m)
+const CAMP_H := 30              # stamp height: floor + the carved space above it
+const CAMP_MIN_HOME := 1670     # ~300 m: never this close to the starter hut
+const CAMP_MIN_VILLAGE := 420   # ~75 m from any NPC village
+
+
+## Plan up to `max_camps` Mud-Claw camps: a driftwood palisade round three mud domes, a
+## shell totem and a firepit, on a flat patch near the shore of an outer island. Never on
+## the home island and never within CAMP_MIN_HOME of the starter hut. Pure function of the
+## seed (every peer plans the same camps). Call after plan_villages, before any chunk.
+func plan_camps(max_camps := 4) -> void:
+	camps.clear()
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 104729 + 23
+	var village_islands := {}
+	for v: Dictionary in villages:
+		village_islands[int(v.island)] = true
+	var order: Array = []
+	for i in islands.size():
+		if i == 0 or int(islands[i].type) == 0 or village_islands.has(i):
+			continue
+		var c: Vector2 = islands[i].center
+		if c.distance_to(hut) < CAMP_MIN_HOME:
+			continue
+		order.append(i)
+	# nearest first, so the first camp a player meets is a sail away rather than across the map
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return (islands[a].center as Vector2).distance_to(hut) < (islands[b].center as Vector2).distance_to(hut))
+	for i: int in order:
+		if camps.size() >= max_camps:
+			break
+		var site := _find_camp_site(rng, i, hut)
+		if site.is_empty():
+			continue
+		camps.append(_build_camp(site, i, rng))
+	print("[gen] %d Mud-Claw camps planned" % camps.size())
+
+
+func _find_camp_site(rng: RandomNumberGenerator, island_idx: int, hut: Vector2) -> Dictionary:
+	var isl: Dictionary = islands[island_idx]
+	var hc: Vector2 = isl.center
+	var hr: float = isl.radius
+	var best := {}
+	for attempt in 700:
+		var ang := rng.randf() * TAU
+		var rad := rng.randf_range(0.15, 0.7) * hr
+		var x := int(hc.x + cos(ang) * rad)
+		var z := int(hc.y + sin(ang) * rad)
+		if Vector2(x, z).distance_to(hut) < CAMP_MIN_HOME + CAMP_R:
+			continue
+		var h := col_h(x, z)
+		if h < sea_high + 2 or h > sea_high + 40:
+			continue
+		var k0 := col_k(x, z)
+		if not is_grassy(k0) and k0 != Kind.BEACH:
+			continue
+		if _near_cave(x, z):
+			continue
+		var near_village := false
+		for v: Dictionary in villages:
+			if Vector2(v.center.x, v.center.z).distance_to(Vector2(x, z)) < CAMP_MIN_VILLAGE:
+				near_village = true
+		if near_village:
+			continue
+		var lo := 999
+		var hi := -999
+		var ok := true
+		for dz in range(-CAMP_R, CAMP_R + 1, 6):
+			for dx in range(-CAMP_R, CAMP_R + 1, 6):
+				if dx * dx + dz * dz > CAMP_R * CAMP_R:
+					continue
+				var hh := col_h(x + dx, z + dz)
+				lo = mini(lo, hh)
+				hi = maxi(hi, hh)
+				if hi - lo > 6:
+					ok = false
+					break
+			if not ok:
+				break
+		if not ok or lo < sea_high + 1:
+			continue
+		# the gate faces the nearest shore
+		for k in 8:
+			var a := TAU * k / 8.0
+			var dir := Vector2(cos(a), sin(a))
+			for s in range(CAMP_R, CAMP_R + 110, 3):
+				var p := Vector2(x, z) + dir * s
+				if col_h(int(p.x), int(p.y)) < sea_low:
+					var score := float(s) * 0.2 + (hi - lo) * 3.0
+					if best.is_empty() or score < best.score:
+						best = {"x": x, "z": z, "y": int(round((lo + hi) * 0.5)), "gate": dir, "score": score}
+					break
+		if not best.is_empty() and best.score < 12.0:
+			break
+	return best
+
+
+func _build_camp(site: Dictionary, island_idx: int, rng: RandomNumberGenerator) -> Dictionary:
+	var c := Vector2i(site.x, site.z)
+	var fy: int = site.y
+	var g: Vector2 = site.gate
+	var n := CAMP_R * 2 + 5
+	var o := CAMP_R + 2                       # grid centre
+	var grid := Prefabs.Grid.new(n, CAMP_H, n)
+	var ga := atan2(g.y, g.x)
+	# trampled mud floor, carved clear above (bumps, grass and bushes go)
+	for z in n:
+		for x in n:
+			var dd := Vector2(x - o, z - o).length()
+			if dd > CAMP_R + 1.5:
+				continue
+			var mud := Palette.WET_SAND if (hash(Vector2i(x, z) + c) & 7) < 3 else Palette.DIRT
+			if dd > CAMP_R - 3 and (hash(Vector2i(z, x) + c) & 3) == 0:
+				mud = Palette.GRAVEL
+			grid.setv(x, 0, z, mud)
+			for y in range(1, CAMP_H):
+				grid.setv(x, y, z, Palette.CLEAR)
+	# driftwood palisade with a gate towards the shore and a couple of broken gaps
+	for z in n:
+		for x in n:
+			var v := Vector2(x - o, z - o)
+			var dd := v.length()
+			if dd < CAMP_R - 0.8 or dd > CAMP_R + 0.8:
+				continue
+			var a := atan2(v.y, v.x)
+			if absf(angle_difference(a, ga)) < 0.12:
+				continue                                  # the gate
+			var post := int(floor((a + PI) * CAMP_R / 1.7))
+			var ph := 9 + posmod(hash(post * 31 + c.x), 6)
+			if posmod(hash(post * 17 + c.y), 23) == 0:
+				ph = 3                                    # a broken stake
+			var wood := Palette.TRUNK if posmod(hash(post * 7 + c.x * 3), 3) != 0 else Palette.DRIFTWOOD
+			for y in range(1, ph + 1):
+				grid.setv(x, y, z, wood)
+			grid.setv(x, 5, z, Palette.DARK_WOOD)         # lashing
+			if ph > 6 and post % 2 == 0:
+				grid.setv(x, ph + 1, z, Palette.SANDSTONE_B)   # a pale point
+	# gate posts: taller, capped with shells
+	for side: int in [-1, 1]:
+		var a := ga + 0.14 * side
+		var px := o + roundi(cos(a) * CAMP_R)
+		var pz := o + roundi(sin(a) * CAMP_R)
+		for y in range(1, 15):
+			grid.setv(px, y, pz, Palette.DARK_WOOD)
+		grid.setv(px, 15, pz, Palette.SANDSTONE_C)
+		grid.setv(px, 16, pz, Palette.BUOY)
+	# three mud domes round the back, doors facing the middle
+	var domes: Array = []
+	for k: int in [-1, 0, 1]:
+		var a := ga + PI + 0.95 * k
+		var dc := Vector2(cos(a), sin(a)) * (CAMP_R - 12)
+		var cx := o + roundi(dc.x)
+		var cz := o + roundi(dc.y)
+		var rad := 7.5 if k == 0 else 6.5
+		var into := -dc.normalized()
+		for z in range(cz - 9, cz + 10):
+			for x in range(cx - 9, cx + 10):
+				for y in range(1, 10):
+					var e := Vector3(x - cx, (y - 1) / 0.8, z - cz).length()
+					if e > rad:
+						continue
+					var dv := Vector2(x - cx, z - cz)
+					var door := y <= 4 and dv.length() > 0.1 and dv.normalized().dot(into) > 0.82
+					if e > rad - 1.4 and not door:
+						var m := Palette.DIRT
+						if y % 3 == 0:
+							m = Palette.WET_SAND
+						elif posmod(hash(Vector3i(x, y, z) + Vector3i(c.x, 0, c.y)), 11) == 0:
+							m = Palette.KELP          # weed thatch
+						grid.setv(x, y, z, m)
+		domes.append(Vector3(c.x + cx - o + 0.5, fy + 1, c.y + cz - o + 0.5))
+	# the shell totem behind the chest: banded shell, two raised claws, glowing eyes
+	var tv := -g * 12.0
+	var tx := o + roundi(tv.x)
+	var tz := o + roundi(tv.y)
+	var bands := [Palette.SANDSTONE_C, Palette.BUOY, Palette.ROOF_RED, Palette.SANDSTONE_C]
+	for y in range(1, 17):
+		for dz in 2:
+			for dx in 2:
+				grid.setv(tx + dx, y, tz + dz, bands[(y / 3) % bands.size()])
+	var side := Vector2(-g.y, g.x)
+	for s: int in [-1, 1]:
+		for t in 5:
+			var sx := tx + roundi(side.x * s * (2 + t * 0.5))
+			var sz := tz + roundi(side.y * s * (2 + t * 0.5))
+			grid.setv(sx, 13 + t, sz, Palette.ROOF_RED)
+		grid.setv(tx + roundi(side.x * s * 3.0 + g.x), 18, tz + roundi(side.y * s * 3.0 + g.y), Palette.BUOY)
+	grid.setv(tx + roundi(g.x * 1.6), 12, tz + roundi(g.y * 1.6), Palette.GLOW_TEAL)
+	grid.setv(tx + 1 + roundi(g.x * 1.6), 12, tz + 1 + roundi(g.y * 1.6), Palette.GLOW_TEAL)
+	# firepit towards the gate: a cobble ring round smouldering embers and charred logs
+	var fv := g * 9.0
+	var fx := o + roundi(fv.x)
+	var fz := o + roundi(fv.y)
+	for z in range(fz - 3, fz + 4):
+		for x in range(fx - 3, fx + 4):
+			var dd := Vector2(x - fx, z - fz).length()
+			if dd <= 3.2 and dd > 2.1:
+				grid.setv(x, 1, z, Palette.COBBLE)
+			elif dd <= 1.2:
+				grid.setv(x, 1, z, Palette.LANTERN)
+	grid.setv(fx - 1, 2, fz, Palette.DARK_WOOD)
+	grid.setv(fx + 1, 2, fz, Palette.DARK_WOOD)
+	grid.setv(fx, 2, fz - 1, Palette.DARK_WOOD)
+	# shell middens: what the claws pick off the reef
+	for k in 26:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(6.0, CAMP_R - 3.0)
+		var mx := o + roundi(cos(a) * r)
+		var mz := o + roundi(sin(a) * r)
+		if grid.getv(mx, 1, mz) == Palette.CLEAR:
+			grid.setv(mx, 1, mz, [Palette.SANDSTONE_C, Palette.BUOY, Palette.SANDSTONE_B][k % 3])
+	var base := Vector3i(c.x - o, fy, c.y - o)
+	native.add_stamp(grid.data, Vector3i(n, CAMP_H, n), base, 1)
+	if native.has_method("add_tree_clear"):
+		native.add_tree_clear(c.x, c.y, CAMP_R + 14)   # no half-carved trees: crowns reach ~12
+	var cv := -g * 6.0
+	var chest := Vector3i(c.x + roundi(cv.x), fy + 1, c.y + roundi(cv.y))
+	return {"island": island_idx, "center": Vector3(c.x + 0.5, fy + 1, c.y + 0.5), "chest": chest,
+		"gate": g, "domes": domes}
+
+
+# ---------------------------------------------------------------- brass mines, sumps, springs
+
+const MINE_GR := 11            # gallery radius (voxels)
+const MINE_TW := 3             # adit half-width
+const MINE_TH := 12            # adit height to the lintel (11 clear: the player is 9)
+## Old brass mines: [{island, entrance: Vector3 (feet), dir: Vector2i, gallery: Vector3i, chest: Vector3i}]
+var mines: Array = []
+## Flooded sumps under karst caverns: [{top: Vector3i, chest: Vector3i, depth: int}]
+var sumps: Array = []
+## Freshwater springs on karst cavern floors (voxel positions)
+var springs: Array = []
+
+
+## Plan the rest of the underground (big archipelago): up to three abandoned brass mines
+## driven into hillsides on the outer islands (timbered adits, a gallery crusted with
+## calamine and copper), and for each karst cavern a flooded sump below its floor (a shaft
+## and a drowned passage to a chamber with a cache) and a freshwater spring. Pure function
+## of the seed. Never on the home island. Call after plan_camps, before any chunk.
+func plan_underground(max_mines := 3) -> void:
+	mines.clear()
+	sumps.clear()
+	springs.clear()
+	if starter.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 15485863 + 41
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var avoid: Array = []
+	for v: Dictionary in villages:
+		avoid.append([Vector2(v.center.x, v.center.z), 300.0])
+	for c: Dictionary in camps:
+		avoid.append([Vector2(c.center.x, c.center.z), 200.0])
+	var order: Array = []
+	for i in islands.size():
+		if i != 0 and int(islands[i].type) == 1:
+			order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return (islands[a].center as Vector2).distance_to(hut) < (islands[b].center as Vector2).distance_to(hut))
+	for i: int in order:
+		if mines.size() >= max_mines:
+			break
+		var site := _find_mine_site(rng, i, avoid)
+		if not site.is_empty():
+			mines.append(_build_mine(site, i))
+			avoid.append([Vector2(site.x, site.z), 160.0])
+	for s: Dictionary in cave_sites():
+		if int(s.kind) != 1:
+			continue
+		var sp := _plan_sump(rng, s.pos)
+		if not sp.is_empty():
+			sumps.append(sp)
+	print("[gen] %d brass mines, %d flooded sumps, %d springs planned" % [mines.size(), sumps.size(), springs.size()])
+
+
+func _find_mine_site(rng: RandomNumberGenerator, island_idx: int, avoid: Array) -> Dictionary:
+	var isl: Dictionary = islands[island_idx]
+	var hc: Vector2 = isl.center
+	var hr: float = isl.radius
+	for attempt in 900:
+		var ang := rng.randf() * TAU
+		var rad := rng.randf_range(0.2, 0.85) * hr
+		var x := int(hc.x + cos(ang) * rad)
+		var z := int(hc.y + sin(ang) * rad)
+		var h0 := col_h(x, z)
+		if h0 < sea_high + 3 or h0 > sea_high + 70:
+			continue
+		var bad := false
+		for av: Array in avoid:
+			if Vector2(x, z).distance_to(av[0]) < float(av[1]):
+				bad = true
+		if bad:
+			continue
+		var d0 := rng.randi_range(0, 3)
+		for k in 4:
+			var d: Vector2i = _DIRS4[(d0 + k) % 4]
+			var p := Vector2i(x, z)
+			# an open hillside face in front of the adit...
+			if col_h(p.x - d.x * 4, p.y - d.y * 4) > h0 + 1 or col_h(p.x - d.x * 8, p.y - d.y * 8) > h0 + 2:
+				continue
+			# ...and a hill to drive into: rock over the adit, more over the gallery
+			var length := -1
+			for L in range(30, 64, 4):
+				var ok := true
+				for s in range(14, L + 1, 4):
+					var q := p + d * s
+					if col_h(q.x, q.y) < h0 + MINE_TH + 4 or _near_cave(q.x, q.y):
+						ok = false
+						break
+				if not ok:
+					break
+				var g := p + d * (L + MINE_GR)
+				var roof := true
+				for t in 9:
+					var a := TAU * t / 8.0
+					var rr := 0.0 if t == 8 else float(MINE_GR + 2)
+					var q := g + Vector2i(roundi(cos(a) * rr), roundi(sin(a) * rr))
+					if col_h(q.x, q.y) < h0 + 22 or _near_cave(q.x, q.y):
+						roof = false
+						break
+				if roof:
+					length = L
+					break
+			if length > 0:
+				return {"x": x, "z": z, "y": h0, "dir": d, "len": length}
+	return {}
+
+
+func _build_mine(site: Dictionary, island_idx: int) -> Dictionary:
+	var d: Vector2i = site.dir
+	var perp := Vector2i(absi(d.y), absi(d.x))
+	var L: int = site.len
+	var W := MINE_GR * 2 + 5
+	var c := W / 2
+	var Lt := L + MINE_GR * 2 + 3
+	var H := MINE_GR + 9
+	var e := Vector2i(site.x, site.z)
+	var h0: int = site.y
+	var sx := Lt if d.x != 0 else W
+	var sz := W if d.x != 0 else Lt
+	var minx := e.x + mini(0, d.x * (Lt - 1)) - perp.x * c
+	var minz := e.y + mini(0, d.y * (Lt - 1)) - perp.y * c
+	var grid := Prefabs.Grid.new(sx, H, sz)
+	var put := func(u: int, y: int, v: int, m: int) -> void:
+		grid.setv(e.x + d.x * v + perp.x * (u - c) - minx, y, e.y + d.y * v + perp.y * (u - c) - minz, m)
+	# the adit: square-cut, gravel floor with two rail lines, a timber frame every 6
+	for v in range(0, L + 2):
+		for u in range(c - MINE_TW, c + MINE_TW + 1):
+			put.call(u, 0, v, Palette.DARK_WOOD if absi(u - c) == 2 else Palette.GRAVEL)
+			for y in range(1, MINE_TH + 1):
+				put.call(u, y, v, Palette.CLEAR)
+		if v % 6 == 1:
+			for y in range(1, MINE_TH + 1):
+				put.call(c - MINE_TW, y, v, Palette.DARK_WOOD)
+				put.call(c + MINE_TW, y, v, Palette.DARK_WOOD)
+			for u in range(c - MINE_TW, c + MINE_TW + 1):
+				put.call(u, MINE_TH, v, Palette.DARK_WOOD)
+			if v % 12 == 7:
+				put.call(c, MINE_TH - 1, v, Palette.LANTERN)
+	# the portal: heavier timbers and a lintel
+	for y in range(1, MINE_TH + 3):
+		put.call(c - MINE_TW - 1, y, 0, Palette.TRUNK)
+		put.call(c + MINE_TW + 1, y, 0, Palette.TRUNK)
+	for u in range(c - MINE_TW - 2, c + MINE_TW + 3):
+		put.call(u, MINE_TH + 1, 0, Palette.TRUNK)
+		put.call(u, MINE_TH + 2, 0, Palette.DARK_WOOD)
+	# the gallery: a domed chamber, its walls crusted with calamine and copper
+	var gv := L + MINE_GR + 1
+	for v in range(gv - MINE_GR - 2, gv + MINE_GR + 3):
+		for u in range(0, W):
+			for y in range(0, H):
+				var ell := Vector3(u - c, (y - 1) * 0.75, v - gv).length()
+				if ell <= MINE_GR and y >= 1:
+					put.call(u, y, v, Palette.CLEAR)
+				elif y == 0 and Vector2(u - c, v - gv).length() <= MINE_GR:
+					put.call(u, y, v, Palette.GRAVEL)
+				elif ell <= MINE_GR + 1.6 and y >= 1:
+					var hv := posmod(hash(Vector3i(u, y, v) + Vector3i(e.x, h0, e.y)), 100)
+					if hv < 24:
+						put.call(u, y, v, Palette.CALAMINE)
+					elif hv < 40:
+						put.call(u, y, v, Palette.COPPER_VEIN)
+	# pit props, lamps, and an ore cart left half full
+	for pp: Vector2i in [Vector2i(-5, -4), Vector2i(5, -4), Vector2i(-5, 5), Vector2i(5, 5)]:
+		for y in range(1, 16):
+			put.call(c + pp.x, y, gv + pp.y, Palette.DARK_WOOD)
+		put.call(c + pp.x, 11, gv + pp.y + (1 if pp.y < 0 else -1), Palette.LANTERN)
+	for u in range(c - 2, c + 3):
+		for v in range(gv - MINE_GR + 2, gv - MINE_GR + 6):
+			put.call(u, 1, v, Palette.METAL if absi(u - c) == 2 else Palette.DARK_WOOD)
+			var rim := absi(u - c) == 2 or v == gv - MINE_GR + 2 or v == gv - MINE_GR + 5
+			put.call(u, 2, v, Palette.DARK_WOOD if rim else Palette.CALAMINE)
+	native.add_stamp(grid.data, Vector3i(sx, H, sz), Vector3i(minx, h0, minz), 0)
+	if native.has_method("add_tree_clear"):
+		native.add_tree_clear(e.x - d.x * 16, e.y - d.y * 16, 34)   # keep the approach to the portal clear
+	var g2 := e + d * gv
+	var chest := Vector3i(g2.x + perp.x * 4 + d.x * 6, h0 + 1, g2.y + perp.y * 4 + d.y * 6)
+	return {"island": island_idx, "entrance": Vector3(e.x + 0.5, h0 + 1, e.y + 0.5), "dir": d,
+		"gallery": Vector3i(g2.x, h0 + 1, g2.y), "chest": chest}
+
+
+## Below a karst cavern's first chamber: a shaft down past the lowest tide, a drowned passage,
+## and a flooded chamber with a cache. Also notes a spring on the cavern floor.
+func _plan_sump(rng: RandomNumberGenerator, site: Vector3i) -> Dictionary:
+	var floor_y := sea_high + 3
+	var a := rng.randf() * TAU
+	var dir := Vector2(cos(a), sin(a))
+	var shaft := Vector2(site.x, site.z) + dir * 6.0
+	var bot := sea_low - 12
+	var pass_len := 14.0
+	var ch := shaft + dir * (pass_len + 7.0)
+	springs.append(Vector3i(roundi(site.x - dir.x * 9.0), site.y, roundi(site.z - dir.y * 9.0)))
+	# buried deep enough the whole way (no breaking out into the sea)
+	for t in 12:
+		var q := shaft.lerp(ch + dir * 8.0, t / 11.0)
+		if col_h(int(q.x), int(q.y)) < sea_high + 8:
+			return {}
+	var lo := Vector2i(int(minf(shaft.x, ch.x)) - 10, int(minf(shaft.y, ch.y)) - 10)
+	var hi := Vector2i(int(maxf(shaft.x, ch.x)) + 11, int(maxf(shaft.y, ch.y)) + 11)
+	var y0 := bot - 7
+	var y1 := floor_y + 2
+	var g := Prefabs.Grid.new(hi.x - lo.x, y1 - y0, hi.y - lo.y)
+	for z in g.sz:
+		for x in g.sx:
+			var w := Vector2(lo.x + x + 0.5, lo.y + z + 0.5)
+			var ds := w.distance_to(shaft)
+			var t := clampf((w - shaft).dot(dir) / pass_len, 0.0, 1.0)
+			var dp := w.distance_to(shaft + dir * pass_len * t)
+			for y in g.sy:
+				var wy := y0 + y
+				var carve := false
+				if ds <= 3.2 and wy >= bot and wy <= floor_y:
+					carve = true
+				elif dp <= 3.4 and absf(wy - (bot + 3)) <= 5.5:
+					carve = true
+				else:
+					var el := Vector3(w.x - ch.x, (wy - (bot + 3)) / 0.85, w.y - ch.y).length()
+					if el <= 8.0 and wy > bot - 3:
+						carve = true
+					elif el <= 9.0 and wy < floor_y - 4:
+						var hv := posmod(hash(Vector3i(lo.x + x, wy, lo.y + z)), 100)
+						if hv < 7:
+							g.setv(x, y, z, Palette.GLOW_TEAL)
+						elif wy <= bot - 2 and hv < 60:
+							g.setv(x, y, z, Palette.GRAVEL)
+				if carve:
+					g.setv(x, y, z, Palette.CLEAR)
+	native.add_stamp(g.data, Vector3i(g.sx, g.sy, g.sz), Vector3i(lo.x, y0, lo.y), 0)
+	return {"top": Vector3i(roundi(shaft.x), floor_y, roundi(shaft.y)),
+		"chest": Vector3i(roundi(ch.x), bot - 1, roundi(ch.y)), "depth": floor_y - (bot - 2)}
+
+
+# ---------------------------------------------------------------- shipwrecks
+
+const WRECK_L := 44            # hull length (voxels, ~7.9 m)
+const WRECK_B := 8             # half-beam
+const WRECK_D := 11            # keel to gunwale
+const WRECK_MIN_HOME := 420    # ~75 m: never on the doorstep, but one may lie down the home coast
+## Beached wrecks: [{island, center: Vector3i, dir: Vector2i (toward the sea), chest: Vector3i}]
+var wrecks: Array = []
+
+
+## Plan the beached shipwrecks (big archipelago): up to `max_wrecks` broken hulls heeled over
+## on the tideline of different islands, each with a locker of salvage and a rare recipe
+## scroll. Pure function of the seed. Call after plan_underground, before any chunk.
+func plan_wrecks(max_wrecks := 6) -> void:
+	wrecks.clear()
+	if starter.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 7919 + 97
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var avoid: Array = [[hut, float(WRECK_MIN_HOME)]]
+	for v: Dictionary in villages:
+		avoid.append([Vector2(v.center.x, v.center.z), 160.0])
+	for c: Dictionary in camps:
+		avoid.append([Vector2(c.center.x, c.center.z), 90.0])
+	for m: Dictionary in mines:
+		avoid.append([Vector2(m.entrance.x, m.entrance.z), 70.0])
+	var order: Array = []
+	for i in islands.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return (islands[a].center as Vector2).distance_to(hut) < (islands[b].center as Vector2).distance_to(hut))
+	for i: int in order:
+		if wrecks.size() >= max_wrecks:
+			break
+		var site := _find_wreck_site(rng, i, avoid)
+		if site.is_empty():
+			continue
+		wrecks.append(_build_wreck(site, i, rng))
+		avoid.append([Vector2(site.x, site.z), 300.0])
+	print("[gen] %d shipwrecks planned" % wrecks.size())
+
+
+## A stretch of beach on the tideline: dry sand behind, open water in front, flat along the shore.
+func _find_wreck_site(rng: RandomNumberGenerator, island_idx: int, avoid: Array) -> Dictionary:
+	var isl: Dictionary = islands[island_idx]
+	var hc: Vector2 = isl.center
+	var hr: float = isl.radius
+	for attempt in 500:
+		var ang := rng.randf() * TAU
+		var rad := rng.randf_range(0.6, 1.1) * hr
+		var x := int(hc.x + cos(ang) * rad)
+		var z := int(hc.y + sin(ang) * rad)
+		var h0 := col_h(x, z)
+		if h0 < sea_low or h0 > sea_high + 2 or col_k(x, z) != Kind.BEACH:
+			continue
+		var bad := false
+		for av: Array in avoid:
+			if Vector2(x, z).distance_to(av[0]) < float(av[1]):
+				bad = true
+		if bad or _near_cave(x, z):
+			continue
+		for k in 4:
+			var d: Vector2i = _DIRS4[k]
+			# the sea in front, the land behind
+			if col_h(x + d.x * 18, z + d.y * 18) >= sea_low - 1 or col_h(x - d.x * 16, z - d.y * 16) < sea_high:
+				continue
+			var p := Vector2i(absi(d.y), absi(d.x))
+			var ok := true
+			for s in range(-WRECK_L / 2, WRECK_L / 2 + 1, 6):
+				var hh := col_h(x + p.x * s, z + p.y * s)
+				if absi(hh - h0) > 3:
+					ok = false
+					break
+			if ok:
+				return {"x": x, "z": z, "y": h0, "dir": d}
+	return {}
+
+
+## A trading cutter driven ashore: heeled toward the sea, the stern stove in, planks sprung,
+## ribs showing, the mast snapped and lying on the sand. Half-buried; tides wash through it.
+func _build_wreck(site: Dictionary, island_idx: int, rng: RandomNumberGenerator) -> Dictionary:
+	var d: Vector2i = site.dir                       # across the hull, toward the sea
+	var perp := Vector2i(absi(d.y), absi(d.x))       # along the hull
+	var c := Vector2i(site.x, site.z)
+	var h0: int = site.y
+	var base := h0 - 3                               # keel is buried this deep
+	var heel := rng.randf_range(0.32, 0.5)           # list toward the sea (radians)
+	var bow := 1 if rng.randf() < 0.5 else -1        # which end of the hull is the bow
+	var ch := cos(heel)
+	var sh := sin(heel)
+	var AW := WRECK_B + WRECK_D + 4                  # across half-size of the box
+	var AL := WRECK_L / 2 + 12                       # along half-size (room for the fallen mast)
+	var H := WRECK_D + 14
+	var minx := c.x - (perp.x * AL + absi(d.x) * AW)
+	var minz := c.y - (perp.y * AL + absi(d.y) * AW)
+	var sx := (perp.x * AL + absi(d.x) * AW) * 2 + 1
+	var sz := (perp.y * AL + absi(d.y) * AW) * 2 + 1
+	var grid := Prefabs.Grid.new(sx, H, sz)
+	var put := func(w: int, y: int, l: int, m: int) -> void:
+		var gx := c.x + d.x * w + perp.x * l - minx
+		var gz := c.y + d.y * w + perp.y * l - minz
+		if gx >= 0 and gz >= 0 and gx < sx and gz < sz and y >= 0 and y < H:
+			grid.setv(gx, y, gz, m)
+	var seed_h := Vector3i(c.x, h0, c.y)
+	for l in range(-WRECK_L / 2, WRECK_L / 2 + 1):
+		var t := float(l * bow + WRECK_L / 2) / float(WRECK_L)      # 0 stern .. 1 bow
+		var taper := minf(1.0, (1.0 - t) * 3.2) * minf(1.0, 0.55 + t * 3.0)
+		if t < 0.12:
+			continue                                                  # the stern is gone
+		var rib := posmod(l, 4) == 0
+		# the sheer rises to a high bow; the keel rocks up toward both ends
+		var top := WRECK_D + 5.0 * pow(maxf(0.0, t - 0.5) / 0.5, 2.0)
+		var keel := 7.0 * pow(maxf(0.0, t - 0.7) / 0.3, 2.0) + 3.0 * pow(maxf(0.0, 0.3 - t) / 0.3, 2.0)
+		for y in range(0, H):
+			for w in range(-AW, AW + 1):
+				# hull space: across (hw) and up (hu) from the keel, undoing the heel
+				var dy := float(y) - 1.0
+				var hw := float(w) * ch - dy * sh
+				var hu := float(w) * sh + dy * ch
+				if hu < keel or hu > top:
+					continue
+				var half := WRECK_B * taper * sqrt(clampf(0.25 + 0.75 * (hu - keel) / maxf(1.0, top - keel), 0.0, 1.0))
+				if absf(hw) > half + 0.5:
+					continue
+				var inner := absf(hw) <= half - 0.7 and hu >= keel + 1.0
+				var hv := posmod(hash(Vector3i(w, y, l) + seed_h), 100)
+				if inner:
+					if y >= 4:
+						# the hold: open to the air, a rib every few planks, half a deck at the bow
+						if rib and absf(absf(hw) - (half - 1.2)) < 0.8:
+							put.call(w, y, l, Palette.DARK_WOOD)
+						elif hu >= top - 1.0 and t > 0.62 and hv < 80:
+							put.call(w, y, l, Palette.PLANK)
+						else:
+							put.call(w, y, l, Palette.CLEAR)
+					continue
+				# planking, sprung and stove in toward the broken stern
+				var holes := 10 + int(maxf(0.0, 0.45 - t) * 120.0)
+				if hu > keel + 2.0 and hv < holes:
+					if y >= 4:
+						put.call(w, y, l, Palette.CLEAR)
+					continue
+				var m := Palette.DARK_WOOD
+				if hu < keel + 2.5:
+					m = Palette.KELP if hv < 30 and y < 6 else Palette.DARK_WOOD      # weed on the bottom
+				elif hu > top - 1.5:
+					m = Palette.PLANK                                              # the gunwale
+				elif hv % 7 == 0:
+					m = Palette.DRIFTWOOD
+				put.call(w, y, l, m)
+	# the mast: a snapped stump in its step, and the rest lying on the sand landward
+	var ml := roundi(WRECK_L * 0.1) * bow
+	for k in 7:
+		var hu := 1.0 + k
+		var w := roundi(hu * sh)
+		var y := 1 + roundi(hu * ch)
+		put.call(w, y, ml, Palette.TRUNK)
+	var fall := -WRECK_B - 3
+	for k in 18:
+		put.call(fall, 4, ml - bow * (k + 2), Palette.TRUNK)
+	for k in range(3, 10):
+		for w2: int in [fall - 1, fall - 2, fall + 1]:
+			if posmod(k + w2, 3) != 0:
+				put.call(w2, 4, ml - bow * k, Palette.WHITEWASH)        # the torn sail, half under sand
+	# spilled planks and barrel staves on the sand behind the stern
+	for k in 10:
+		var l3 := -bow * (WRECK_L / 2 + rng.randi_range(-4, 9))
+		var w3 := rng.randi_range(-AW + 2, -WRECK_B)
+		for s in rng.randi_range(2, 5):
+			put.call(w3, 4, l3 + s * -bow, Palette.PLANK if k % 3 != 0 else Palette.DARK_WOOD)
+	native.add_stamp(grid.data, Vector3i(sx, H, sz), Vector3i(minx, base, minz), 0)
+	native.add_tree_clear(c.x, c.y, AL + 4)
+	# the captain's locker, in the lee of the bow under what is left of the deck
+	var lk := c + perp * roundi(WRECK_L * 0.12) * bow - d * 2
+	return {"island": island_idx, "center": Vector3i(c.x, h0, c.y), "dir": d, "along": perp * bow,
+		"chest": Vector3i(lk.x, h0 + 1, lk.y)}
+
+
+# ---------------------------------------------------------------- Sea-Reaver outposts
+
+const OUT_H := 44               # stamp height: floor + the carved space (the watchtower reaches ~36)
+const OUT_MIN_HOME := 2200      # ~400 m: further out than the Mud-Claws
+const OUT_TOWER_Y := 26         # lookout platform height above the yard floor (~4.7 m)
+## Sea-Reaver outposts (big archipelago), voxel units:
+## [{island, center: Vector3 (feet), gate: Vector2, totem: Vector3i, chest: Vector3i,
+##   bunk: Vector3i, posts: [Vector3 feet], tower: Vector3 (feet, on the platform)}]
+var outposts: Array = []
+
+
+## Plan the Sea-Reaver outposts: up to `max_out` palisaded pirate camps on far islands that
+## have no village or Mud-Claw camp, each with a watchtower, tents, torches, a strongbox and
+## the War Horn Totem (an entity, placed by EntityManager). Pure function of the seed. Call
+## after plan_wrecks (so older worlds keep their camps, mines and wrecks where they were).
+func plan_outposts(max_out := 2) -> void:
+	outposts.clear()
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 15485863 + 41
+	var taken := {}
+	for v: Dictionary in villages:
+		taken[int(v.island)] = true
+	for c: Dictionary in camps:
+		taken[int(c.island)] = true
+	var order: Array = []
+	for i in islands.size():
+		if i == 0 or int(islands[i].type) == 0 or taken.has(i):
+			continue
+		if (islands[i].center as Vector2).distance_to(hut) < OUT_MIN_HOME:
+			continue
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return (islands[a].center as Vector2).distance_to(hut) < (islands[b].center as Vector2).distance_to(hut))
+	for i: int in order:
+		if outposts.size() >= max_out:
+			break
+		var site := _find_camp_site(rng, i, hut)
+		if site.is_empty():
+			continue
+		var clash := false
+		for m: Dictionary in mines:
+			if Vector2(m.entrance.x, m.entrance.z).distance_to(Vector2(site.x, site.z)) < 120.0:
+				clash = true
+		for w: Dictionary in wrecks:
+			if Vector2(w.center.x, w.center.z).distance_to(Vector2(site.x, site.z)) < 90.0:
+				clash = true
+		if clash or Vector2(site.x, site.z).distance_to(hut) < OUT_MIN_HOME:
+			continue
+		outposts.append(_build_outpost(site, i, rng))
+	print("[gen] %d Sea-Reaver outposts planned" % outposts.size())
+
+
+func _build_outpost(site: Dictionary, island_idx: int, rng: RandomNumberGenerator) -> Dictionary:
+	var c := Vector2i(site.x, site.z)
+	var fy: int = site.y
+	var g: Vector2 = site.gate
+	var side := Vector2(-g.y, g.x)
+	var R := CAMP_R
+	var n := R * 2 + 7
+	var o := R + 3
+	var grid := Prefabs.Grid.new(n, OUT_H, n)
+	var ga := atan2(g.y, g.x)
+	# packed earth and gravel, a boardwalk to the gate; carved clear above
+	for z in n:
+		for x in n:
+			var v := Vector2(x - o, z - o)
+			if v.length() > R + 1.5:
+				continue
+			var m := Palette.DIRT if (hash(Vector2i(x, z) + c) & 3) != 0 else Palette.GRAVEL
+			if absf(v.dot(side)) < 2.5 and v.dot(g) > -8.0:
+				m = Palette.PLANK
+			grid.setv(x, 0, z, m)
+			for y in range(1, OUT_H):
+				grid.setv(x, y, z, Palette.CLEAR)
+	# a tall stockade of sharpened trunks, tarred and lashed, with a wide gate
+	for z in n:
+		for x in n:
+			var v := Vector2(x - o, z - o)
+			var dd := v.length()
+			if dd < R - 0.8 or dd > R + 0.8:
+				continue
+			var a := atan2(v.y, v.x)
+			if absf(angle_difference(a, ga)) < 0.15:
+				continue
+			var post := int(floor((a + PI) * R / 1.5))
+			var ph := 15 + posmod(hash(post * 13 + c.x), 3)
+			for y in range(1, ph + 1):
+				grid.setv(x, y, z, Palette.TRUNK if post % 3 != 0 else Palette.DARK_WOOD)
+			grid.setv(x, 4, z, Palette.DARK_WOOD)
+			grid.setv(x, 11, z, Palette.DARK_WOOD)
+			grid.setv(x, ph + 1, z, Palette.SANDSTONE_C)
+	# gate towers: square posts with a lantern each
+	for s: int in [-1, 1]:
+		var a := ga + 0.19 * s
+		var px := o + roundi(cos(a) * R)
+		var pz := o + roundi(sin(a) * R)
+		for y in range(1, 21):
+			grid.box(px - 1, y, pz - 1, px, y, pz, Palette.DARK_WOOD)
+		grid.setv(px, 21, pz, Palette.LANTERN)
+		stamp_lights.append(Vector3i(c.x + px - o, fy + 21, c.y + pz - o))
+	# the watchtower, beside the gate inside the wall, with a plank stair up to the lookout
+	var twx := o + roundi(g.x * (R - 9) + side.x * 11.0)
+	var twz := o + roundi(g.y * (R - 9) + side.y * 11.0)
+	for dz: int in [-3, 3]:
+		for dx: int in [-3, 3]:
+			for y in range(1, OUT_TOWER_Y + 9):
+				grid.setv(twx + dx, y, twz + dz, Palette.TRUNK)
+	grid.box(twx - 4, OUT_TOWER_Y, twz - 4, twx + 4, OUT_TOWER_Y, twz + 4, Palette.PLANK)
+	for k in range(-4, 5):
+		for e: Vector2i in [Vector2i(k, -4), Vector2i(k, 4), Vector2i(-4, k), Vector2i(4, k)]:
+			if posmod(k, 2) == 0:
+				grid.setv(twx + e.x, OUT_TOWER_Y + 1, twz + e.y, Palette.DARK_WOOD)
+			grid.setv(twx + e.x, OUT_TOWER_Y + 2, twz + e.y, Palette.DARK_WOOD)
+	for z in range(-4, 5):
+		for x in range(-4, 5):
+			grid.setv(twx + x, OUT_TOWER_Y + 9 + (4 - maxi(absi(x), absi(z))) / 2, twz + z,
+					Palette.ROOF_RED if posmod(x + z, 3) != 0 else Palette.WHITEWASH)
+	grid.setv(twx, OUT_TOWER_Y + 1, twz, Palette.LANTERN)
+	stamp_lights.append(Vector3i(c.x + twx - o, fy + OUT_TOWER_Y + 1, c.y + twz - o))
+	# the stair: climbing toward the gate, one voxel up per voxel along, onto the platform
+	var sd := g
+	var foot := Vector2(twx, twz) - side * 6.0 - sd * float(OUT_TOWER_Y + 2)
+	for k in OUT_TOWER_Y:
+		for w in range(-1, 2):
+			var q := foot + sd * float(k) + side * float(w)
+			grid.setv(roundi(q.x), k + 1, roundi(q.y), Palette.PLANK)
+	for k in range(0, 6):
+		for w in range(-1, 2):
+			var q := foot + sd * float(OUT_TOWER_Y - 1 + k) + side * float(w)
+			grid.setv(roundi(q.x), OUT_TOWER_Y, roundi(q.y), Palette.PLANK)
+	for k in range(0, 6):
+		var q := Vector2(twx, twz) - side * float(k + 3)
+		grid.setv(roundi(q.x), OUT_TOWER_Y, roundi(q.y), Palette.PLANK)
+	var tower := Vector3(c.x + twx - o + 0.5, fy + OUT_TOWER_Y + 1, c.y + twz - o + 0.5)
+	# three striped canvas tents round the back, open toward the yard
+	var tents: Array = []
+	for k: int in [-1, 0, 1]:
+		var a := ga + PI + 0.85 * k
+		var along := Vector2(cos(a), sin(a))
+		var across := Vector2(-along.y, along.x)
+		var tc := Vector2(o, o) + along * float(R - 12)
+		for l in range(-5, 6):
+			for w in range(-6, 7):
+				var hgt := 8 - absi(w)
+				if hgt < 1:
+					continue
+				var q := tc + along * float(l) + across * float(w)
+				var m := Palette.WHITEWASH if posmod(l, 2) == 0 else Palette.ROOF_RED
+				grid.setv(roundi(q.x), hgt, roundi(q.y), m)
+				if l == 5:
+					for yy in range(1, hgt):
+						grid.setv(roundi(q.x), yy, roundi(q.y), Palette.WHITEWASH)
+		tents.append(Vector3i(c.x + roundi(tc.x) - o, fy + 1, c.y + roundi(tc.y) - o))
+	# a firepit in the yard; crates and barrels; torch posts round the wall
+	var fpx := o + roundi(g.x * 4.0)
+	var fpz := o + roundi(g.y * 4.0)
+	for z in range(fpz - 3, fpz + 4):
+		for x in range(fpx - 3, fpx + 4):
+			var dd := Vector2(x - fpx, z - fpz).length()
+			if dd <= 3.2 and dd > 2.1:
+				grid.setv(x, 1, z, Palette.COBBLE)
+			elif dd <= 1.2:
+				grid.setv(x, 1, z, Palette.LANTERN)
+	stamp_lights.append(Vector3i(c.x + fpx - o, fy + 1, c.y + fpz - o))
+	for k in 9:
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(10.0, R - 6.0)
+		var qx := o + roundi(cos(a) * r)
+		var qz := o + roundi(sin(a) * r)
+		if Vector2(qx - twx, qz - twz).length() < 9.0 or Vector2(qx - o, qz - o).dot(g) > R - 16:
+			continue
+		var h := 3 if k % 3 != 0 else 5
+		grid.box(qx - 1, 1, qz - 1, qx + 1, h, qz + 1, Palette.PLANK if k % 2 == 0 else Palette.DARK_WOOD)
+		grid.setv(qx, h, qz, Palette.DARK_WOOD)
+	for k in 4:
+		var a := ga + PI * 0.5 + PI * k * 0.5 + 0.4
+		var qx := o + roundi(cos(a) * (R - 5))
+		var qz := o + roundi(sin(a) * (R - 5))
+		for y in range(1, 11):
+			grid.setv(qx, y, qz, Palette.DARK_WOOD)
+		grid.setv(qx, 11, qz, Palette.LANTERN)
+		stamp_lights.append(Vector3i(c.x + qx - o, fy + 11, c.y + qz - o))
+	native.add_stamp(grid.data, Vector3i(n, OUT_H, n), Vector3i(c.x - o, fy, c.y - o), 1)
+	native.add_tree_clear(c.x, c.y, R + 14)
+	var feet := func(v: Vector2) -> Vector3: return Vector3(c.x + v.x + 0.5, fy + 1, c.y + v.y + 0.5)
+	var posts: Array = [feet.call(g * (R - 4) + side * 4.0), feet.call(g * (R - 4) - side * 4.0),
+		feet.call(-side * 14.0), feet.call(-g * 12.0 + side * 8.0), feet.call(g * 8.0 - side * 9.0),
+		feet.call(-g * 6.0 - side * 12.0), feet.call(side * 3.0), feet.call(-g * 3.0 - side * 3.0)]
+	var tv := -g * 15.0
+	var cv := -g * 12.0 + side * 6.0
+	return {"island": island_idx, "center": Vector3(c.x + 0.5, fy + 1, c.y + 0.5), "gate": g,
+		"totem": Vector3i(c.x + roundi(tv.x), fy + 1, c.y + roundi(tv.y)),
+		"chest": Vector3i(c.x + roundi(cv.x), fy + 1, c.y + roundi(cv.y)),
+		"bunk": tents[1] if tents.size() > 1 else Vector3i(c.x, fy + 1, c.y),
+		"posts": posts, "tower": tower}
+
+
+# ---------------------------------------------------------------- the Barnacled Hulk's strand
+
+const HULK_MIN_HOME := 2600     # ~470 m: the far side of the archipelago
+## The Hollow Flats boss lair (big archipelago), voxel units, or {} if none:
+## {island, lair: Vector3 (feet), dir: Vector2 (toward the sea), boulders: [Vector3i (feet, on the rocks)]}
+var hulk := {}
+
+
+## Plan the Barnacled Hulk's strand: a low beach (below half tide, so it floods and drains)
+## on a far island, with two rock outcrops landward that hold loose boulders. Pure function
+## of the seed. Call after plan_outposts.
+func plan_hulk() -> void:
+	hulk = {}
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 3571 + 7
+	var taken := {}
+	for v: Dictionary in villages:
+		taken[int(v.island)] = true
+	for o: Dictionary in outposts:
+		taken[int(o.island)] = true
+	var order: Array = []
+	for i in islands.size():
+		if i == 0 or taken.has(i) or (islands[i].center as Vector2).distance_to(hut) < HULK_MIN_HOME:
+			continue
+		order.append(i)
+	# the farthest island first
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return (islands[a].center as Vector2).distance_to(hut) > (islands[b].center as Vector2).distance_to(hut))
+	for i: int in order:
+		var site := _find_flats(rng, i)
+		if not site.is_empty():
+			hulk = _build_strand(site, i)
+			break
+	print("[gen] Barnacled Hulk lair: %s" % ("island %d" % int(hulk.island) if not hulk.is_empty() else "none"))
+
+
+## A broad, low, flat beach: sand between low tide and half tide for 8 m around, the sea
+## beyond it and land behind.
+func _find_flats(rng: RandomNumberGenerator, island_idx: int) -> Dictionary:
+	var isl: Dictionary = islands[island_idx]
+	var hc: Vector2 = isl.center
+	var hr: float = isl.radius
+	var mid := int(sea_mid)
+	for attempt in 900:
+		var ang := rng.randf() * TAU
+		var rad := rng.randf_range(0.55, 1.1) * hr
+		var x := int(hc.x + cos(ang) * rad)
+		var z := int(hc.y + sin(ang) * rad)
+		var h0 := col_h(x, z)
+		if h0 < sea_low or h0 > mid - 1 or col_k(x, z) != Kind.BEACH:
+			continue
+		var flat := 0
+		for k in 12:
+			var a := TAU * k / 12.0
+			var hh := col_h(x + int(cos(a) * 32), z + int(sin(a) * 32))
+			if hh <= mid + 3 and hh >= sea_low - 8:
+				flat += 1
+		if flat < 6 or _near_cave(x, z):
+			continue
+		var land := Vector2(hc.x - x, hc.y - z).normalized()
+		var dry := false
+		for r in [60, 100, 150, 220]:
+			if col_h(x + int(land.x * r), z + int(land.y * r)) >= sea_high:
+				dry = true
+		if not dry:
+			continue
+		return {"x": x, "z": z, "y": h0, "dir": -land}
+	return {}
+
+
+func _build_strand(site: Dictionary, island_idx: int) -> Dictionary:
+	var c := Vector2i(site.x, site.z)
+	var h0: int = site.y
+	var sea: Vector2 = site.dir
+	var land := -sea
+	var side := Vector2(-sea.y, sea.x)
+	var boulders: Array = []
+	# two rock outcrops on the landward edge of the flats, each topped by a loose boulder
+	for s: int in [-1, 1]:
+		var oc := Vector2(c) + land * 30.0 + side * (18.0 * s)
+		var R := 9
+		var H := 15
+		var n := R * 2 + 3
+		var grid := Prefabs.Grid.new(n, H + 4, n)
+		for z in n:
+			for x in n:
+				var d := Vector2(x - R - 1, z - R - 1).length()
+				if d > R + 0.5:
+					continue
+				var top := int(round(H * (1.0 - pow(d / float(R + 1), 2.2))))
+				# a sheer face toward the strand, a slope behind
+				var toward := Vector2(x - R - 1, z - R - 1).dot(sea)
+				if toward > 0.0:
+					top = mini(H, top + 2)
+				for y in range(0, top + 1):
+					var m := Palette.STONE if (x + y * 3 + z) % 5 != 0 else Palette.SANDSTONE_A
+					if y == top:
+						m = Palette.SANDSTONE_C if toward > 0.0 else Palette.GRASS_DRY
+					grid.setv(x, y, z, m)
+		var base := Vector3i(int(oc.x) - R - 1, h0, int(oc.y) - R - 1)
+		native.add_stamp(grid.data, Vector3i(n, H + 4, n), base, 1)
+		# the boulder sits on the strand-side lip of the outcrop
+		var lip := oc + sea * 3.0
+		boulders.append(Vector3i(int(lip.x), h0 + H + 1, int(lip.y)))
+	native.add_tree_clear(c.x, c.y, 60)
+	return {"island": island_idx, "lair": Vector3(c.x + 0.5, h0 + 1, c.y + 0.5), "dir": sea, "boulders": boulders}

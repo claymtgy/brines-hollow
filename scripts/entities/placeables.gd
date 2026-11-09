@@ -38,6 +38,9 @@ const BUILTIN := {
 	&"cat_basket":      ["Dock Cat's Basket",      {&"kelp_frond": 6, &"driftwood": 2, &"silver_mackerel": 1}, &"ground", 1],
 	&"scarecrow":       ["Oilskin Scarecrow",      {&"driftwood": 4, &"leaves": 4, &"wood_plank": 2}, &"ground", 5],
 	&"pantry_barrel":   ["Sealed Pantry Barrel",   {&"wood_plank": 6, &"kelp_frond": 2, &"stone": 1}, &"ground", 10],
+	&"stone_well":      ["Stone Well",             {&"cobblestone": 12, &"wood_plank": 6, &"kelp_frond": 4}, &"ground", 5],
+	&"mooring_bollard": ["Mooring Bollard",        {&"driftwood": 4, &"iron_ingot": 1}, &"ground", 10],
+	&"tide_hearth":     ["Tide Hearth",            {&"cobblestone": 16, &"driftwood": 8, &"sea_brass_ingot": 2}, &"ground", 1],
 	&"village_bell":    ["Harbour Bell",           {&"iron_ingot": 2, &"wood_plank": 8, &"cobblestone": 4}, &"ground", 1],
 }
 
@@ -86,6 +89,12 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"scarecrow", ScarecrowEntity)
 	EntityManager.register_type(&"village_bell", VillageBellEntity, {"aliases": [&"bell"]})
 	EntityManager.register_type(&"barnacled_chest", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_barnacled(c), {"item": &""})
+	EntityManager.register_type(&"stone_well", func(c: Vector3i) -> WorldEntity: return WaterSourceEntity.make_well(c), {"aliases": [&"well"]})
+	EntityManager.register_type(&"freshwater_spring", func(c: Vector3i) -> WorldEntity: return WaterSourceEntity.make_spring(c), {"item": &""})
+	EntityManager.register_type(&"war_horn_totem", WarHornEntity, {"item": &""})
+	EntityManager.register_type(&"tide_hearth", TideHearthEntity, {"aliases": [&"hearth"]})
+	EntityManager.register_type(&"mooring_bollard", BollardEntity, {"aliases": [&"bollard"]})
+	EntityManager.register_type(&"loose_boulder", BoulderEntity, {"item": &""})
 	EntityManager.register_type(&"pantry_barrel", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_pantry_barrel(c), {"aliases": [&"pantry"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]

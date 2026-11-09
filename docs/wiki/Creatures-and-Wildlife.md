@@ -21,6 +21,71 @@ Cave eels, crabs and the like. See the [creatures table](generated/creatures.md)
 **won't come out in light**: a lantern post or a lit station (campfire, smokehouse, furnace,
 hearth pot) keeps the area around it clear.
 
+## Gloom-Crawlers
+Pale, blind cave hunters that cling to the ceilings of **deep caverns and mines**. They
+hunt by sound: walk or run beneath one and it drops on you from above with a hiss as it
+lets go. Listen for the hiss and step aside.
+
+- **Sneak (Ctrl) under them** and they don't hear you.
+- **Light drives them off.** They won't come within a few metres of a lantern or a lit
+  station, so torch your route through a cavern.
+- On the ground they bite and keep hunting by sound, but they give up after a few seconds
+  and climb back to the roof.
+- They drop **gloom glands** (they glow) and chitin.
+
+## Sea-Reaver outposts
+Marooned pirates hold stockades on the **far islands**, well away from home: palisade walls,
+gate towers with lanterns, a watchtower, tents, and a **Reaver Strongbox** with brass, iron,
+salvage and a rare recipe scroll. When you first come near one it's marked on your chart.
+
+- **Cutlass reavers** close in with a two-cut combo. **Harpooners** throw from range, and
+  one always keeps the watchtower.
+- Reavers **see** rather than hear. Stay out of sight, and at night don't carry a torch: it
+  gives you away.
+- The **War Horn Totem** stands inside the gate. When the reavers spot you it sounds and two
+  more come running. Wipe out the garrison and a new one arrives five minutes later, as long
+  as the totem stands.
+- **Topple the totem** (F) once no reaver is within about 30 m and the outpost is **captured
+  for good**: no more reavers, and a bed appears in the tents so you can use it as a forward
+  base.
+- Garrisons: **3 + 1 harpooner on Cozy (they never attack), 4 + 2 on Tidewatch, 5 + 3 on
+  Undertow**.
+
+## The Barnacled Hulk
+On the tidal flats of a far island, beneath two tall stone outcrops, something huge lies
+buried in the sand. Come close and **the Barnacled Hulk** rises: a colossal hermit crab in a
+barnacle-crusted shell.
+
+- **Its shell turns most blows.** Hitting it head-on barely scratches it until the shell is
+  cracked.
+- **Drop the boulders.** Loose boulders sit on top of the outcrops. Climb up and push one (F)
+  when the Hulk is below: each hit cracks the shell and does heavy damage. They roll back
+  into place after a while.
+- **Use the tide.** When the tide falls below mid, the Hulk bogs down in the mud of the flats
+  for a few seconds. While it's mired it can't fight back and takes much more damage.
+- It sweeps with its claw and slams its shell down; both are slow, so watch and dodge.
+- Beaten, it drops **The Hulk's Pearl**, heavy chitin, brass and sea glass, and it stays
+  beaten for everyone in the world.
+
+## Mud-Claw camps
+Crab-folk hold driftwood camps on some of the outer islands: a palisade of posts with a
+gate, three mud domes, a shell totem and a fire pit. There are never any on your home island
+or within about 300 m of your hut. When you first come near one, it's marked on your sea chart.
+
+- **Swarmers** are small and quick and come in a pack, but only two press an attack at once.
+  **The brute** is slow and heavily plated, and its overhead slam has a long wind-up you can
+  read and punish.
+- **By day the camp dozes** in its domes and only wakes to noise. Sneak (Ctrl) and you can
+  reach the camp chest. Running or fighting wakes the lot.
+- **Light keeps swarmers off.** Carry a lantern and they'll circle and click but won't close.
+  The brute doesn't care.
+- **They won't leave home.** Get well clear of the palisade, or take to the water, and they
+  give up and go back.
+- Beat the whole garrison and the camp is **cleared for good**, for everyone in the world.
+  Its mark on the chart is crossed out. They drop **heavy chitin plate**.
+- How many guard a camp: **3 swarmers + a brute on Cozy, 4 + 1 on Tidewatch, 6 + 1 on
+  Undertow**. On Cozy they never attack: they scuttle into their domes when you come close.
+
 ## Raiders: foxes and stoats
 At night a **red fox** or a **stoat** may come for your pen. Stoats only steal eggs.
 How many raids a night: **1 on Cozy, 2 on Tidewatch, 3 on Undertow**.

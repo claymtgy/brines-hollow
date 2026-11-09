@@ -248,7 +248,7 @@ func _restore_boats() -> void:
 		return
 	main.boats._spawned = true  # don't spawn the default fleet on top of the saved one
 	for b: Array in saved:
-		main.boats._create(int(b[0]), b[1], float(b[2]))
+		main.boats._create(int(b[0]), b[1], float(b[2]), int(b[3]) if b.size() > 3 else 0)
 	print("[session] restored %d boat(s)" % saved.size())
 
 
@@ -256,7 +256,8 @@ func _restore_boats() -> void:
 func start_dedicated(port: int) -> void:
 	main._started = true
 	main.hud.show_menu(false)
-	print("[server] world '%s', seed %d: generating..." % [world_name, main.seed_value])
+	VoxelWorld.apply_layout(main.world_layout)   # the saved world's layout (or --layout for a new one)
+	print("[server] world '%s', seed %d, layout %d: generating..." % [world_name, main.seed_value, VoxelWorld.layout])
 	await main.world.generate(main.seed_value)
 	on_world_generated()
 	main.farm = NetFarm.new(VoxelWorld.SEA_MID, VoxelWorld.TIDE_AMP)
@@ -371,6 +372,10 @@ func capture_profile() -> Dictionary:
 		d["isles"] = main.atlas.serialize()
 	if main.get("npc_villages") != null:
 		d["villages"] = main.npc_villages.serialize()
+	if main.get("creatures") != null and main.creatures.camps != null:
+		d["camps"] = main.creatures.camps.serialize_seen()
+	if main.get("creatures") != null and main.creatures.outposts != null:
+		d["outposts"] = main.creatures.outposts.serialize_seen()
 	return d
 
 
@@ -393,6 +398,10 @@ func apply_profile(d: Dictionary) -> void:
 		main.atlas.deserialize(d.isles)
 	if d.has("villages") and main.get("npc_villages") != null:
 		main.npc_villages.deserialize(d.villages)
+	if d.has("camps") and main.get("creatures") != null and main.creatures.camps != null:
+		main.creatures.camps.deserialize_seen(d.camps)
+	if d.has("outposts") and main.get("creatures") != null and main.creatures.outposts != null:
+		main.creatures.outposts.deserialize_seen(d.outposts)
 	if d.get("bed") is Vector3:
 		p.set_meta("respawn_point", d.bed)
 	if d.has("pos"):
@@ -431,7 +440,7 @@ func save_all() -> void:
 	var boats := []
 	if main.boats != null:
 		for b: Boat in main.boats.boats.values():
-			boats.append([b.id, b.position, b.yaw])
+			boats.append([b.id, b.position, b.yaw, b.kind])
 	var state := {
 		"v": SAVE_VERSION,
 		"tod": main.sky.time_of_day,
@@ -690,6 +699,15 @@ func _check_report(tag: String) -> void:
 	print("[%s] edits_hash=%d checksum=%d edited_cols=%d plots=%d planted=%d inv_stone=%d boats=%d entities=%d pot_bait=%d barrel=%d" % [
 		tag, eh, main._region_checksum(c, 14), cols.size(), plots, planted,
 		inv_stone, main.boats.boats.size() if main.boats != null else -1, ents, pot_bait, barrel_fish])
+	if main.world != null and main.world.gen != null:
+		var gen: WorldGen = main.world.gen
+		var named := {}
+		if main.entities != null:
+			for e: WorldEntity in main.entities.entities.values():
+				if e.entity_name in ["Wreck Locker", "Miner's Strongbox", "Sunken Cache", "Reaver Strongbox", "War Horn Totem", "Loose Boulder"] or e is WaterSourceEntity:
+					named[e.entity_name] = int(named.get(e.entity_name, 0)) + 1
+		print("[%s] camps=%d mines=%d sumps=%d wrecks=%d outposts=%d hulk=%s world_entities=%s" % [tag, gen.camps.size(), gen.mines.size(),
+				gen.sumps.size(), gen.wrecks.size(), gen.outposts.size(), not gen.hulk.is_empty(), named])
 
 
 func _check_edits() -> void:

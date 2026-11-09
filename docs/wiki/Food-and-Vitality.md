@@ -15,5 +15,8 @@
 - If your health runs out you **faint**. You wake at your bunk if you've slept in one, or back
   at the landing if you haven't. On Cozy you can't take damage at all (see [Difficulty](Difficulty-Modes.md)).
 
+**Spring water** from a cavern spring or a stone well is a plain drink: a little health, a
+stamina top-up, and stamina recovers faster for eight minutes.
+
 ---
 [Home](Home.md) · [Fishing & Crab Pots](Fishing-and-Crab-Pots.md) · [FAQ](FAQ.md)

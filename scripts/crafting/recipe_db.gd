@@ -267,6 +267,25 @@ static func _register_basic_and_tools() -> void:
 
 	# Workbench Crafting
 	register_recipe(RecipeDef.new(
+		&"craft_skiff_kit", "Outrigger Skiff", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 24}, {"item_id": &"driftwood", "count": 8},
+			{"item_id": &"kelp_frond", "count": 10}, {"item_id": &"sea_wool", "count": 4}],
+		&"skiff_kit", 1, 6.0, [&"maritime", &"boat"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_barge_kit", "Tide-Barge", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 40}, {"item_id": &"driftwood", "count": 12},
+			{"item_id": &"iron_ingot", "count": 2}, {"item_id": &"kelp_frond", "count": 10}],
+		&"barge_kit", 1, 10.0, [&"maritime", &"boat"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_sloop_kit", "Coastal Sloop", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 36}, {"item_id": &"sea_wool", "count": 10},
+			{"item_id": &"sea_brass_ingot", "count": 4}, {"item_id": &"iron_ingot", "count": 2}],
+		&"sloop_kit", 1, 12.0, [&"maritime", &"boat"]
+	))
+
+	register_recipe(RecipeDef.new(
 		&"craft_backpack_driftwood", "Driftwood Rucksack", RecipeDef.Category.WORKBENCH, &"workbench",
 		[{"item_id": &"driftwood", "count": 4}, {"item_id": &"sea_wool", "count": 2}],
 		&"backpack_driftwood", 1, 3.0, [&"backpack", &"storage"]
@@ -342,6 +361,11 @@ static func _register_basic_and_tools() -> void:
 		&"furnace_smelt_copper", "Smelt Sea-Brass Ingot", RecipeDef.Category.FORGE, &"furnace",
 		[{"item_id": &"copper_ore", "count": 2}],
 		&"sea_brass_ingot", 1, 0.0, [&"metal", &"alloy"]
+	))
+	register_recipe(RecipeDef.new(
+		&"furnace_fine_brass", "Fine Sea-Brass (quenched)", RecipeDef.Category.FORGE, &"furnace",
+		[{"item_id": &"copper_ore", "count": 1}, {"item_id": &"calamine_ore", "count": 1}, {"item_id": &"spring_water", "count": 1}],
+		&"sea_brass_ingot", 3, 0.0, [&"metal", &"alloy"]
 	))
 	register_recipe(RecipeDef.new(
 		&"furnace_smelt_iron", "Smelt Iron Ingot", RecipeDef.Category.FORGE, &"furnace",
@@ -459,6 +483,23 @@ static func _register_culinary_and_hearth() -> void:
 		&"cook_clam_chowder", "Hearty Clam Chowder", RecipeDef.Category.COOKING, &"hearth_pot",
 		[{"item_id": &"brine_oyster", "count": 2}, {"item_id": &"root_potato", "count": 1}, {"item_id": &"salt_milk", "count": 1}],
 		&"hearty_clam_chowder", 1, 8.0, [&"food", &"chowder", &"soup"]
+	))
+
+	# Secret recipes: learned only by landing the rarest catches (RecipeBook.SECRET).
+	register_recipe(RecipeDef.new(
+		&"cook_leviathan_feast", "Leviathan Feast", RecipeDef.Category.COOKING, &"hearth_pot",
+		[{"item_id": &"abyssal_ray", "count": 1}, {"item_id": &"marsh_honey", "count": 1}, {"item_id": &"samphire", "count": 2}],
+		&"leviathan_feast", 3, 20.0, [&"food", &"banquet", &"secret"]
+	))
+	register_recipe(RecipeDef.new(
+		&"cook_phosphor_broth", "Phosphor Ink Broth", RecipeDef.Category.COOKING, &"hearth_pot",
+		[{"item_id": &"ghost_squid", "count": 1}, {"item_id": &"gloom_gland", "count": 1}, {"item_id": &"kelp_frond", "count": 2}],
+		&"phosphor_broth", 2, 12.0, [&"food", &"soup", &"secret"]
+	))
+	register_recipe(RecipeDef.new(
+		&"smoke_storm_eel", "Storm-Smoked Eel", RecipeDef.Category.SMOKEHOUSE, &"smokehouse",
+		[{"item_id": &"lightning_eel", "count": 1}, {"item_id": &"sea_salt", "count": 2}],
+		&"storm_smoked_eel", 2, 14.0, [&"food", &"smoked", &"secret"]
 	))
 
 	register_recipe(RecipeDef.new(

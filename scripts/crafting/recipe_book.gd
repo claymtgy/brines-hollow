@@ -7,7 +7,8 @@ extends RefCounted
 ##   - discovery: the first time a key ingredient enters your inventory
 ##   - quests: tutorial / story rewards (learn(id, "quest"))
 ##   - drifters: recruiting a profession teaches its trade recipes
-##   - recipe scrolls: any "recipe_scroll_<recipe id>" item is read on pickup (merchants sell some)
+##   - recipe scrolls: any "recipe_scroll_<recipe id>" item is read on pickup (merchants sell some;
+##     the rare ones turn up in shipwreck lockers, sunken caches, cave chests and old mines)
 
 signal recipe_learned(recipe_id: StringName, source: String)
 
@@ -27,6 +28,17 @@ const DISCOVERY := {
 	&"ghost_squid": [&"craft_hydrographic_chart"],
 }
 
+## Secret recipes: landing one of the rarest catches teaches its own dish, and nothing else
+## ever does (no scrolls are dealt for these, though you can copy yours for a friend).
+const SECRET := {
+	&"abyssal_ray": [&"cook_leviathan_feast"],
+	&"ghost_squid": [&"cook_phosphor_broth"],
+	&"lightning_eel": [&"smoke_storm_eel"],
+}
+
+## Copying a recipe you know onto a scroll (to give, trade or sell): the parchment.
+const COPY_COST := [[&"shore_wheat", 2]]
+
 ## Taught by recruiting a drifter of this profession (DrifterDef.Profession values).
 const PROFESSION := {
 	0: [&"place_crab_pot", &"place_sea_barrel", &"craft_ocean_caster_rod"],              # FISHER
@@ -40,6 +52,17 @@ const PROFESSION := {
 ## Only obtainable as rewards or scrolls (listed so they start locked).
 const REWARD_ONLY := [&"place_crab_pot", &"place_salt_pan", &"smoke_fish_ration", &"cook_bouillabaisse",
 	&"brew_chicory_coffee", &"place_barber_mirror", &"place_storage_crate"]
+
+## Only ever found as scrolls (old mines, wrecks, flooded sumps): listed so they start locked.
+const FOUND_ONLY := [&"furnace_fine_brass", &"place_stone_well"]
+
+## The old brass mines' secret: one scroll in every miner's strongbox.
+const MINE_SCROLL := &"furnace_fine_brass"
+
+## The rare scrolls dealt out (a shuffled deck per world) to wreck lockers, sunken caches, and
+## now and then a cave chest or a Mud-Claw hoard. Fine sea-brass is the old mines' own secret.
+const FOUND_SCROLLS := [&"place_stone_well", &"cook_bouillabaisse", &"smoke_fish_ration",
+	&"brew_chicory_coffee", &"place_storage_crate", &"place_salt_pan", &"place_barber_mirror"]
 
 ## Scrolls the merchants may carry.
 const MERCHANT_SCROLLS := [&"cook_bouillabaisse", &"brew_chicory_coffee", &"cook_glazed_crab", &"place_barber_mirror"]
@@ -61,7 +84,16 @@ static func locked_ids() -> Dictionary:
 				_locked[r] = true
 		for r in REWARD_ONLY:
 			_locked[r] = true
+		for r in FOUND_ONLY:
+			_locked[r] = true
+		for list in SECRET.values():
+			for r in list:
+				_locked[r] = true
 	return _locked
+
+
+static func scroll_item(recipe_id: StringName) -> StringName:
+	return StringName(SCROLL_PREFIX + String(recipe_id))
 
 
 static func is_lockable(recipe_id: StringName) -> bool:
@@ -95,12 +127,64 @@ func on_item_acquired(item_id: StringName, inv: Inventory = null) -> Array:
 	var s := String(item_id)
 	if s.begins_with(SCROLL_PREFIX):
 		var rid := StringName(s.trim_prefix(SCROLL_PREFIX))
+		if knows(rid):
+			return []                     # already in the book: keep the scroll to give or trade
 		if inv != null:
 			inv.remove_item(item_id, 1)   # the scroll is read and kept in the book
 		return [rid] if learn(rid, "scroll") else []
+	var out: Array = []
 	if DISCOVERY.has(item_id):
-		return learn_all(DISCOVERY[item_id], "discovery")
-	return []
+		out.append_array(learn_all(DISCOVERY[item_id], "discovery"))
+	if SECRET.has(item_id):
+		out.append_array(learn_all(SECRET[item_id], "secret"))
+	return out
+
+
+## Can this recipe be copied onto a scroll? (one you know that others have to find)
+func can_copy(recipe_id: StringName) -> bool:
+	return is_lockable(recipe_id) and known.has(recipe_id)
+
+
+## Copy a known recipe onto a scroll for another player. Costs COPY_COST. True on success.
+func copy_scroll(recipe_id: StringName, inv: Inventory) -> bool:
+	if inv == null or not can_copy(recipe_id):
+		return false
+	for c: Array in COPY_COST:
+		if inv.get_item_count(c[0]) < int(c[1]):
+			return false
+	register_scroll_items()
+	var item := scroll_item(recipe_id)
+	if not ItemDB.has_item(item):
+		return false
+	for c: Array in COPY_COST:
+		inv.remove_item(c[0], int(c[1]))
+	if inv.add_item(item, 1) > 0:
+		for c: Array in COPY_COST:
+			inv.add_item(c[0], int(c[1]))   # no room: give the parchment back
+		return false
+	return true
+
+
+## How a locked recipe is learned (for the Recipe Book's hints).
+static func source_of(recipe_id: StringName) -> String:
+	for k: StringName in SECRET:
+		if SECRET[k].has(recipe_id):
+			var it: ItemDef = ItemDB.get_item(k)
+			return "Secret: land a %s" % (it.name if it != null else String(k))
+	for k: StringName in DISCOVERY:
+		if DISCOVERY[k].has(recipe_id):
+			var it: ItemDef = ItemDB.get_item(k)
+			return "Discover: get your hands on %s" % (it.name if it != null else String(k))
+	for prof: int in PROFESSION:
+		if PROFESSION[prof].has(recipe_id):
+			return "Taught by a drifter"
+	if recipe_id == MINE_SCROLL:
+		return "A scroll in an old brass mine"
+	if FOUND_SCROLLS.has(recipe_id) or FOUND_ONLY.has(recipe_id):
+		return "A rare scroll: wrecks, sunken caches, caves"
+	if REWARD_ONLY.has(recipe_id):
+		return "A quest reward or a merchant's scroll"
+	return "Known from the start"
 
 
 func on_drifter_recruited(profession: int) -> Array:

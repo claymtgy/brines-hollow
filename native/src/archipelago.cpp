@@ -150,6 +150,7 @@ void ArchipelagoGen::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("land_regions", "region_vox"), &ArchipelagoGen::land_regions);
 	ClassDB::bind_method(D_METHOD("add_stamp", "data", "dims", "base", "foundation"), &ArchipelagoGen::add_stamp);
 	ClassDB::bind_method(D_METHOD("clear_stamps"), &ArchipelagoGen::clear_stamps);
+	ClassDB::bind_method(D_METHOD("add_tree_clear", "x", "z", "r"), &ArchipelagoGen::add_tree_clear);
 	ClassDB::bind_method(D_METHOD("generate_column_debug", "cx", "cz"), &ArchipelagoGen::generate_column_debug);
 	ClassDB::bind_method(D_METHOD("build_lod", "region", "region_vox", "step"), &ArchipelagoGen::build_lod);
 }
@@ -186,6 +187,7 @@ void ArchipelagoGen::configure(int p_seed, const Vector3i &p_size, float p_sea_m
 	islands.clear();
 	stacks.clear();
 	stamps.clear();
+	tree_clear.clear();
 	Rng rng(hcomb(seed, 99));
 	const float W = (float)size.x, D = (float)size.z;
 
@@ -638,6 +640,12 @@ void ArchipelagoGen::trees_in_cell(int fx, int fz, std::vector<Tree> &out) const
 			int nb[4] = { column_height(x + 2, z), column_height(x - 2, z), column_height(x, z + 2), column_height(x, z - 2) };
 			int k = kind_at(x, z, h, id, nb);
 			if (k != K_GRASS && k != K_GRASS_DRY) continue;
+			bool cleared = false;
+			for (const Vector3i &tc : tree_clear) {
+				int dx = x - tc.x, dz = z - tc.y;
+				if (dx * dx + dz * dz <= tc.z * tc.z) { cleared = true; break; }
+			}
+			if (cleared) continue;
 			Tree t;
 			t.x = x; t.z = z; t.y = h + 1;
 			if (roll < 0.40f) { t.type = 0; t.tall = r.irange(26, 36); t.r = 0; }

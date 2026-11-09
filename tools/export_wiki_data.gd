@@ -96,6 +96,9 @@ func _unlock_sources() -> Dictionary:
 	for item: StringName in RecipeBook.DISCOVERY:
 		for r: StringName in RecipeBook.DISCOVERY[item]:
 			_add_src(src, r, "find %s" % _item_name(item))
+	for item: StringName in RecipeBook.SECRET:
+		for r: StringName in RecipeBook.SECRET[item]:
+			_add_src(src, r, "secret: land a %s" % _item_name(item))
 	for prof: int in RecipeBook.PROFESSION:
 		for r: StringName in RecipeBook.PROFESSION[prof]:
 			_add_src(src, r, "recruit a %s" % PROFESSIONS[prof])
@@ -104,6 +107,9 @@ func _unlock_sources() -> Dictionary:
 			_add_src(src, StringName(r), "Wren: \"%s\"" % m.title)
 	for r: StringName in RecipeBook.MERCHANT_SCROLLS:
 		_add_src(src, r, "merchant scroll")
+	_add_src(src, RecipeBook.MINE_SCROLL, "scroll in an old brass mine")
+	for r: StringName in RecipeBook.FOUND_SCROLLS:
+		_add_src(src, r, "rare scroll (wrecks, sumps, caves)")
 	for r: StringName in RecipeBook.REWARD_ONLY:
 		if not src.has(r):
 			_add_src(src, r, "quest reward / scroll")
@@ -209,6 +215,12 @@ const CREATURE_INFO := {
 	&"stoat": ["Stoat", "Woods; raids coops at night", "Never hurts players; steals eggs"],
 	&"rat": ["Shore rat", "Up from the tideline the nights after a storm", "Never hurts players; eats food from open chests and crates"],
 	&"eagle": ["Sea eagle", "High over the island by day", "Never hurts players; stoops on ducks in the open (scatters them on Cozy)"],
+	&"mudclaw": ["Mud-Claw swarmer", "Mud-Claw camps on the outer islands; dozes by day", "Yes, in packs (never on Cozy)"],
+	&"mudbrute": ["Mud-Claw brute", "Guards each Mud-Claw camp", "Yes: slow, heavy overhead slam (never on Cozy)"],
+	&"gloomcrawler": ["Gloom-Crawler", "Ceilings of deep caverns and mines, any hour", "Yes: drops on players it hears (never on Cozy)"],
+	&"reaver": ["Sea-Reaver", "Reaver outposts on the far islands", "Yes: cutlass combo (never on Cozy)"],
+	&"reaver_harpooner": ["Reaver harpooner", "Reaver outposts, one on each watchtower", "Yes: throws harpoons from range (never on Cozy)"],
+	&"barnacled_hulk": ["The Barnacled Hulk", "Buried on a far island's tidal flats (boss, once per world)", "Yes: boss (never on Cozy)"],
 }
 
 
@@ -242,4 +254,10 @@ static func _make_creature(kind: StringName) -> Creature:
 		&"stoat": return Stoat.new()
 		&"rat": return ShoreRat.new()
 		&"eagle": return SeaEagle.new()
+		&"mudclaw": return MudClaw.new()
+		&"mudbrute": return MudClaw.new(true)
+		&"gloomcrawler": return GloomCrawler.new()
+		&"reaver": return SeaReaver.new()
+		&"reaver_harpooner": return SeaReaver.new(true)
+		&"barnacled_hulk": return BarnacledHulk.new()
 	return null

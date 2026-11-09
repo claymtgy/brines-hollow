@@ -70,6 +70,58 @@ static func cave_loot(kind: int, rng: RandomNumberGenerator) -> Array:
 	return out
 
 
+## An old miner's strongbox: brass, calamine, a little copper.
+static func mine_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"calamine_ore", rng.randi_range(3, 6)], [&"copper_ore", rng.randi_range(2, 4)],
+		[&"sea_brass_ingot", rng.randi_range(1, 3)]]
+	if rng.randf() < 0.5:
+		out.append([&"iron_ingot", 1])
+	return out
+
+
+## Whatever sank to the bottom of a flooded sump: the best of the caves, for those who dive.
+static func sump_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"sea_glass", rng.randi_range(4, 8)], [&"sea_brass_ingot", rng.randi_range(2, 3)],
+		[&"iron_ingot", rng.randi_range(1, 2)]]
+	if rng.randf() < 0.5:
+		out.append([&"chitin_plate", rng.randi_range(1, 3)])
+	return out
+
+
+## A wrecked cutter's locker: what the sea left of her cargo and the captain's purse.
+static func wreck_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"wood_plank", rng.randi_range(4, 8)], [&"brass_guilder", rng.randi_range(6, 18)],
+		[&"sea_glass", rng.randi_range(1, 4)]]
+	match rng.randi_range(0, 3):
+		0: out.append([&"sea_wool", rng.randi_range(2, 4)])
+		1: out.append([&"iron_ingot", rng.randi_range(1, 2)])
+		2: out.append([&"sea_salt", rng.randi_range(4, 8)])
+		_: out.append([&"shore_hardtack", rng.randi_range(2, 3)])
+	return out
+
+
+## What the Mud-Claws hoard: reef salvage, shell and the odd bit of worked metal.
+static func camp_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"sea_glass", rng.randi_range(3, 6)], [&"chitin_plate", rng.randi_range(2, 4)],
+		[&"copper_ore", rng.randi_range(2, 5)]]
+	if rng.randf() < 0.6:
+		out.append([&"sea_brass_ingot", rng.randi_range(1, 2)])
+	if rng.randf() < 0.5:
+		out.append([&"iron_ingot", 1])
+	return out
+
+
+## A Sea-Reaver strongbox: the outpost's plunder.
+static func outpost_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [[&"brass_guilder", rng.randi_range(30, 60)], [&"iron_ingot", rng.randi_range(2, 4)],
+		[&"sea_brass_ingot", rng.randi_range(2, 4)], [&"wood_plank", rng.randi_range(6, 12)]]
+	match rng.randi_range(0, 2):
+		0: out.append([&"sea_wool", rng.randi_range(3, 6)])
+		1: out.append([&"marsh_honey", rng.randi_range(2, 4)])
+		_: out.append([&"sea_glass", rng.randi_range(4, 8)])
+	return out
+
+
 ## Tar-sealed pantry barrel: holds any food and keeps shore rats out.
 static func make_pantry_barrel(coord: Vector3i) -> ChestEntity:
 	var c := ChestEntity.new("Sealed Pantry Barrel", coord, 16)

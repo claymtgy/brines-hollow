@@ -37,16 +37,17 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Wooden Hatchet | 2 Driftwood, 1 Wood Plank | 1 Wooden Hatchet | anywhere | instant | known |
 | Wooden Shovel | 1 Driftwood, 2 Wood Plank | 1 Wooden Shovel | anywhere | instant | known |
 
-## Workbench (40)
+## Workbench (46)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
-| Barber's Looking Glass | 3 Wood Plank, 2 Polished Sea Glass | 1 Barber's Looking Glass | Workbench | 2 s | recruit a Carpenter; merchant scroll |
+| Barber's Looking Glass | 3 Wood Plank, 2 Polished Sea Glass | 1 Barber's Looking Glass | Workbench | 2 s | recruit a Carpenter; merchant scroll; rare scroll (wrecks, sumps, caves) |
 | Blacksmith's Anvil | 2 Iron Ingot, 4 Limestone | 1 Blacksmith's Anvil | Workbench | 2 s | known |
 | Brine Saltery | 6 Wood Plank, 4 Limestone | 1 Brine Saltery | Workbench | 2 s | find Sea Salt |
 | Campfire | 4 Driftwood, 4 Limestone | 1 Campfire | Workbench | 2 s | known |
 | Carpentry Workbench | 8 Driftwood | 1 Carpentry Workbench | Workbench | 2 s | known |
-| Clay Salt Pan | 4 Limestone, 4 Sand | 1 Clay Salt Pan | Workbench | 2 s | recruit a Farmer; Wren: "Let the Tide Work" |
+| Clay Salt Pan | 4 Limestone, 4 Sand | 1 Clay Salt Pan | Workbench | 2 s | recruit a Farmer; Wren: "Let the Tide Work"; rare scroll (wrecks, sumps, caves) |
+| Coastal Sloop | 36 Wood Plank, 10 Shore-Sheep Wool, 4 Sea-Brass Ingot, 2 Iron Ingot | 1 Coastal Sloop (kit) | Workbench | 12 s | known |
 | Coastal Teahouse | 6 Wood Plank, 2 Polished Sea Glass | 1 Coastal Teahouse | Workbench | 2 s | find Kelp Fronds |
 | Dock Cat's Basket | 6 Kelp Fronds, 2 Driftwood, 1 Silver Mackerel | 1 Dock Cat's Basket | Workbench | 2 s | known |
 | Driftwood Chest | 6 Driftwood | 1 Driftwood Chest | Workbench | 2 s | known |
@@ -61,10 +62,12 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Kelp-Oil Lantern Post | 3 Driftwood, 2 Kelp Fronds, 1 Limestone | 1 Kelp-Oil Lantern Post | Workbench | 2 s | known |
 | Latched Pen Gate | 6 Wood Plank, 2 Driftwood | 1 Latched Pen Gate | Workbench | 2 s | known |
 | Live-Capture Trap | 4 Driftwood, 2 Wood Plank, 2 Kelp Fronds | 1 Live-Capture Trap | Workbench | 2 s | known |
-| Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 2 s | known |
 | Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 3 s | known |
+| Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 2 s | known |
+| Mooring Bollard | 4 Driftwood, 1 Iron Ingot | 1 Mooring Bollard | Workbench | 2 s | known |
 | Ocean Caster Rod | 3 Tarred Wood, 1 Sea-Brass Ingot | 1 Ocean Caster Rod | Workbench | 4 s | find Sea-Brass Ingot; recruit a Fisher |
 | Oilskin Scarecrow | 4 Driftwood, 4 Forest Foliage, 2 Wood Plank | 1 Oilskin Scarecrow | Workbench | 2 s | known |
+| Outrigger Skiff | 24 Wood Plank, 8 Driftwood, 10 Kelp Fronds, 4 Shore-Sheep Wool | 1 Outrigger Skiff (kit) | Workbench | 6 s | known |
 | Pine Sapling | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | Workbench | 2 s | known |
 | Sealed Pantry Barrel | 6 Wood Plank, 2 Kelp Fronds, 1 Limestone | 1 Sealed Pantry Barrel | Workbench | 2 s | known |
 | Shearing Shears | 2 Limestone, 2 Driftwood | 1 Shearing Shears | Workbench | 2 s | known |
@@ -76,13 +79,16 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Stone Hoe | 2 Driftwood, 2 Limestone | 1 Stone Hoe | Workbench | instant | known |
 | Stone Pickaxe | 2 Driftwood, 3 Limestone | 1 Stone Pickaxe | Workbench | instant | known |
 | Stone Shovel | 2 Driftwood, 2 Limestone | 1 Stone Shovel | Workbench | instant | known |
-| Storage Crate | 6 Wood Plank | 1 Storage Crate | Workbench | 2 s | recruit a Carpenter; Wren: "Make Your Mark" |
+| Stone Well | 12 Cobblestone, 6 Wood Plank, 4 Kelp Fronds | 1 Stone Well | Workbench | 2 s | rare scroll (wrecks, sumps, caves) |
+| Storage Crate | 6 Wood Plank | 1 Storage Crate | Workbench | 2 s | recruit a Carpenter; Wren: "Make Your Mark"; rare scroll (wrecks, sumps, caves) |
 | Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | Workbench | instant | known |
+| Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | 1 Tide Hearth | Workbench | 2 s | known |
+| Tide-Barge | 40 Wood Plank, 12 Driftwood, 2 Iron Ingot, 10 Kelp Fronds | 1 Tide-Barge (kit) | Workbench | 10 s | known |
 | Watertight Sea Barrel | 6 Wood Plank, 2 Kelp Fronds | 1 Watertight Sea Barrel | Workbench | 2 s | find Silver Mackerel; find Tidepool Flounder; recruit a Fisher; Wren: "A Line in the Water" |
 | Wicker Crab Pot | 3 Driftwood, 4 Kelp Fronds | 1 Wicker Crab Pot | Workbench | 2 s | recruit a Fisher; Wren: "Tools of the Trade" |
 | Wooden Pail | 4 Wood Plank, 1 Driftwood | 1 Wooden Pail | Workbench | 2 s | known |
 
-## Cooking (7)
+## Cooking (9)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -90,16 +96,19 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Crisp Tidepool Flounder | 1 Tidepool Flounder | 1 Crisp Tidepool Flounder | Campfire | 4 s | find Tidepool Flounder |
 | Hearty Clam Chowder | 2 Brine Oyster, 1 Root Potato, 1 Salt-Goat Milk | 1 Hearty Clam Chowder | Hearth Pot | 8 s | find Brine Oyster; recruit a Smoker & Chef |
 | Honey-Glazed Abyssal Crab | 2 Shore Crab, 1 Marsh Honey, 1 Sea Salt | 1 Honey-Glazed Abyssal Crab | Hearth Pot | 12 s | find Shore Crab; merchant scroll |
-| Samphire Bouillabaisse | 1 Cliff Salmon, 1 Shore Crab, 2 Sea Samphire | 1 Samphire Bouillabaisse | Hearth Pot | 10 s | recruit a Smoker & Chef; merchant scroll |
+| Leviathan Feast | 1 Abyssal Leviathan Ray, 1 Marsh Honey, 2 Sea Samphire | 3 Leviathan Feast | Hearth Pot | 20 s | secret: land a Abyssal Leviathan Ray |
+| Phosphor Ink Broth | 1 Ghost Squid, 1 Gloom-Crawler Gland, 2 Kelp Fronds | 2 Phosphor Ink Broth | Hearth Pot | 12 s | secret: land a Ghost Squid |
+| Samphire Bouillabaisse | 1 Cliff Salmon, 1 Shore Crab, 2 Sea Samphire | 1 Samphire Bouillabaisse | Hearth Pot | 10 s | recruit a Smoker & Chef; merchant scroll; rare scroll (wrecks, sumps, caves) |
 | Shore-Wheat Hardtack | 3 Shore Wheat, 1 Sea Salt | 2 Shore-Wheat Hardtack | Hearth Pot | 6 s | find Shore Wheat |
 | Skillet Shore-Egg | 1 Shore-Duck Egg, 1 Sea Samphire | 1 Shore-Duck Egg | Campfire | 4 s | known |
 
-## Smokehouse (2)
+## Smokehouse (3)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
-| Smoked Fish Ration | 2 Silver Mackerel, 1 Sea Salt, 1 Tarred Wood | 2 Smoked Fish Ration | Smokehouse | 10 s | recruit a Smoker & Chef |
+| Smoked Fish Ration | 2 Silver Mackerel, 1 Sea Salt, 1 Tarred Wood | 2 Smoked Fish Ration | Smokehouse | 10 s | recruit a Smoker & Chef; rare scroll (wrecks, sumps, caves) |
 | Smoked Salmon Strips | 1 Cliff Salmon, 1 Sea Salt | 2 Smoked Salmon Strips | Smokehouse | 12 s | find Cliff Salmon |
+| Storm-Smoked Eel | 1 Lightning Eel, 2 Sea Salt | 2 Storm-Smoked Eel | Smokehouse | 14 s | secret: land a Lightning Eel |
 
 ## Saltery (2)
 
@@ -113,12 +122,13 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
 | Peppermint Kelp Tea | 2 Kelp Fronds, 1 Marsh Honey | 1 Peppermint Kelp Tea | Brewery | 5 s | find Kelp Fronds; recruit a Lamplighter |
-| Roasted Chicory Sea-Brew | 1 Root Potato, 1 Sea Salt | 1 Roasted Chicory Sea-Brew | Brewery | 5 s | recruit a Trader; merchant scroll |
+| Roasted Chicory Sea-Brew | 1 Root Potato, 1 Sea Salt | 1 Roasted Chicory Sea-Brew | Brewery | 5 s | recruit a Trader; merchant scroll; rare scroll (wrecks, sumps, caves) |
 
-## Forge (15)
+## Forge (16)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
+| Fine Sea-Brass (quenched) | 1 Copper Ore, 1 Calamine Ore, 1 Flask of Spring Water | 3 Sea-Brass Ingot | Furnace | instant | scroll in an old brass mine |
 | Fire Sea Glass | 3 Sand | 2 Polished Sea Glass | Furnace | instant | known |
 | Forge Brass Diving Helm | 4 Sea-Brass Ingot, 2 Polished Sea Glass | 1 brass_diving_helmet | Anvil | instant | known |
 | Forge Copper Hatchet | 2 Pine Wood, 2 Sea-Brass Ingot | 1 Copper Hatchet | Anvil | instant | known |

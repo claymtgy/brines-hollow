@@ -117,7 +117,10 @@ Goal: A rich, relaxing sandbox loop with no combat required.
   - *Drifters:* recruiting a villager teaches their trade (a Smoker-Chef brings smokehouse and hearth recipes).
   - *Recipe scrolls:* merchants sell scrolls; reading one (on pickup) adds the recipe to your book.
   - Stations open a recipe window showing known recipes, ingredients you have/need, and how many are still undiscovered; Tab opens hand crafting.
-  - *Next:* rare scrolls in wrecks and sea caves, legendary-fish "secret recipes", a Recipe Book tab in the Field Logbook, and recipe-scroll trading between players.
+  - ✅ *Rare scrolls:* beached shipwrecks on the outer beaches each hold a Wreck Locker with a scroll; sunken caches, cave chests and Mud-Claw hoards deal out more from a per-world deck; fine sea-brass and the stone well are scroll-only.
+  - ✅ *Secret recipes:* landing a legendary fish teaches its dish (Abyssal Ray → Leviathan Feast, Ghost Squid → Phosphor Broth, Lightning Eel → Storm-Smoked Eel).
+  - ✅ *Recipe Book tab* in the Field Logbook: recipes grouped by station with ingredients, "???" entries that hint where to learn them, and a known/total count.
+  - ✅ *Scroll trading:* copy any recipe you know onto a scroll (2 Shore Wheat) to hand or trade to another player; reading a scroll you already know keeps it.
 
 ### 4. Vitality Triad: Nourishment (Hunger), Health & Stamina
 - **Nourishment & Satiety (Non-Punitive Hunger):**
@@ -182,7 +185,7 @@ Life on the islands beyond the player: some of it ambient, some of it hungry. Pr
 - **Co-op:** ✅ host/server simulates wildlife and livestock; livestock poses stream to clients (~10 Hz), clients' petting/feeding/shearing and herding reach the host; raid alerts go to everyone. Befriended otters are remembered per player profile and find their friend again after a reload or rejoin. ✅ Harbour Bell: rings by itself when a raid starts within 90 m (alert with direction and distance for every player, 3D toll, light-shaft beacon over the raid); ring it by hand to call everyone and scare off raiders within 25 m.
 
 ### 8. Subterranean World & Cave Networks
-- ✅ **Done (big archipelago):** tidal sea caves in every larger island's cliffs (mouth floods at high tide, sandy grotto with a barnacled chest), karst caverns of 2–4 chambers under high ground (stalactites, stalagmites, glowing moss, a passage out to the hillside, a chest), and copper / brine-iron ore veins on cave walls (iron needs a tier-2 pick). Still to come: freshwater aquifers and wells, brass mines, flooded sumps.
+- ✅ **Done (big archipelago):** tidal sea caves in every larger island's cliffs (mouth floods at high tide, sandy grotto with a barnacled chest), karst caverns of 2–4 chambers under high ground (stalactites, stalagmites, glowing moss, a passage out to the hillside, a chest), and copper / brine-iron ore veins on cave walls (iron needs a tier-2 pick). Also done: abandoned brass mines on the outer islands (timbered adit, a gallery crusted with calamine and copper, a miner's strongbox), a flooded sump under each karst cavern (a dive to a sunken cache), a freshwater spring in each cavern and a stone well in every village (buildable from a rare scroll), spring water as a drink and as the quench for fine sea-brass (copper + calamine).
 - **Tidal Sea Caves:** Carved into island cliff faces; entrances fully submerge during high tide. Low tide reveals interior sandy grottos with rare sea-glass, barnacled chests, and hidden passages.
 - **Karst Limestone Caverns:** Multi-chamber caverns beneath island plateaus featuring stalactites, glowing moss patches, and subterranean freshwater aquifers that supply village wells.
 - **Abandoned Brass Mines & Catacombs:** Ancient pre-deluge extraction tunnels with rickety timber shoring, ore veins (copper, iron, tin), rusted minecarts, and forgotten subterranean workbenches.
@@ -203,12 +206,13 @@ Goal: Turn an isolated shelter into a bustling, self-sustaining coastal communit
 
 1. **Founding & Settlement Boundaries:**
    - **Tide Hearth / Town Bell:** Placeable municipal core that claims a town boundary (60m–150m radius).
+     - ✅ *Done:* the Tide Hearth founds your own village (craftable; the first one claims the town). Tiers past Camp need a hearth; it is the village's cooking fire and collection point for the town depot, and reports morale on use.
    - **Zoning:** Designate Residential, Farming/Docks, Refining/Crafting, and Market districts.
 2. **Housing & Room Detection:**
    - Dynamic 3D flood-fill algorithm verifies enclosed rooms: solid walls, weatherproof roof, door, bed, light source.
    - Room score (interior volume, furniture, seaside windows) dictates villager happiness and recruitment draw.
 3. **Drifter Recruitment:**
-   - Rescuing castaways from shipwrecks exposed at low tide.
+   - ✅ Rescuing castaways from shipwrecks exposed at low tide (three castaways, pinned in outer-island wrecks; free them at low tide and they sail home on their own).
    - Saving drifters trapped in tidal sea caves before the tide rises.
    - Welcoming immigrant passengers arriving on visiting packet boats.
 4. **Villager Jobs & Daily Routines:**
@@ -222,15 +226,16 @@ Goal: Turn an isolated shelter into a bustling, self-sustaining coastal communit
    - Town Stockpile Depots: Villagers deposit harvested yields and retrieve required seeds/tools without micromanagement.
 6. **Town Morale & Progression:**
    - Morale driven by food variety, dry housing, and town safety. High morale boosts town production speed by up to 30% and attracts rare master artisans.
+   - ✅ *Done:* morale from homes (valid rooms and their quality), food variety in the depot and pantry barrels, safety (lights and a Harbour Bell) and the hearth; it drifts toward its target and is reported at the hearth and in announcements when the town grows a tier.
 7. **Tidal Festivals & Community Banquets:**
    - Seasonal calendar celebrations (*Spring Tide Equinox*, *Night of the Floating Lanterns*).
    - Multi-course community banquets: players submit dishes to communal tables to trigger town-wide prosperity buffs and unlock rare decorative blueprints.
 8. **Town Visual Identity & Customization:**
    - Tunable harbor bell chimes (custom melody/pitch), painted heraldic banners/flags, colored glow-glass streetlamps, and wooden directional signposts.
 9. **Settlement Maritime Fleet (Tier 2 Boats):**
-   - **The Tide-Barge (Flat-Bottom Cargo Vessel):** High-displacement, flat-bottom barge built to haul bulk stone, timber, and building supplies between islands without grounding in tidal mud.
-   - **Coastal Sloop / Cutter:** Single-mast sailboat with rudder wheel, 2–4 player capacity, onboard navigation cot, and mounting davits for hauling heavy crab pots.
-   - **Harbor Infrastructure:** Wooden piers, mooring bollards, boat sheds, and dry docks for repairing hulls damaged by storms or reefs.
+   - ✅ **The Tide-Barge (Flat-Bottom Cargo Vessel):** High-displacement, flat-bottom barge built to haul bulk stone, timber, and building supplies between islands without grounding in tidal mud. *Done:* 4 seats, sweep oars, a 27-slot cargo hold (Shift+F to stow/take), floats over mud flats; slow and steady.
+   - ✅ **Coastal Sloop / Cutter:** Single-mast sailboat with rudder wheel, 2–4 player capacity, onboard navigation cot, and mounting davits for hauling heavy crab pots. *Done:* 3 seats, cuddy cabin, gaff sail that points higher into the wind and runs faster than the skiff. (Cot and davits still to come.)
+   - **Harbor Infrastructure:** Wooden piers, mooring bollards, boat sheds, and dry docks for repairing hulls damaged by storms or reefs. ✅ *Mooring bollards* hold an empty boat in place; launched boats and their holds are saved with the world.
 
 ---
 
@@ -355,15 +360,20 @@ Combat in Brine's Hollow is reimagined from basic weapon swings into a fluid, ta
   - *Combat Route:* Harpoon eye-stalks, dodge claw slams, hit soft joints when it emerges to strike.
   - *Non-Combat / Environmental Route:* Collapse overhead limestone pillars with pickaxes/explosives onto the hull, or bait it into sinking tidal mud during the receding tide.
   - *Reward:* *Gilded Ship Wheel* (vessel maneuverability buff), heavy chitin plates for Tier 2 gear.
+  - ✅ *Done (first pass):* the Hulk lies buried on a far island's tidal flats beneath two stone outcrops. Its barnacle shell shrugs off blows until cracked; push the loose boulders off the rocks onto it (each one cracks the shell), or fight it on the flats as the tide drops so it mires in the mud and takes heavy damage. Drops The Hulk's Pearl, chitin, brass and sea glass; stays slain. (Ship-wheel reward and eye-stalk harpooning still to come.)
 
 ### 4. Enemies, Hostile Factions & Enemy POI Spawn Points
 - **Hostile Factions & Enemy Types:**
   - **Drowned Marauders / Sea-Reavers:** Marooned pirate castaways armed with cutlasses, boarding axes, and crude harpoon throwers; patrol shorelines and coastlines.
+    - ✅ *Done:* cutlass reavers (two-cut combo) and harpooners (throw from range, one posted on the watchtower); they see you (torches give you away at night) and guard their posts.
   - **Mud-Claw Swarmers & Brutes:** Territorial crustacean biped humanoids defending tidal mudflats, mangrove shallows, and sea caves; armored against slashing, weak to bludgeoning or traps.
+    - ✅ *Done:* Mud-Claw camps on the outer islands (never within ~300 m of the starter hut): palisade, mud domes, shell totem and a hoard chest; a garrison of swarmers plus a brute that dozes by day (sneak past), keeps off lantern light, is leashed to its camp, and stays cleared once beaten. Charted on discovery; co-op synced.
   - **Abyssal Cultists / Drowned Priests:** Cloaked fanatics who worship ancient leviathans; cast water surges and summon bioluminescent cave horrors in submerged ruins.
   - **Gloom-Crawlers & Cave Skitterers:** Subterranean cave hunters that ambush from cave ceilings; blind but detect running footsteps and surface vibrations; repelled by bright torchlight.
+    - ✅ *Done:* Gloom-Crawlers cling to deep cavern ceilings and drop on players they hear (sneak to pass beneath), bite on the ground, give up and climb home, and keep off torchlight. Drop gloom glands and chitin.
 - **Enemy Villages, Camps & POI Spawners:**
   - **Sea-Reaver Outposts & Smuggler Coves:** Fortified palisades with watchtowers, flare horns, docks with pirate skiffs, and loot caches. Enemies spawn from the camp's *War Horn Totem*; destroying or capturing the totem halts respawns permanently and converts the outpost into a claimable player forward base.
+    - ✅ *Done:* up to two outposts on far islands (stockade, gate towers, watchtower, tents, strongbox with a scroll). The War Horn Totem sounds for reinforcements and regrows the garrison 5 minutes after a wipe; topple it with no reaver nearby to capture the outpost for good, which leaves a bed there as a forward base. Charted on discovery; co-op synced. (Docks and skiffs still to come.)
   - **Mud-Claw Hive Mounds:** Shell-and-mud burrow spires on tidal flats that release swarms during low and mid tide.
   - **Sunken Cultist Temples:** Ancient submerged stone plazas and monolithic pillars on outer islets where cultists perform tide rituals.
   - **Infested Subterranean Mine Shafts:** Underground dungeon POIs deep inside cave systems featuring barricaded passages, elite cave marauders, and rich ore hoards.
@@ -390,7 +400,7 @@ Goal: Build boats, sail beyond the home atoll, and confront or outsmart the guar
 ### 1. Nautical Travel & Multi-Tier Vessel Fleet
 - **Vessel Progression & Roles:**
   - **Tier 1 (Coastal Skiffs):** *Driftwood Rowboat / Coracle* (shallow navigation, quiet fishing) and *Outrigger Canoe* (fast islet scouting).
-  - **Tier 2 (Workboats & Transports):** *Tide-Barge* (high-capacity bulk block/material hauling, shallow-draft) and *Coastal Sloop* (nimble day-sailer with small cabin).
+  - ✅ **Tier 2 (Workboats & Transports):** *Tide-Barge* (high-capacity bulk block/material hauling, shallow-draft) and *Coastal Sloop* (nimble day-sailer with small cabin).
   - **Tier 3 (Deep-Sea Expedition Vessels):** *Ocean Schooner / Ketch* — multi-masted flagship with customizable decks, sleeping berths (sea-spawn / rest), navigation chart table, and deck cooking stove.
   - **Tier 4 (Specialized Biome Vessels):**
     - *The Salvage Diving Tender:* Outfitted with heavy rope winch and brass diving bell to lower players into deep drowned trenches and kelp ruins.

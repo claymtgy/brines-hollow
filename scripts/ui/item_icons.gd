@@ -222,6 +222,12 @@ static func _draw_item(def: ItemDef, id: StringName) -> Image:
 	if "axe" in s or "hatchet" in s: return _tool_tier_img(_draw_tool(Tool.AXE), s)
 	if "shovel" in s: return _tool_tier_img(_draw_tool(Tool.SHOVEL), s)
 	if "hammer" in s or "mallet" in s or "maul" in s: return _draw_tool(Tool.HAMMER)
+	if "skiff" in s or "boat" in s or "barge" in s or "sloop" in s: return _boat_icon()
+	if s == "calamine_ore": return _cube(Palette.COLORS[Palette.CALAMINE])
+	if s == "spring_water": return _flask()
+	if s == "gloom_gland": return _cube(Palette.COLORS[Palette.GLOW_TEAL])
+	if s == "hulk_pearl": return _cube(Palette.COLORS[Palette.WHITEWASH])
+	if s == "stone_well": return _cube(Palette.COLORS[Palette.COBBLE])
 	if "rod" in s: return _draw_tool(Tool.ROD)
 	if "hoe" in s: return _tool_tier_img(_draw_tool(Tool.HOE), s)
 	if "cutlass" in s or "sword" in s or "knife" in s: return _draw_tool(Tool.CUTLASS)
@@ -238,6 +244,32 @@ static func _draw_item(def: ItemDef, id: StringName) -> Image:
 		ItemDef.Category.EQUIPMENT: return _garment(tint)
 		ItemDef.Category.TOOL: return _draw_tool(Tool.PICKAXE)
 	return _crate()
+
+
+## A corked glass flask of water.
+static func _flask() -> Image:
+	var i := _img()
+	var glass := Color(0.62, 0.82, 0.88, 0.9)
+	_ellipse(i, 15.5, 20.0, 9.0, 9.0, glass)
+	_ellipse(i, 15.5, 21.0, 7.5, 7.0, Color(0.30, 0.62, 0.82))
+	_rect(i, 12, 5, 8, 8, glass)
+	_rect(i, 13, 2, 6, 4, Color(0.55, 0.38, 0.24))
+	_ellipse(i, 12.0, 18.0, 2.0, 3.0, Color(1, 1, 1, 0.7))
+	return i
+
+
+## A little sailing boat: hull, mast, striped sail.
+static func _boat_icon() -> Image:
+	var i := _img()
+	_rect(i, 2, 11, 12, 2, Color8(120, 84, 56))
+	_rect(i, 3, 13, 10, 1, Color8(90, 62, 42))
+	_rect(i, 2, 10, 12, 1, Color8(70, 110, 160))
+	_line(i, Vector2i(8, 2), Vector2i(8, 10), Color8(90, 62, 42))
+	for y in range(3, 10):
+		var w := 9 - y
+		var c := Color8(236, 230, 214) if (y / 2) % 2 == 0 else Color8(190, 70, 60)
+		_line(i, Vector2i(9, y), Vector2i(9 + maxi(0, 10 - y - 1), y), c)
+	return i
 
 
 static func _crate() -> Image:

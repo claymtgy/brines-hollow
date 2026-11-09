@@ -22,6 +22,11 @@ var current_tier: TownTier = TownTier.CAMP
 var rooms: Array[Dictionary] = []           ## Validated housing records
 var drifters: Array[DrifterDef] = []        ## Recruited villagers
 var town_depot: StorageContainer            ## Automated shared village stockpile
+var hearth_placed := false                  ## a Tide Hearth has founded the town
+## Town conditions, measured by VillageManager (authority) every few seconds:
+var food_kinds := 0                         ## distinct foods in the depot and pantry barrels
+var safety := 0.5                           ## 0..1: lanterns, the harbour bell
+var _morale_t := 0.0
 
 
 func _init(p_hearth_pos: Vector3i = Vector3i.ZERO, p_name: String = "Brine's Hollow") -> void:
@@ -179,11 +184,20 @@ func assign_drifter_to_room(drifter_id: StringName, room_id: int) -> bool:
 # Progression & Simulation
 # -------------------------------------------------------------------------
 
+## A Tide Hearth was built at `c`: the town is founded (or its heart moved) here.
+func found_at(c: Vector3i) -> void:
+	hearth_pos = c
+	hearth_placed = true
+	_check_tier_progression()
+
+
 func _check_tier_progression() -> void:
 	var count: int = drifters.size()
 	var new_tier: TownTier = TownTier.CAMP
 
-	if count >= 17:
+	if not hearth_placed:
+		new_tier = TownTier.CAMP           # a town needs its hearth before it can grow
+	elif count >= 17:
 		new_tier = TownTier.PORT
 	elif count >= 9:
 		new_tier = TownTier.VILLAGE
@@ -208,11 +222,77 @@ func get_town_morale() -> float:
 	return sum / float(drifters.size())
 
 
+const TIER_NAMES := ["Castaway Camp", "Coastal Hamlet", "Brine Village", "Thriving Port Town"]
+
+
+## Where a villager's morale is heading: a dry home (and how good it is), the variety of food
+## in the town's stores, how safe the town feels, and having a hearth to gather round.
+## Returns {total, home, food, safety, hearth}. Morale drives work speed: 0.7x to 1.3x.
+func morale_parts(d: DrifterDef) -> Dictionary:
+	var home := 0.12
+	if not d.is_homeless() and d.assigned_room_id < rooms.size():
+		var r: Dictionary = rooms[d.assigned_room_id]
+		home = 0.2 if not r.get("valid", true) else 0.32 + 0.18 * clampf(float(r.get("quality", 10)) / 100.0, 0.0, 1.0)
+	var food: float = [0.0, 0.08, 0.15, 0.22, 0.26, 0.3][clampi(food_kinds, 0, 5)]
+	var safe := 0.22 * clampf(safety, 0.0, 1.0)
+	var hearth := 0.08 if hearth_placed else 0.0
+	return {"total": clampf(home + food + safe + hearth, 0.0, 1.0), "home": home, "food": food, "safety": safe, "hearth": hearth}
+
+
 ## Simulation tick for routines and work shifts
 func tick_settlement(delta_sec: float, day_fraction: float) -> void:
+	_morale_t -= delta_sec
+	var drift := _morale_t <= 0.0
+	if drift:
+		_morale_t = 5.0
 	for d in drifters:
 		d.update_routine(day_fraction)
 		d.tick_work(delta_sec, town_depot)
+		if drift:
+			# morale settles toward its target over a few in-game hours
+			d.morale = move_toward(d.morale, float(morale_parts(d).total), 0.02)
+
+
+func depot_count() -> int:
+	var n := 0
+	for s: ItemSlot in town_depot.inventory.slots:
+		if s != null and not s.is_empty():
+			n += s.count
+	return n
+
+
+## Empties the town depot. Returns [[item_id, count], ...] for whoever collected it.
+func collect_depot() -> Array:
+	var out: Array = []
+	for s: ItemSlot in town_depot.inventory.slots:
+		if s != null and not s.is_empty():
+			out.append([s.item_id, s.count])
+	for g: Array in out:
+		town_depot.inventory.remove_item(g[0], int(g[1]))
+	return out
+
+
+## One line for the hearth: tier, people, morale and what's pulling it down.
+func report() -> String:
+	if not hearth_placed:
+		return "%s has no hearth yet: build a Tide Hearth to found the town." % settlement_name
+	var m := get_town_morale()
+	var hint := ""
+	var homeless := 0
+	for d in drifters:
+		if d.is_homeless():
+			homeless += 1
+	if homeless > 0:
+		hint = "%d need a home" % homeless
+	elif food_kinds < 3:
+		hint = "stock more kinds of food (pantry barrels)"
+	elif safety < 0.6:
+		hint = "light the town with lanterns, hang a harbour bell"
+	else:
+		hint = "the town is content"
+	return "%s, a %s: %d villager%s, morale %d%% (work %+d%%)  ·  %s" % [settlement_name,
+		TIER_NAMES[clampi(int(current_tier), 0, 3)], drifters.size(), "" if drifters.size() == 1 else "s",
+		int(m * 100.0), int(round((0.7 + m * 0.6 - 1.0) * 100.0)), hint]
 
 
 # -------------------------------------------------------------------------
@@ -233,6 +313,9 @@ func serialize() -> Dictionary:
 		"hearth": {"x": hearth_pos.x, "y": hearth_pos.y, "z": hearth_pos.z},
 		"radius": territory_radius_m,
 		"tier": current_tier,
+		"hearth_placed": hearth_placed,
+		"food_kinds": food_kinds,
+		"safety": safety,
 		"rooms": r_data,
 		"drifters": d_data,
 		"depot": town_depot.serialize()
@@ -245,6 +328,9 @@ func deserialize(data: Dictionary) -> void:
 	hearth_pos = Vector3i(h.get("x", 0), h.get("y", 0), h.get("z", 0))
 	territory_radius_m = float(data.get("radius", 80.0))
 	current_tier = int(data.get("tier", 0))
+	hearth_placed = bool(data.get("hearth_placed", false))
+	food_kinds = int(data.get("food_kinds", 0))
+	safety = float(data.get("safety", 0.5))
 
 	rooms.clear()
 	if data.has("rooms"):

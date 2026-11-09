@@ -38,6 +38,12 @@ var entities: Dictionary = {}
 var main: Node = null
 var starter_done := false
 var caves_stocked := false   # barnacled chests placed in the world's caves (layout 2+)
+var camps_stocked := false   # a chest in each Mud-Claw camp (layout 2+)
+var wrecks_stocked := false  # a locker in each beached shipwreck (layout 2+)
+var _scroll_deck: Array = []  # rare recipe scrolls still to deal out (RecipeBook.FOUND_SCROLLS)
+var hulk_stocked := false      # loose boulders above the Barnacled Hulk's strand
+var outposts_stocked := false  # a War Horn Totem and a strongbox in each Sea-Reaver outpost
+var under_stocked := false   # mine strongboxes, sump caches, springs, village wells (layout 2+)
 var sleeping_peers: Dictionary = {}  # peer_id (int) -> bed grid_coord (Vector3i)
 
 
@@ -453,13 +459,18 @@ func deserialize(data: Array) -> void:
 
 ## Session state hooks (saved in state.dat, sent to joining players).
 func save_state() -> Dictionary:
-	return {"list": serialize(), "starter_done": starter_done, "caves_stocked": caves_stocked}
+	return {"list": serialize(), "starter_done": starter_done, "caves_stocked": caves_stocked, "camps_stocked": camps_stocked, "under_stocked": under_stocked, "wrecks_stocked": wrecks_stocked, "outposts_stocked": outposts_stocked, "hulk_stocked": hulk_stocked}
 
 
 func load_state(d: Dictionary) -> void:
 	deserialize(d.get("list", []))
 	starter_done = bool(d.get("starter_done", false))
 	caves_stocked = bool(d.get("caves_stocked", false))
+	camps_stocked = bool(d.get("camps_stocked", false))
+	under_stocked = bool(d.get("under_stocked", false))
+	wrecks_stocked = bool(d.get("wrecks_stocked", false))
+	outposts_stocked = bool(d.get("outposts_stocked", false))
+	hulk_stocked = bool(d.get("hulk_stocked", false))
 
 
 ## Called by Main with the Session once both exist.
@@ -589,6 +600,181 @@ func _on_world_ready(_is_new: bool) -> void:
 		spawn_starter()
 	if is_authority() and not caves_stocked:
 		stock_caves()
+	if is_authority() and not camps_stocked:
+		stock_camps()
+	if is_authority() and not under_stocked:
+		stock_underground()
+	if is_authority() and not wrecks_stocked:
+		stock_wrecks()
+	if is_authority() and not outposts_stocked:
+		stock_outposts()
+	if is_authority() and not hulk_stocked:
+		stock_hulk()
+
+
+## The loose boulders on the rocks above the Hulk's strand. Authority only, once.
+func stock_hulk() -> void:
+	hulk_stocked = true
+	if main == null or main.world == null or main.world.gen == null or main.world.gen.hulk.is_empty():
+		return
+	var n := 0
+	for b: Vector3i in main.world.gen.hulk.boulders:
+		if _place_at(&"loose_boulder", b, 0, 8) != null:
+			n += 1
+	print("[hulk] %d loose boulders on the rocks" % n)
+
+
+## The War Horn Totem and a strongbox in each Sea-Reaver outpost. Authority only, once.
+func stock_outposts() -> void:
+	outposts_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var gen: WorldGen = main.world.gen
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0x5EA4
+	var n := {"totem": 0, "box": 0}
+	for i in gen.outposts.size():
+		var rec: Dictionary = gen.outposts[i]
+		var t := _place_at(&"war_horn_totem", rec.totem, 0, 6)
+		if t is WarHornEntity:
+			(t as WarHornEntity).outpost = i
+			n.totem += 1
+		var ent := _place_at(&"barnacled_chest", rec.chest, 0, 6)
+		if ent is ChestEntity:
+			(ent as ChestEntity).entity_name = "Reaver Strongbox"
+			for it: Array in ChestEntity.outpost_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
+			n.box += 1
+	if not gen.outposts.is_empty():
+		print("[outposts] %d outposts, %d totems, %d strongboxes" % [gen.outposts.size(), n.totem, n.box])
+
+
+## The next rare recipe scroll from this world's shuffled deck (reshuffled when it runs out).
+func _deal_scroll() -> StringName:
+	RecipeBook.register_scroll_items()
+	if _scroll_deck.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(main.seed_value) ^ 0x5C2011
+		_scroll_deck = RecipeBook.FOUND_SCROLLS.duplicate()
+		for i in range(_scroll_deck.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t: Variant = _scroll_deck[i]
+			_scroll_deck[i] = _scroll_deck[j]
+			_scroll_deck[j] = t
+	return RecipeBook.scroll_item(_scroll_deck.pop_back())
+
+
+## A captain's locker in each beached wreck: salvage, coin, and a rare recipe scroll.
+func stock_wrecks() -> void:
+	wrecks_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0x3EC4
+	var placed := 0
+	for w: Dictionary in main.world.gen.wrecks:
+		var d: Vector2i = w.dir
+		var al: Vector2i = w.get("along", Vector2i.ZERO)
+		var ent: WorldEntity = null
+		for k: int in [0, 4, -4, 8, -8, 12]:
+			ent = _place_at(&"barnacled_chest", (w.chest as Vector3i) + Vector3i(al.x * k, 0, al.y * k), 1 if d.x != 0 else 0, 6)
+			if ent != null:
+				break
+		if ent is ChestEntity:
+			(ent as ChestEntity).entity_name = "Wreck Locker"
+			for it: Array in ChestEntity.wreck_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
+			placed += 1
+	if not main.world.gen.wrecks.is_empty():
+		print("[wrecks] %d shipwrecks, %d lockers placed" % [main.world.gen.wrecks.size(), placed])
+
+
+## The old brass mines' strongboxes, a cache at the bottom of each flooded sump, a freshwater
+## spring in each karst cavern, and a stone well in each NPC village. Authority only, once.
+func stock_underground() -> void:
+	under_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var gen: WorldGen = main.world.gen
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0x5A3F
+	var n := {"mine": 0, "sump": 0, "spring": 0, "well": 0}
+	for m: Dictionary in gen.mines:
+		var ent := _place_at(&"barnacled_chest", m.chest, rng.randi_range(0, 3), 4)
+		if ent is ChestEntity:
+			(ent as ChestEntity).entity_name = "Miner's Strongbox"
+			for it: Array in ChestEntity.mine_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			(ent as ChestEntity).container.inventory.add_item(RecipeBook.scroll_item(RecipeBook.MINE_SCROLL), 1)
+			n.mine += 1
+	for s: Dictionary in gen.sumps:
+		var ent := _place_at(&"barnacled_chest", s.chest, rng.randi_range(0, 3), 3)
+		if ent is ChestEntity:
+			(ent as ChestEntity).entity_name = "Sunken Cache"
+			for it: Array in ChestEntity.sump_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
+			n.sump += 1
+	for p: Vector3i in gen.springs:
+		for off: Vector3i in [Vector3i.ZERO, Vector3i(4, 0, 0), Vector3i(-4, 0, 0), Vector3i(0, 0, 4), Vector3i(0, 0, -4)]:
+			if _place_at(&"freshwater_spring", p + off, 0, 3) != null:
+				n.spring += 1
+				break
+	for v: Dictionary in gen.villages:
+		var c: Vector3 = v.center
+		var side: Vector2i = v.side
+		for off in [10, -10, 16, -16]:
+			var w := Vector3i(roundi(c.x) + side.x * off, roundi(c.y), roundi(c.z) + side.y * off)
+			if _place_at(&"stone_well", w, 0, 6) != null:
+				n.well += 1
+				break
+	print("[under] %d mine strongboxes, %d sump caches, %d springs, %d village wells" % [n.mine, n.sump, n.spring, n.well])
+
+
+## Place `type` on the ground near voxel `p` (searching `up` voxels above it). Null if blocked.
+func _place_at(type: StringName, p: Vector3i, rot: int, up: int) -> WorldEntity:
+	var col := Vector2i(p.x >> 5, p.z >> 5)
+	if not main.world.store.is_column_generated(col):
+		main.world.store.generate_column(col)
+	var y := _ground_y(p.x, p.z, p.y + up)
+	if y <= 0:
+		return null
+	return _authority_place(type, Vector3i(p.x, y, p.z), rot, 1)
+
+
+## One barnacled chest in each Mud-Claw camp, in front of the totem. Authority only, once per world.
+func stock_camps() -> void:
+	camps_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0xC1A3
+	var placed := 0
+	for rec: Dictionary in main.world.gen.camps:
+		var p: Vector3i = rec.chest
+		var col := Vector2i(p.x >> 5, p.z >> 5)
+		if not main.world.store.is_column_generated(col):
+			main.world.store.generate_column(col)
+		var y := _ground_y(p.x, p.z, p.y + 6)
+		if y <= 0:
+			continue
+		var g: Vector2 = rec.gate
+		var rot := 0
+		if absf(g.x) > absf(g.y):
+			rot = 1 if g.x > 0 else 3
+		else:
+			rot = 0 if g.y > 0 else 2
+		var ent := _authority_place(&"barnacled_chest", Vector3i(p.x, y, p.z), rot, 1)
+		if ent is ChestEntity:
+			for it: Array in ChestEntity.camp_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			if rng.randf() < 0.3:
+				(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
+			placed += 1
+	if not main.world.gen.camps.is_empty():
+		print("[camps] %d Mud-Claw camps, %d camp chests placed" % [main.world.gen.camps.size(), placed])
 
 
 ## One barnacled chest in each tidal grotto and karst cavern. Authority only, once per world.
@@ -613,6 +799,8 @@ func stock_caves() -> void:
 		if ent is ChestEntity:
 			for it: Array in ChestEntity.cave_loot(int(s.kind), rng):
 				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			if rng.randf() < 0.35:
+				(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
 			placed += 1
 	if not sites.is_empty():
 		print("[caves] %d cave systems, %d barnacled chests placed" % [sites.size(), placed])

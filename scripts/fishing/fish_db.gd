@@ -74,7 +74,7 @@ static func init_db() -> void:
 
 	# 6. Abyssal Leviathan Ray: Legendary trophy catch of the deep trenches
 	var ray := FishDef.new(
-		&"abyssal_ray", "Abyssal Leviathan Ray", &"silver_mackerel", # Yields trophy/special
+		&"abyssal_ray", "Abyssal Leviathan Ray", &"abyssal_ray",   # the trophy itself (secret feast)
 		FishDef.Rarity.LEGENDARY, FishDef.Habitat.DEEP_TRENCH,
 		FishDef.TidePref.LOW_TIDE_ONLY, FishDef.WeatherPref.ANY, FishDef.TimePref.NIGHT_ONLY, 3
 	)

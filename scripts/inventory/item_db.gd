@@ -118,6 +118,9 @@ static func _register_materials() -> void:
 		ItemDef.new(&"sea_salt", "Sea Salt", ItemDef.Category.MATERIAL, 999, -1, [&"salt", &"cure", &"cooking"]),
 		ItemDef.new(&"sea_glass", "Polished Sea Glass", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"decor"]),
 		ItemDef.new(&"chitin_plate", "Heavy Chitin Plate", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"armor_mat"]),
+		ItemDef.new(&"gloom_gland", "Gloom-Crawler Gland", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"glow"]),
+		ItemDef.new(&"hulk_pearl", "The Hulk's Pearl", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary", &"decor"]),
+		ItemDef.new(&"calamine_ore", "Calamine Ore", ItemDef.Category.MATERIAL, 999, -1, [&"ore", &"metal"]),
 	]
 	for o in ores:
 		register_item(o)
@@ -157,6 +160,10 @@ static func _register_crops_and_farming() -> void:
 		ItemDef.new(&"pickled_samphire_jar", "Pickled Samphire Jar", ItemDef.Category.FOOD, 20, -1, [&"food", &"pickled", &"cure"]),
 		ItemDef.new(&"peppermint_kelp_tea", "Peppermint Kelp Tea", ItemDef.Category.FOOD, 20, -1, [&"drink", &"tea", &"tonic"]),
 		ItemDef.new(&"roasted_chicory_brew", "Roasted Chicory Sea-Brew", ItemDef.Category.FOOD, 20, -1, [&"drink", &"coffee", &"tonic"]),
+		# Secret recipes from the rarest catches
+		ItemDef.new(&"leviathan_feast", "Leviathan Feast", ItemDef.Category.FOOD, 5, -1, [&"food", &"meal", &"banquet", &"buff", &"secret"]),
+		ItemDef.new(&"storm_smoked_eel", "Storm-Smoked Eel", ItemDef.Category.FOOD, 20, -1, [&"food", &"meal", &"smoked", &"secret"]),
+		ItemDef.new(&"phosphor_broth", "Phosphor Ink Broth", ItemDef.Category.FOOD, 10, -1, [&"food", &"soup", &"buff", &"secret"]),
 	]
 
 	# Configure food buffs & 3-meal satiety stomach attributes (keyed by id, not list
@@ -176,6 +183,9 @@ static func _register_crops_and_farming() -> void:
 		&"salt_milk": {"hp_bonus": 15, "stamina_bonus": 20, "regen_hp_sec": 0.8, "duration_sec": 600.0},
 		&"sea_egg": {"hp_bonus": 12, "stamina_bonus": 15, "regen_hp_sec": 0.5, "duration_sec": 600.0},
 		&"goat_cheese": {"hp_bonus": 35, "stamina_bonus": 30, "regen_hp_sec": 1.2, "duration_sec": 1200.0},
+		&"leviathan_feast": {"hp_bonus": 100, "stamina_bonus": 80, "regen_hp_sec": 3.0, "duration_sec": 2400.0, "cold_immunity": true, "extra_breath_sec": 120.0, "swim_speed": 1.3},
+		&"storm_smoked_eel": {"hp_bonus": 30, "stamina_bonus": 60, "stamina_regen_mult": 2.0, "regen_hp_sec": 1.0, "duration_sec": 1200.0},
+		&"phosphor_broth": {"hp_bonus": 35, "stamina_bonus": 30, "regen_hp_sec": 1.4, "duration_sec": 1500.0, "extra_breath_sec": 90.0, "swim_speed": 1.2},
 	}
 	for c: ItemDef in crops:
 		if food_buffs.has(c.id):
@@ -183,6 +193,10 @@ static func _register_crops_and_farming() -> void:
 
 	for c in crops:
 		register_item(c)
+	# Spring water from cavern springs and stone wells: a plain drink, and the furnace's quench.
+	var water := ItemDef.new(&"spring_water", "Flask of Spring Water", ItemDef.Category.FOOD, 20, -1, [&"drink", &"water", &"fresh"])
+	water.food_data = {"hp_bonus": 4, "stamina_bonus": 10, "stamina_regen_mult": 1.35, "regen_hp_sec": 0.3, "duration_sec": 480.0}
+	register_item(water)
 
 
 static func _register_fish_and_sea() -> void:
@@ -192,6 +206,7 @@ static func _register_fish_and_sea() -> void:
 		ItemDef.new(&"tidepool_flounder", "Tidepool Flounder", ItemDef.Category.FOOD, 20, -1, [&"fish", &"benthic", &"fresh"]),
 		ItemDef.new(&"lightning_eel", "Lightning Eel", ItemDef.Category.FOOD, 20, -1, [&"fish", &"storm", &"fresh"]),
 		ItemDef.new(&"ghost_squid", "Ghost Squid", ItemDef.Category.FOOD, 20, -1, [&"fish", &"night", &"luminescent"]),
+		ItemDef.new(&"abyssal_ray", "Abyssal Leviathan Ray", ItemDef.Category.FOOD, 5, -1, [&"fish", &"legendary", &"trophy"]),
 		ItemDef.new(&"shore_crab", "Shore Crab", ItemDef.Category.FOOD, 20, -1, [&"shellfish", &"trap"]),
 		ItemDef.new(&"brine_oyster", "Brine Oyster", ItemDef.Category.FOOD, 50, -1, [&"shellfish", &"aquaculture"]),
 	]
@@ -377,6 +392,9 @@ static func _register_special_and_currencies() -> void:
 		ItemDef.new(&"gilded_ship_wheel", "Gilded Ship Wheel", ItemDef.Category.SPECIAL, 1, -1, [&"trophy", &"boss_drop"]),
 		ItemDef.new(&"blueprint_tide_mill", "Blueprint: Tide Mill", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"engineering"]),
 		ItemDef.new(&"blueprint_dry_dock", "Blueprint: Dry Dock", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"maritime"]),
+		ItemDef.new(&"skiff_kit", "Outrigger Skiff (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
+		ItemDef.new(&"barge_kit", "Tide-Barge (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
+		ItemDef.new(&"sloop_kit", "Coastal Sloop (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"pine_sapling", "Pine Sapling", ItemDef.Category.SPECIAL, 20, -1, [&"placeable", &"sapling", &"forestry"]),
 	]
 	for s in specials:

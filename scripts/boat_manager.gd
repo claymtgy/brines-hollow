@@ -78,6 +78,7 @@ func _spawn_initial() -> void:
 		if main.is_net:
 			spawn_boat.rpc(bid, sp.pos, sp.yaw)
 	print("[boat] spawned %d boat(s)" % spots.size())
+	_spawn_saved()
 
 
 ## Fallback until the world provides boat_spawns: nearest open water to the player spawn
@@ -110,27 +111,242 @@ func _deep_enough(p: Vector3, low: float, vs: float) -> bool:
 	return true
 
 
-func _create(bid: int, pos: Vector3, yaw: float) -> Boat:
+func _create(bid: int, pos: Vector3, yaw: float, kind := Boat.KIND_ROWBOAT) -> Boat:
 	if boats.has(bid):
 		return boats[bid]
 	var b := Boat.new()
 	b.name = "Boat%d" % bid
 	add_child(b)
-	b.setup(bid, main.world, main.sky, pos, yaw)
+	b.setup(bid, main.world, main.sky, pos, yaw, kind)
 	boats[bid] = b
 	_next_id = maxi(_next_id, bid + 1)
 	return b
 
 
 @rpc("authority", "call_remote", "reliable")
-func spawn_boat(bid: int, pos: Vector3, yaw: float) -> void:
-	_create(bid, pos, yaw)
+func spawn_boat(bid: int, pos: Vector3, yaw: float, kind := 0) -> void:
+	_create(bid, pos, yaw, kind)
+
+
+# ---------------------------------------------------------------- launching a skiff
+
+## Open water beside the player, deep enough at low tide for the skiff's hull and float.
+func launch_spot(p: Player) -> Variant:
+	var vs := VoxelWorld.VS
+	var low := (VoxelWorld.SEA_MID - VoxelWorld.TIDE_AMP) * vs
+	var water: float = main.sky.water_level_m()
+	if p.position.y > water + 2.5:
+		return null
+	for r in [3.0, 4.0, 5.0, 6.5]:
+		for k in 16:
+			var a := TAU * k / 16.0
+			var c: Vector3 = p.position + Vector3(cos(a), 0, sin(a)) * float(r)
+			var yaw := atan2(c.x - p.position.x, c.z - p.position.z)
+			var f := Vector3(sin(yaw), 0, cos(yaw))
+			var s := Vector3(cos(yaw), 0, -sin(yaw))
+			var ok := true
+			for q: Vector3 in [c, c + f * 2.0, c - f * 2.0, c - s * 1.1, c + s * 0.5]:
+				if not _deep_enough(q, minf(low, water - 0.3), vs):
+					ok = false
+					break
+			if ok:
+				return {"pos": Vector3(c.x, water, c.z), "yaw": yaw}
+	return null
+
+
+const KITS := {&"skiff_kit": Boat.KIND_SKIFF, &"barge_kit": Boat.KIND_BARGE, &"sloop_kit": Boat.KIND_SLOOP}
+const KIT_HINT := {
+	Boat.KIND_SKIFF: "Skiff launched. F to board, W to raise the sail.",
+	Boat.KIND_BARGE: "Tide-Barge launched. F to board; Shift+F beside it to stow or take cargo.",
+	Boat.KIND_SLOOP: "Coastal Sloop launched. F to board, W to raise the sail: she points higher than a skiff.",
+}
+
+
+## The boat kind of the kit in the player's hand, or -1.
+func held_kit() -> int:
+	var p: Player = main.player
+	if p == null or p.is_seated():
+		return -1
+	var slot: ItemSlot = p.inventory.get_active_item()
+	if slot == null or slot.is_empty():
+		return -1
+	return int(KITS.get(slot.item_id, -1))
+
+
+func holding_skiff_kit() -> bool:
+	return held_kit() >= 0
+
+
+func try_launch() -> bool:
+	var kind := held_kit()
+	if kind < 0:
+		return false
+	var sp: Variant = launch_spot(main.player)
+	var nm := Boat.new()
+	nm.kind = kind
+	var label := nm.display_name()
+	nm.free()
+	if sp == null:
+		main.hud.show_toast("Find open water (at least waist deep) to launch the %s" % label)
+		return false
+	main.player.inventory.remove_item(KITS.find_key(kind), 1)
+	if _is_host():
+		_host_launch(sp.pos, sp.yaw, kind)
+	else:
+		request_launch.rpc_id(1, sp.pos, sp.yaw, kind)
+	main.hud.show_toast(KIT_HINT.get(kind, "Launched."))
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_launch(pos: Vector3, yaw: float, kind := Boat.KIND_SKIFF) -> void:
+	if multiplayer.is_server():
+		_host_launch(pos, yaw, kind)
+
+
+func _host_launch(pos: Vector3, yaw: float, kind := Boat.KIND_SKIFF) -> Boat:
+	var bid := _next_id
+	_next_id += 1
+	var b := _create(bid, pos, yaw, kind)
+	if main.is_net and multiplayer.multiplayer_peer != null:
+		spawn_boat.rpc(bid, pos, yaw, kind)
+	print("[boat] %s %d launched at (%.1f, %.1f)" % [b.display_name(), bid, pos.x, pos.z])
+	return b
+
+
+# ---------------------------------------------------------------- the barge's hold
+
+## Shift+F beside a barge: stow the active stack, or (empty-handed) take a stack out.
+func hold_interact(b: Boat) -> void:
+	var p: Player = main.player
+	var slot: ItemSlot = p.inventory.get_active_item()
+	if slot != null and not slot.is_empty():
+		var id := slot.item_id
+		var n := p.inventory.remove_item(id, slot.count)
+		if n <= 0:
+			return
+		if _is_host():
+			_host_hold(_local_id(), b.id, &"stow", id, n)
+		else:
+			request_hold.rpc_id(1, b.id, &"stow", id, n)
+	elif _is_host():
+		_host_hold(_local_id(), b.id, &"take", &"", 0)
+	else:
+		request_hold.rpc_id(1, b.id, &"take", &"", 0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_hold(bid: int, op: StringName, item: StringName, n: int) -> void:
+	if multiplayer.is_server():
+		_host_hold(multiplayer.get_remote_sender_id(), bid, op, item, n)
+
+
+func _host_hold(peer: int, bid: int, op: StringName, item: StringName, n: int) -> void:
+	var b: Boat = boats.get(bid)
+	var back: Array = []
+	var toast := ""
+	if b == null or b.hold == null:
+		if op == &"stow":
+			back = [[item, n]]
+		_give(peer, back, "There's no hold here.")
+		return
+	var who: Node3D = main.player if peer == _local_id() else main.remotes.get(peer)
+	if who != null and who.position.distance_to(b.position) > BOARD_RANGE + 3.0:
+		if op == &"stow":
+			_give(peer, [[item, n]], "")
+		return
+	if op == &"stow":
+		var left := b.hold.add_item(item, n)
+		var it: ItemDef = ItemDB.get_item(item)
+		toast = "Stowed %d %s in the barge's hold (%d/%d)" % [n - left, it.name if it != null else String(item), b.hold_used(), Boat.HOLD_SLOTS]
+		if left > 0:
+			back = [[item, left]]
+			toast += "  ·  the hold is full"
+	else:
+		for s: ItemSlot in b.hold.slots:
+			if not s.is_empty():
+				var id: StringName = s.item_id
+				var got := b.hold.remove_item(id, s.count)
+				back = [[id, got]]
+				var it2: ItemDef = ItemDB.get_item(id)
+				toast = "Took %d %s from the hold" % [got, it2.name if it2 != null else String(id)]
+				break
+		if back.is_empty():
+			toast = "The hold is empty. Hold Shift and press F with a stack in hand to stow it."
+	_give(peer, back, toast)
+	_send_hold(b)
+
+
+func _give(peer: int, items: Array, toast: String) -> void:
+	if peer == _local_id() or not main.is_net:
+		hold_give(items, toast)
+	else:
+		hold_give.rpc_id(peer, items, toast)
+
+
+@rpc("authority", "call_remote", "reliable")
+func hold_give(items: Array, toast: String) -> void:
+	var p: Player = main.player
+	if p == null:
+		return
+	for g: Array in items:
+		var left := p.inventory.add_item(StringName(g[0]), int(g[1]))
+		if left > 0:
+			toast += "  (no room: %d dropped)" % left
+	if toast != "":
+		main.hud.show_toast(toast)
+
+
+func _send_hold(b: Boat) -> void:
+	if main.is_net and multiplayer.multiplayer_peer != null and b.hold != null:
+		hold_sync.rpc(b.id, b.hold.serialize())
+
+
+@rpc("authority", "call_remote", "reliable")
+func hold_sync(bid: int, data: Variant) -> void:
+	var b: Boat = boats.get(bid)
+	if b != null and b.hold != null:
+		b.hold.deserialize(data)
+
+
+# ---------------------------------------------------------------- saving the fleet
+
+var _saved_fleet: Array = []
+var _fleet_registered := false
+
+
+## Launched boats (skiffs, barges, sloops, and the barge's cargo) are kept with the world;
+## the starting rowboats are always re-made where the world puts them.
+func _save_fleet() -> Variant:
+	var out: Array = []
+	for b: Boat in boats.values():
+		if b.kind == Boat.KIND_ROWBOAT:
+			continue
+		out.append({"kind": b.kind, "pos": b.position, "yaw": b.yaw, "hold": b.hold.serialize() if b.hold != null else null})
+	return out
+
+
+func _load_fleet(d: Variant) -> void:
+	_saved_fleet = d if d is Array else []
+	if _spawned and _is_host():
+		_spawn_saved()
+
+
+func _spawn_saved() -> void:
+	for rec: Dictionary in _saved_fleet:
+		var b := _host_launch(rec.get("pos", Vector3.ZERO), float(rec.get("yaw", 0.0)), int(rec.get("kind", Boat.KIND_SKIFF)))
+		if b.hold != null and rec.get("hold") != null:
+			b.hold.deserialize(rec.hold)
+			_send_hold(b)
+	if not _saved_fleet.is_empty():
+		print("[boat] relaunched %d saved boat(s)" % _saved_fleet.size())
+	_saved_fleet = []
 
 
 @rpc("authority", "call_remote", "reliable")
 func sync_all(data: Array) -> void:
 	for d: Array in data:
-		var b := _create(d[0], d[1], d[2])
+		var b := _create(d[0], d[1], d[2], int(d[4]) if d.size() > 4 else 0)
 		b.occupants = (d[3] as Array).duplicate()
 	_refresh_links()
 
@@ -140,8 +356,11 @@ func _on_peer_connected(id: int) -> void:
 		return
 	var data := []
 	for b: Boat in boats.values():
-		data.append([b.id, b.position, b.yaw, b.occupants])
+		data.append([b.id, b.position, b.yaw, b.occupants, b.kind])
 	sync_all.rpc_id(id, data)
+	for b: Boat in boats.values():
+		if b.hold != null:
+			hold_sync.rpc_id(id, b.id, b.hold.serialize())
 
 
 func _on_peer_disconnected(id: int) -> void:
@@ -160,6 +379,10 @@ func _on_peer_disconnected(id: int) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	var can_interact: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or (main.controller != null and main.controller.current_type != ControllerManager.Type.KEYBOARD_MOUSE)
 	if e.is_action_pressed("interact") and can_interact:
+		if holding_skiff_kit() and nearest_boardable(main.player.position) == null and launch_spot(main.player) != null:
+			get_viewport().set_input_as_handled()
+			try_launch()
+			return
 		interact()
 
 
@@ -184,12 +407,24 @@ func interact() -> void:
 			request_leave.rpc_id(1, p.boat.id)
 		return
 	var b := nearest_boardable(p.position)
+	var near_barge := _nearest_barge(p.position)
+	if near_barge != null and Input.is_action_pressed("sprint"):
+		hold_interact(near_barge)
+		return
 	if b == null:
 		return
 	if _is_host():
 		_host_seat(_local_id(), b.id, b.free_seat())
 	else:
 		request_seat.rpc_id(1, b.id, b.free_seat())
+
+
+func _nearest_barge(pos: Vector3) -> Boat:
+	for b: Boat in boats.values():
+		if b.hold != null and Vector2(pos.x - b.position.x, pos.z - b.position.z).length() < BOARD_RANGE + 0.6 \
+				and absf(pos.y - b.position.y) < 2.5:
+			return b
+	return null
 
 
 func nearest_boardable(pos: Vector3) -> Boat:
@@ -292,6 +527,9 @@ func _refresh_links() -> void:
 # ---------------------------------------------------------------- simulation + sync
 
 func _physics_process(delta: float) -> void:
+	if not _fleet_registered and main.get("session") != null:
+		_fleet_registered = true
+		main.session.register_state(&"fleet", _save_fleet, _load_fleet)
 	if not _world_ready():
 		return
 	if not _spawned and _is_host():
@@ -301,6 +539,7 @@ func _physics_process(delta: float) -> void:
 		_last_net_id = me
 	var p: Player = main.player
 	for b: Boat in boats.values():
+		b._local_auth = b.authority() == me
 		if b.authority() != me:
 			b.interpolate(delta)
 			continue
@@ -348,11 +587,23 @@ func _process(_delta: float) -> void:
 	var p: Player = main.player
 	var prompt := ""
 	if p.is_seated():
-		prompt = "F  Step off      W/S  row    A/D  turn    Shift  pull hard" if p.seat == 0 else "F  Step off      (riding as passenger)"
+		if p.boat.has_sail():
+			var bt: Boat = p.boat
+			var w := bt.wind_vec()
+			var pos_name := Boat.point_of_sail(bt.forward2(), w)
+			var status := "%s  %.1f m/s  ·  sail %d%%" % [pos_name, bt.vel.length(), int(bt.row_power * 100.0)]
+			prompt = (status + "      W/S sail  A/D steer  Shift paddle  F step off") if p.seat == 0 				else (status + "      F  Step off")
+		else:
+			prompt = "F  Step off      W/S  row    A/D  turn    Shift  pull hard" if p.seat == 0 else "F  Step off      (riding as passenger)"
 	else:
 		var b := nearest_boardable(p.position)
-		if b != null:
-			prompt = "F  Board rowboat" if b.free_seat() == 0 else "F  Ride along"
+		var kit := held_kit()
+		if kit >= 0 and b == null and launch_spot(p) != null:
+			prompt = "F  Launch %s" % ["rowboat", "skiff", "Tide-Barge", "Coastal Sloop"][kit]
+		elif b != null:
+			prompt = ("F  Board %s" % b.display_name()) if b.free_seat() == 0 else "F  Ride along"
+			if b.hold != null:
+				prompt += "      Shift+F  stow / take cargo (%d/%d)" % [b.hold_used(), Boat.HOLD_SLOTS]
 		elif main.entities != null:
 			var ent: WorldEntity = main.entities.get_closest_interactable(p.position)
 			if ent != null:
@@ -482,3 +733,97 @@ func _scale_shots(dir: String, b: Boat) -> void:
 	main.rig.dist = 6.0
 	await _wait(1.0)
 	await main._shot(dir, "scale_boat")
+
+
+## --skiffcheck[=SHOT_DIR]: launch a skiff from a kit, sail it on each point of sail, and
+## check it beats the rowboat on a reach and stalls head to wind.
+func run_skiff_check(shot_dir: String) -> void:
+	var p: Player = main.player
+	p.input_enabled = false
+	while boats.is_empty():
+		await get_tree().process_frame
+	var row: Boat = boats.values()[0]
+	p.position = row.position
+	p.inventory.add_item(&"skiff_kit", 1)
+	await _wait(1.0)
+	var before := boats.size()
+	var sp: Variant = launch_spot(p)
+	print("[skiff] launch spot: %s" % [sp])
+	if sp == null or not try_launch():
+		print("[skiff] FAIL no launch")
+		get_tree().quit()
+		return
+	await _wait(0.5)
+	var b: Boat = null
+	for x: Boat in boats.values():
+		if x.is_skiff():
+			b = x
+	print("[skiff] boats %d -> %d, kit left %d" % [before, boats.size(), p.inventory.get_item_count(&"skiff_kit")])
+	p.position = b.position + Vector3(0, 0.5, 0)
+	_host_seat(_local_id(), b.id, 0)
+	await _wait(0.4)
+	print("[skiff] seated=%s skiff=%s" % [p.is_seated(), p.is_seated() and p.boat.is_skiff()])
+	# open water for the trial: a spot with 45 m of clear sea all round
+	var water := b.water_y()
+	var found := false
+	for r in range(20, 600, 20):
+		for k in 24:
+			var a := TAU * k / 24.0
+			var c := row.position + Vector3(cos(a), 0, sin(a)) * float(r)
+			var clear := true
+			for j in 16:
+				var q := c + Vector3(cos(TAU * j / 16.0), 0, sin(TAU * j / 16.0)) * 60.0
+				for ti in 16:
+					var t := ti / 15.0
+					var e: Vector3 = c.lerp(q, t) / VoxelWorld.VS
+					if main.world.gen.col_h(int(e.x), int(e.z)) > VoxelWorld.SEA_MID - VoxelWorld.TIDE_AMP - 4:
+						clear = false
+						break
+				if not clear:
+					break
+			if clear:
+				b.position = Vector3(c.x, water, c.z)
+				p.position = b.position + Vector3(0, 0.5, 0)
+				found = true
+				await _wait(3.0)   # let the sea floor stream in
+				break
+		if found:
+			break
+	print("[skiff] trial spot %s blocked=%d" % [b.position, b.blocked_count(b.position, b.yaw, b.water_y())])
+	debug_active = true
+	var w := b.wind_vec()
+	print("[skiff] wind %s (strength %.2f)" % [w.normalized(), w.length()])
+	var results := {}
+	for leg: Array in [["beam reach", PI * 0.5], ["running", 0.0], ["in irons", PI]]:
+		var wa := atan2(w.x, w.y)   # the bow, relative to where the wind blows towards
+		b.yaw = wa + float(leg[1])
+		b.position = Vector3(b.position.x, b.water_y(), b.position.z) if leg[0] == "beam reach" else b.get_meta("trial", b.position)
+		b.set_meta("trial", b.position)
+		b.vel = Vector2.ZERO
+		b.yaw_vel = 0.0
+		debug_input = Vector3(1, 0, 0)       # raise the sail and hold it
+		for sec in 6:
+			await _wait(1.0)
+			print("[skiff]   %s t=%d speed %.2f sail %.2f blocked %d grounded %s eff %.2f" % [leg[0], sec + 1, b.vel.length(), b.row_power,
+				b.blocked_count(b.position, b.yaw, b.water_y()), b.grounded, Boat.sail_efficiency(b.forward2(), b.wind_vec())])
+		results[leg[0]] = b.vel.length()
+		_stat(b, String(leg[0]))
+		if shot_dir != "" and leg[0] == "beam reach":
+			main.rig.yaw = b.yaw + PI * 0.7
+			main.rig.pitch = -0.32
+			main.rig.dist = 8.0
+			main.rig.shoulder = -2.6
+			main.hud.show_hud(false)
+			await _wait(0.4)
+			await main._shot(shot_dir, "skiff_reach")
+			main.hud.show_hud(true)
+	debug_input = Vector3(-1, 0, 0)
+	await _wait(2.0)
+	print("[skiff] sail lowered: %d%%" % int(b.row_power * 100.0))
+	var pc = p.get("combat")
+	if pc != null:
+		p.inventory.add_item(&"silver_mackerel", 1)
+		print("[skiff] gulls see fish while aboard: %s" % [pc.holding_fish()])
+	print("[skiff] speeds: reach %.2f, run %.2f, irons %.2f m/s" % [results["beam reach"], results["running"], results["in irons"]])
+	debug_active = false
+	get_tree().quit()

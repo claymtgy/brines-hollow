@@ -17,10 +17,11 @@ extends Node
 const SIM_DT := 0.05
 const SNAPSHOT_DT := 0.1
 const SPAWN_DT := 1.0
-const CAP := {&"crab": 12, &"gull": 12, &"eel": 4}
+const CAP := {&"crab": 12, &"gull": 12, &"eel": 4, &"gloomcrawler": 4}
 ## Snapshot kind indices: append only (clients map index -> kind).
 const KINDS := [&"crab", &"gull", &"eel", &"hare", &"seal", &"puffin", &"otter", &"heron", &"whale",
-	&"fox", &"stoat", &"rat", &"eagle"]
+	&"fox", &"stoat", &"rat", &"eagle", &"mudclaw", &"mudbrute", &"gloomcrawler",
+	&"reaver", &"reaver_harpooner", &"barnacled_hulk"]
 const DESPAWN_DIST := 70.0
 
 var main: Node
@@ -44,6 +45,9 @@ var _diff_loaded := false
 var _args := {}
 var wildlife: WildlifeDirector       # ambient animals, farm raids, dens (scripts/wildlife/)
 var fx: WildlifeFX
+var camps: MudClawCamps              # Mud-Claw camps on the outer islands
+var outposts: ReaverOutposts         # Sea-Reaver outposts on the far islands
+var hulk: HulkLair                   # the Barnacled Hulk's strand (Hollow Flats boss)
 
 # Dev-check counters
 var stats_hits := 0
@@ -56,6 +60,15 @@ func _ready() -> void:
 	fx = WildlifeFX.new()
 	fx.name = "WildlifeFX"
 	add_child(fx)
+	camps = MudClawCamps.new()
+	camps.net = self
+	add_child(camps)
+	outposts = ReaverOutposts.new()
+	outposts.net = self
+	add_child(outposts)
+	hulk = HulkLair.new()
+	hulk.net = self
+	add_child(hulk)
 	if main.get("session") != null:
 		main.session.register_state(&"wildlife", wildlife.serialize, wildlife.deserialize)
 	for a in OS.get_cmdline_user_args():
@@ -324,6 +337,12 @@ func spawn(kind: StringName, pos: Vector3, cid := -1) -> Creature:
 		&"stoat": c = Stoat.new()
 		&"rat": c = ShoreRat.new()
 		&"eagle": c = SeaEagle.new()
+		&"mudclaw": c = MudClaw.new()
+		&"mudbrute": c = MudClaw.new(true)
+		&"gloomcrawler": c = GloomCrawler.new()
+		&"reaver": c = SeaReaver.new()
+		&"reaver_harpooner": c = SeaReaver.new(true)
+		&"barnacled_hulk": c = BarnacledHulk.new()
 		_: return null
 	if cid < 0:
 		cid = _next_id
@@ -358,7 +377,7 @@ func _spawn_tick() -> void:
 	for c: Creature in creatures.values():
 		var near := false
 		for pl: Dictionary in players:
-			if c.position.distance_to(pl.pos) < (40.0 if c.kind == &"eel" else wildlife.despawn_distance(c.kind)):
+			if c.position.distance_to(pl.pos) < (40.0 if c.kind in [&"eel", &"gloomcrawler"] else wildlife.despawn_distance(c.kind)):
 				near = true
 				break
 		if not near:
@@ -407,7 +426,48 @@ func _spawn_tick() -> void:
 				var home := _find_cave_water(pp, water_y)
 				if home != Vector3.INF and not Perception.is_lit(home, _context().lights):
 					spawn(&"eel", home)
+		# Gloom-Crawlers: on cavern ceilings deep under rock, any hour (caves are always dark).
+		if CombatMath.hostiles_allowed(difficulty) and _count(&"gloomcrawler", Vector3.ZERO, 0) < CAP[&"gloomcrawler"] 				and _count(&"gloomcrawler", pp, 30.0) < (3 if difficulty == CombatMath.Difficulty.UNDERTOW else 2) 				and _rng.randf() < 0.35:
+			var pvx := floori(pp.x / vs)
+			var pvz := floori(pp.z / vs)
+			if gen.col_h(pvx, pvz) > floori(pp.y / vs) + 14:   # well under rock: a cavern or mine
+				var at := find_cave_ceiling(pp)
+				if at != Vector3.INF and not Perception.is_lit(at, _context().lights, GloomCrawler.KEEP_OFF_LIGHT):
+					var gc := spawn(&"gloomcrawler", at) as GloomCrawler
+					gc.cling(at)
 	wildlife.spawn_tick(players)
+	camps.spawn_tick(players)
+	outposts.spawn_tick(players)
+	hulk.spawn_tick(players)
+
+
+## The underside of a cavern ceiling near `pp` (but not right overhead), with a clear 2 m+
+## drop to the floor, or INF.
+func find_cave_ceiling(pp: Vector3) -> Vector3:
+	var vs := VoxelWorld.VS
+	var w: VoxelWorld = main.world
+	var gen: WorldGen = w.gen
+	for t in 20:
+		var x := floori(pp.x / vs) + _rng.randi_range(-55, 55)
+		var z := floori(pp.z / vs) + _rng.randi_range(-55, 55)
+		if Vector2(x * vs - pp.x, z * vs - pp.z).length() < 6.0:
+			continue
+		_ensure_column(x, z)
+		var y := floori(pp.y / vs) + 1
+		if w.get_voxel(x, y, z) != 0:
+			continue
+		var floor_y := y
+		while floor_y > 1 and w.get_voxel(x, floor_y - 1, z) == 0 and y - floor_y < 40:
+			floor_y -= 1
+		var top := y
+		while top < y + 50 and w.get_voxel(x, top + 1, z) == 0:
+			top += 1
+		if top >= y + 50 or top - floor_y < 12 or gen.col_h(x, z) < top + 6:
+			continue
+		if floor_y * vs < main.sky.water_level_m():
+			continue          # flooded: the eels' water
+		return Vector3((x + 0.5) * vs, (top + 1) * vs, (z + 0.5) * vs)
+	return Vector3.INF
 
 
 ## A flooded cell under a natural roof near `pp`, or INF.
@@ -777,6 +837,8 @@ func _update_overlay(delta: float) -> void:
 # ---------------------------------------------------------------- dev checks
 #   --solo --creaturecheck            spawns, kill + loot, hurt/dodge, Cozy, saved difficulty
 #   --host --creaturecheck=host  /  --join --creaturecheck=client   co-op sync
+#   --host --creaturecheck=fighthost  /  --join --creaturecheck=fightclient   co-op Mud-Claw fight
+#   (add --port=N to both when another host already holds the default port)
 
 var _check_started := false
 
@@ -794,6 +856,74 @@ func _kinds() -> Dictionary:
 
 func _creature_check(role: String) -> void:
 	var p: Player = main.player
+	if role == "fighthost":
+		# Co-op Mud-Claw fight: a swarmer and a brute right beside the joined player.
+		while main.remotes.is_empty():
+			await _wait(0.5)
+		var rp: Node3D = main.remotes.values()[0]
+		while rp.position.length() < 1.0:      # no position from the peer yet
+			await _wait(0.5)
+		await _wait(2.0)
+		var claws := []
+		for k in 2:
+			var at: Vector3 = rp.position + Vector3(2.0 + k * 1.5, 0.2, 0.5)
+			var mc := spawn(&"mudbrute" if k == 1 else &"mudclaw", at) as MudClaw
+			mc.dome = at
+			mc.camp_center = at
+			mc.roused = true
+			claws.append(mc)
+		print("[fight-host] spawned claws %s beside peer %d" % [claws.map(func(c: Creature) -> int: return c.cid), main.remotes.keys()[0]])
+		for k in 12:
+			await _wait(1.0)
+			print("[fight-host] t=%d %s" % [k, claws.map(func(c: Variant) -> String: return ("%s %s hp %.0f at %s" % [c.kind, Creature.STATE_NAMES[c.state], c.hp, c.position]) if is_instance_valid(c) else "freed")])
+		if not is_instance_valid(claws[1]) or not is_instance_valid(claws[0]):
+			print("[fight-host] hits_applied=%d claws freed" % stats_hits)
+			get_tree().quit()
+			return
+		var brute: Creature = claws[1]
+		print("[fight-host] hits_applied=%d swarmer_alive=%s brute_hp=%s" % [stats_hits,
+				creatures.has(claws[0].cid), "%.0f/%.0f" % [brute.hp, brute.max_hp] if is_instance_valid(brute) and creatures.has(brute.cid) else "dead"])
+		get_tree().quit()
+		return
+	if role == "fightclient":
+		var t := 0.0
+		var swarm: Creature = null
+		var brute: Creature = null
+		while (swarm == null or brute == null) and t < 20.0:
+			for c: Creature in creatures.values():
+				if c.kind == &"mudclaw":
+					swarm = c
+				elif c.kind == &"mudbrute":
+					brute = c
+			await _wait(0.25)
+			t += 0.25
+		print("[fight-client] sees swarmer=%s brute=%s" % [swarm != null, brute != null])
+		if swarm == null or brute == null:
+			get_tree().quit()
+			return
+		var hp0 := p.vitality.current_hp
+		var sid := swarm.cid
+		var stats := CombatMath.weapon_stats(ItemDB.get_item(&"rusty_cutlass"))
+		var swings := 0
+		var hits := 0
+		for i in 14:
+			var tgt: Creature = swarm if creatures.has(sid) else brute
+			if not is_instance_valid(tgt):
+				break
+			var fwd := tgt.position - p.position
+			fwd.y = 0.0
+			if fwd.length() > 1.6:
+				p.position = tgt.position - fwd.normalized() * 1.2 + Vector3.UP * 0.1
+			hits += local_swing(p.position + Vector3.UP * 0.9, fwd.normalized(), stats, false)
+			swings += 1
+			await _wait(0.6)
+		await _wait(1.5)
+		print("[fight-client] swings=%d hits=%d swarmer_gone=%s brute_hp_ratio=%s hp %.1f -> %.1f hurt_taken=%.1f" % [
+			swings, hits, not creatures.has(sid),
+			"%.2f" % (brute.hp / brute.max_hp) if is_instance_valid(brute) and creatures.has(brute.cid) else "dead",
+			hp0, p.vitality.current_hp, stats_hurt])
+		get_tree().quit()
+		return
 	if role == "host":
 		while main.remotes.is_empty():
 			await _wait(0.5)

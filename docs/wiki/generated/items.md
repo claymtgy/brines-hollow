@@ -4,16 +4,18 @@
 
 Every item in the game, by category. Value is the base merchant price in Brass Guilders.
 
-## Material (24)
+## Material (27)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
 | Brine-Iron Ore | `sea_iron_ore` | 999 | 1 | ore, metal |
+| Calamine Ore | `calamine_ore` | 999 | 1 | ore, metal |
 | Cobblestone | `cobblestone` | 999 | 1 | stone, masonry |
 | Copper Ore | `copper_ore` | 999 | 1 | ore, metal |
 | Down Feather | `down_feather` | 99 | 1 | feather, crafting, textile |
 | Driftwood | `driftwood` | 999 | 1 | timber, wood, shore |
 | Forest Foliage | `leaves` | 999 | 1 | flora, thatch |
+| Gloom-Crawler Gland | `gloom_gland` | 999 | 1 | salvage, glow |
 | Heavy Chitin Plate | `chitin_plate` | 999 | 1 | salvage, armor_mat |
 | Iron Ingot | `iron_ingot` | 999 | 1 | metal, refined |
 | Kelp Fronds | `kelp_frond` | 999 | 1 | kelp, flora, fuel |
@@ -30,23 +32,28 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Shore Wheat Seed | `seed_shore_wheat` | 99 | 1 | seed, sweet_soil |
 | Shore-Sheep Wool | `sea_wool` | 99 | 1 | textile, crafting |
 | Tarred Wood | `dark_wood` | 999 | 1 | timber, refined |
+| The Hulk's Pearl | `hulk_pearl` | 1 | 1 | trophy, legendary, decor |
 | Tide Kale Spores | `seed_tide_kale` | 99 | 1 | seed, brackish_soil |
 | Wood Plank | `wood_plank` | 999 | 1 | timber, refined |
 
-## Food (26)
+## Food (31)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Abyssal Leviathan Ray | `abyssal_ray` | 5 | 1 | fish, legendary, trophy |
 | Brine Oyster | `brine_oyster` | 50 | 1 | shellfish, aquaculture |
 | Charred Sea Mackerel | `roasted_mackerel` | 20 | 1 | food, meal, roasted |
 | Cliff Salmon | `cliff_salmon` | 20 | 1 | fish, pelagic, fresh |
 | Crisp Tidepool Flounder | `roasted_flounder` | 20 | 1 | food, meal, roasted |
+| Flask of Spring Water | `spring_water` | 20 | 1 | drink, water, fresh |
 | Ghost Squid | `ghost_squid` | 20 | 1 | fish, night, luminescent |
 | Hearty Clam Chowder | `hearty_clam_chowder` | 10 | 1 | food, meal, soup, buff |
 | Honey-Glazed Abyssal Crab | `glazed_abyssal_crab` | 10 | 1 | food, meal, banquet, buff |
+| Leviathan Feast | `leviathan_feast` | 5 | 1 | food, meal, banquet, buff, secret |
 | Lightning Eel | `lightning_eel` | 20 | 1 | fish, storm, fresh |
 | Marsh Honey | `marsh_honey` | 50 | 1 | sweet, cooking |
 | Peppermint Kelp Tea | `peppermint_kelp_tea` | 20 | 1 | drink, tea, tonic |
+| Phosphor Ink Broth | `phosphor_broth` | 10 | 1 | food, soup, buff, secret |
 | Pickled Samphire Jar | `pickled_samphire_jar` | 20 | 1 | food, pickled, cure |
 | Roasted Chicory Sea-Brew | `roasted_chicory_brew` | 20 | 1 | drink, coffee, tonic |
 | Root Potato | `root_potato` | 99 | 1 | crop, staple |
@@ -61,14 +68,16 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Silver Mackerel | `silver_mackerel` | 20 | 1 | fish, pelagic, fresh |
 | Smoked Fish Ration | `smoked_fish_ration` | 20 | 1 | food, meal, preserved |
 | Smoked Salmon Strips | `smoked_salmon_strips` | 20 | 1 | food, meal, preserved |
+| Storm-Smoked Eel | `storm_smoked_eel` | 20 | 1 | food, meal, smoked, secret |
 | Tide Kale | `tide_kale` | 99 | 1 | crop, vegetable |
 | Tidepool Flounder | `tidepool_flounder` | 20 | 1 | fish, benthic, fresh |
 
-## Tool (30)
+## Tool (33)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
 | Builder's Hammer | `builders_hammer` | 1 | 1 | tool, hammer |
+| Coastal Sloop (kit) | `sloop_kit` | 1 | 1 | maritime, boat |
 | Copper Hatchet | `copper_axe` | 1 | 1 | tool, axe |
 | Copper Pickaxe | `copper_pickaxe` | 1 | 1 | tool, pickaxe |
 | Corsair's Brass Sabre | `corsair_sabre` | 1 | 1 | weapon, cutlass, blade |
@@ -83,6 +92,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Mason's Chisel | `masons_chisel` | 1 | 1 | tool, chisel |
 | Net Launcher | `net_launcher` | 1 | 1 | weapon, trapper |
 | Ocean Caster Rod | `ocean_caster_rod` | 1 | 1 | tool, fishing_rod |
+| Outrigger Skiff (kit) | `skiff_kit` | 1 | 1 | maritime, boat |
 | Phosphor Lantern Staff | `phosphor_lantern_staff` | 1 | 1 | weapon, occult, light |
 | Pneumatic Speargun | `pneumatic_speargun` | 1 | 1 | weapon, speargun, ranged |
 | Rusty Cutlass | `rusty_cutlass` | 1 | 1 | weapon, cutlass, blade |
@@ -92,6 +102,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Stone Hoe | `stone_hoe` | 1 | 1 | tool, hoe |
 | Stone Pickaxe | `stone_pickaxe` | 1 | 1 | tool, pickaxe |
 | Stone Shovel | `stone_shovel` | 1 | 1 | tool, shovel |
+| Tide-Barge (kit) | `barge_kit` | 1 | 1 | maritime, boat |
 | Titan Barbed Harpoon | `heavy_harpoon` | 1 | 1 | weapon, harpoon, tether |
 | Weighted Throwing Net | `weighted_trapper_net` | 1 | 1 | weapon, trapper, net |
 | Whittled Fishing Rod | `whittle_rod` | 1 | 1 | tool, fishing_rod |
@@ -127,7 +138,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Blueprint: Dry Dock | `blueprint_dry_dock` | 1 | 1 | blueprint, maritime |
 | Blueprint: Tide Mill | `blueprint_tide_mill` | 1 | 1 | blueprint, engineering |
 
-## Special (29)
+## Special (32)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
@@ -151,12 +162,15 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Latched Pen Gate | `pen_gate` | 10 | 1 | placeable |
 | Live-Capture Trap | `live_trap` | 5 | 1 | placeable |
 | Livestock Trough | `feed_trough` | 5 | 1 | placeable |
+| Mooring Bollard | `mooring_bollard` | 10 | 1 | placeable |
 | Oilskin Scarecrow | `scarecrow` | 5 | 1 | placeable |
 | Pine Sapling | `pine_sapling` | 20 | 1 | placeable, sapling, forestry |
 | Sealed Pantry Barrel | `pantry_barrel` | 10 | 1 | placeable |
 | Shore Poultry Coop | `poultry_coop` | 5 | 1 | placeable |
 | Smelting Furnace | `furnace` | 5 | 1 | placeable |
+| Stone Well | `stone_well` | 5 | 1 | placeable |
 | Storage Crate | `storage_crate` | 10 | 1 | placeable |
+| Tide Hearth | `tide_hearth` | 1 | 1 | placeable |
 | Tide Scrip | `tide_scrip` | 9999 | 1 | currency, export |
 | Watertight Sea Barrel | `sea_barrel` | 10 | 1 | placeable |
 | Wicker Crab Pot | `crab_pot` | 10 | 1 | placeable |

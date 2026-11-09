@@ -3,8 +3,10 @@ extends CanvasLayer
 ## Wayfarer's Journal — Quest Log.
 ## Full interactive log of active and completed quests across the archipelago.
 ## Toggled with J, L, or from the inventory screen.
+## The Recipe Book tab lists every recipe by station: what you know, how the rest are found,
+## and lets you copy a hard-won recipe onto a scroll to give or trade to another player.
 
-enum Tab { ACTIVE, COMPLETED }
+enum Tab { ACTIVE, COMPLETED, RECIPES }
 
 var main: Node
 var player: Player
@@ -19,6 +21,7 @@ var _empty_label: Label
 
 var current_tab: int = Tab.ACTIVE
 var selected_quest_id: StringName = &""
+var selected_station: StringName = &"none"
 var _open: bool = false
 
 
@@ -162,6 +165,7 @@ func _build() -> void:
 	var tab_defs := [
 		[Tab.ACTIVE, "Active Quests"],
 		[Tab.COMPLETED, "Completed Quests"],
+		[Tab.RECIPES, "Recipe Book"],
 	]
 	for td in tab_defs:
 		var t_idx: int = td[0]
@@ -261,6 +265,15 @@ func refresh() -> void:
 		var is_cur: bool = (bi == current_tab)
 		_tab_buttons[bi].modulate = Color(1.0, 0.96, 0.80) if is_cur else Color(0.80, 0.78, 0.74)
 
+	_tab_buttons[0].text = "Active Quests (%d)" % qm.active_quests.size()
+	_tab_buttons[1].text = "Completed Quests (%d)" % qm.completed_quests.size()
+	if _tab_buttons.size() > 2:
+		var book := recipe_counts()
+		_tab_buttons[2].text = "Recipe Book (%d / %d)" % [book.x, book.y]
+	if current_tab == Tab.RECIPES:
+		_render_recipe_book()
+		return
+
 	# Fetch quests for current tab
 	var quest_list: Array[QuestDef] = []
 	if current_tab == Tab.ACTIVE:
@@ -316,6 +329,115 @@ func refresh() -> void:
 		_quest_list_container.add_child(card)
 
 	_render_details(selected_qd)
+
+
+# -------------------------------------------------------------------------
+# Recipe Book
+# -------------------------------------------------------------------------
+
+## Known / total recipes for this player.
+func recipe_counts() -> Vector2i:
+	var all := RecipeDB.get_all_recipes()
+	var known := 0
+	for r: RecipeDef in all:
+		if player == null or player.recipes == null or player.recipes.knows(r.id):
+			known += 1
+	return Vector2i(known, all.size())
+
+
+func _station_order() -> Array:
+	var out: Array = []
+	for st: StringName in RecipeDB.STATION_NAMES:
+		if not RecipeDB.get_station_exclusive_recipes(st).is_empty():
+			out.append(st)
+	for r: RecipeDef in RecipeDB.get_all_recipes():
+		if not out.has(r.required_station):
+			out.append(r.required_station)
+	return out
+
+
+func _station_label(st: StringName) -> String:
+	return RecipeDB.STATION_NAMES.get(st, String(st).capitalize())
+
+
+func _render_recipe_book() -> void:
+	for c in _quest_list_container.get_children():
+		c.queue_free()
+	var stations := _station_order()
+	if not stations.has(selected_station) and not stations.is_empty():
+		selected_station = stations[0]
+	for st: StringName in stations:
+		var list := RecipeDB.get_station_exclusive_recipes(st)
+		var known := 0
+		for r: RecipeDef in list:
+			if player == null or player.recipes == null or player.recipes.knows(r.id):
+				known += 1
+		var b := Button.new()
+		b.text = "%s   %d / %d" % [_station_label(st), known, list.size()]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.custom_minimum_size = Vector2(300, 40)
+		b.modulate = Color(1.0, 0.96, 0.80) if st == selected_station else Color(0.82, 0.80, 0.76)
+		var s2: StringName = st
+		b.pressed.connect(func() -> void:
+			selected_station = s2
+			refresh())
+		_quest_list_container.add_child(b)
+	_render_station_recipes(selected_station)
+
+
+func _render_station_recipes(st: StringName) -> void:
+	for c in _details_vbox.get_children():
+		c.queue_free()
+	var title := Label.new()
+	title.text = _station_label(st)
+	title.theme_type_variation = &"InkLabel"
+	title.add_theme_font_override("font", UiTheme.font(850))
+	title.add_theme_font_size_override("font_size", 22)
+	_details_vbox.add_child(title)
+	var book: RecipeBook = player.recipes if player != null else null
+	var hidden := 0
+	for r: RecipeDef in RecipeDB.get_station_exclusive_recipes(st):
+		var knows := book == null or book.knows(r.id)
+		if not knows:
+			hidden += 1
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_details_vbox.add_child(row)
+		var lbl := Label.new()
+		lbl.theme_type_variation = &"InkLabel"
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if knows:
+			var parts: Array[String] = []
+			for inp: Dictionary in r.inputs:
+				var it: ItemDef = ItemDB.get_item(inp.item_id)
+				parts.append("%d %s" % [int(inp.count), it.name if it != null else String(inp.item_id)])
+			lbl.text = "%s
+    %s" % [r.name, ", ".join(parts)]
+		else:
+			lbl.text = "???   (%s)" % RecipeBook.source_of(r.id)
+			lbl.modulate = Color(0.75, 0.72, 0.66)
+		lbl.add_theme_font_size_override("font_size", 14)
+		row.add_child(lbl)
+		if knows and book != null and book.can_copy(r.id):
+			var copy := Button.new()
+			copy.text = "Copy to scroll"
+			copy.tooltip_text = "Write this recipe out to give or trade (2 Shore Wheat for the parchment)."
+			var rid: StringName = r.id
+			copy.pressed.connect(func() -> void:
+				if book.copy_scroll(rid, player.inventory):
+					if main.get("hud") != null:
+						main.hud.show_toast("Copied %s onto a scroll. Give it to a friend or sell it." % r.name)
+				elif main.get("hud") != null:
+					main.hud.show_toast("You need 2 Shore Wheat (and a free slot) to write out a scroll.")
+				refresh())
+			row.add_child(copy)
+	if hidden > 0:
+		var hint := Label.new()
+		hint.theme_type_variation = &"Small"
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.text = "%d still to find here. Scrolls you already know are kept, not read, so you can pass them on." % hidden
+		_details_vbox.add_child(hint)
 
 
 func _has_quest(list: Array[QuestDef], q_id: StringName) -> bool:

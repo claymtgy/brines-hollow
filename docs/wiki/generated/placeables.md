@@ -31,6 +31,9 @@ Build these with the Blueprints tool (pays the cost from your pack) or craft the
 | Dock Cat's Basket | 6 Kelp Fronds, 2 Driftwood, 1 Silver Mackerel | on the ground |
 | Oilskin Scarecrow | 4 Driftwood, 4 Forest Foliage, 2 Wood Plank | on the ground |
 | Sealed Pantry Barrel | 6 Wood Plank, 2 Kelp Fronds, 1 Limestone | on the ground |
+| Stone Well | 12 Cobblestone, 6 Wood Plank, 4 Kelp Fronds | on the ground |
+| Mooring Bollard | 4 Driftwood, 1 Iron Ingot | on the ground |
+| Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | on the ground |
 | Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | on the ground |
 
 ## Voxel blueprints

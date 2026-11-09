@@ -134,6 +134,9 @@ func _run() -> void:
 	town.recruit_drifter(DrifterDef.new(&"drifter_carpenter", "Sawyer", DrifterDef.Profession.CARPENTER))
 	town.recruit_drifter(DrifterDef.new(&"drifter_farmer", "Mallow", DrifterDef.Profession.FARMER))
 	town.recruit_drifter(DrifterDef.new(&"drifter_cook", "Barnaby", DrifterDef.Profession.SMOKER_CHEF))
+	assert_test.call("Without a Tide Hearth the town stays a camp",
+		town.current_tier == SettlementManager.TownTier.CAMP)
+	town.found_at(Vector3i(10, 11, 10))
 
 	assert_test.call("Settlement upgraded to HAMLET tier with 4 villagers and 3 homes",
 		town.current_tier == SettlementManager.TownTier.HAMLET)

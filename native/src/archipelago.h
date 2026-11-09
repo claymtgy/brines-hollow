@@ -108,6 +108,7 @@ private:
 	std::vector<Sphere> cave;
 	Vector3i cave_min, cave_max;
 	std::vector<Stamp> stamps;
+	std::vector<Vector3i> tree_clear;   // (x, z, radius): no trees planted here (camp clearings)
 	std::vector<CaveSys> caves;
 	std::vector<CaveSite> cave_sites;
 	void plan_caves();
@@ -137,7 +138,8 @@ public:
 
 	// starter structures etc. (call before streaming starts)
 	void add_stamp(const PackedByteArray &data, const Vector3i &dims, const Vector3i &base, int foundation);
-	void clear_stamps() { stamps.clear(); }
+	void clear_stamps() { stamps.clear(); tree_clear.clear(); }
+	void add_tree_clear(int x, int z, int r) { tree_clear.push_back(Vector3i(x, z, r)); }
 
 	// generation (thread-safe). out[cy] is null for all-air layers.
 	void generate_column(int cx, int cz, std::vector<std::unique_ptr<uint8_t[]>> &out) const;

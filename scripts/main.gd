@@ -207,7 +207,7 @@ func _ready() -> void:
 		start_host()
 	elif _args.has("join"):
 		start_join(_args.join if _args.join != "" else "127.0.0.1")
-	elif _args.has("solo") or _args.has("tutorialcheck") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck") \
+	elif _args.has("solo") or _args.has("tutorialcheck") or _args.has("shot") or _args.has("bench") or _args.has("boatcheck") or _args.has("skiffcheck") or _args.has("lhcheck") or _args.has("campcheck") or _args.has("undercheck") \
 			or (_args.has("villagecheck") and not _args.has("join") and not _args.has("host")) or _args.has("tradecheck"):
 		start_solo()
 	else:
@@ -226,11 +226,16 @@ func start_solo() -> void:
 	_begin_world()
 
 
+## The game port; `--port=N` overrides it (dev checks that run beside another host).
+func net_port() -> int:
+	return int(_args.port) if String(_args.get("port", "")).is_valid_int() else PORT
+
+
 func start_host() -> void:
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(PORT, 8)
+	var err := peer.create_server(net_port(), 8)
 	if err != OK:
-		hud.show_menu(true, "Could not host on port %d (error %d)." % [PORT, err])
+		hud.show_menu(true, "Could not host on port %d (error %d)." % [net_port(), err])
 		return
 	multiplayer.multiplayer_peer = peer
 	is_net = true
@@ -239,7 +244,7 @@ func start_host() -> void:
 
 func start_join(ip: String) -> void:
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(ip, PORT)
+	var err := peer.create_client(ip, net_port())
 	if err != OK:
 		hud.show_menu(true, "Could not start client (error %d)." % err)
 		return
@@ -343,7 +348,7 @@ func _begin_world() -> void:
 		player.customizer.deserialize(session.selected_customizer_data)
 	player.bind_quest_signals()
 	var chosen_spawn: Dictionary = {}
-	if _args.has("homestead") or _args.has("bench") or _args.has("boatcheck") or _args.has("shot"):
+	if _args.has("homestead") or _args.has("bench") or _args.has("boatcheck") or _args.has("skiffcheck") or _args.has("lhcheck") or _args.has("shot"):
 		chosen_spawn = world.gen.starter_spawns[0] if world.gen != null and not world.gen.starter_spawns.is_empty() else {"pos": world.gen.spawn, "yaw": world.gen.spawn_yaw, "name": "Homestead Pier"}
 	elif _assigned_spawn_idx >= 0 and world.gen != null:
 		chosen_spawn = world.gen.get_spawn_by_index(_assigned_spawn_idx)
@@ -361,6 +366,14 @@ func _begin_world() -> void:
 	hud.show_toast("Washed ashore: %s" % chosen_spawn.get("name", "Starter Island"))
 	if _args.has("boatcheck"):
 		boats.run_check(_args.boatcheck)
+	elif _args.has("skiffcheck"):
+		boats.run_skiff_check(String(_args.skiffcheck))
+	elif _args.has("lhcheck"):
+		_run_lighthouse_check(String(_args.lhcheck))
+	elif _args.has("campcheck"):
+		creatures.camps.run_check(String(_args.campcheck))
+	elif _args.has("undercheck"):
+		UndergroundCheck.run(self, String(_args.undercheck))
 	elif _args.has("netcheck"):
 		_run_netcheck()
 	elif _args.has("bench"):
@@ -374,14 +387,72 @@ func _begin_world() -> void:
 # ---------------------------------------------------------------- islands
 
 ## Names the islands once the world exists, then announces each landfall.
+var _beam: LighthouseBeam = null
+
+
+## --lhcheck=DIR: look at the starter lighthouse by day and at night.
+func _run_lighthouse_check(dir: String) -> void:
+	player.input_enabled = false
+	var lp: Variant = world.gen.starter.get("lighthouse")
+	print("[lighthouse] site %s" % [lp])
+	if not (lp is Vector3i):
+		get_tree().quit()
+		return
+	var c: Vector3 = Vector3(lp as Vector3i) * VS
+	var hut: Vector3 = Vector3(world.gen.starter.hut) * VS
+	print("[lighthouse] %.1f m from the hut, lantern %.1f m up" % [Vector2(c.x - hut.x, c.z - hut.z).length(), c.y - hut.y])
+	var away := Vector3(hut.x - c.x, 0, hut.z - c.z).normalized()
+	player.position = Vector3(c.x, 0, c.z) + away * 9.0
+	player.position.y = float(world.gen.col_h(floori(player.position.x / VS), floori(player.position.z / VS)) + 2) * VS
+	rig.yaw = atan2(-away.x, -away.z) + PI
+	rig.pitch = 0.18
+	rig.dist = 14.0
+	hud.show_hud(false)
+	sky.time_of_day = 0.45
+	await get_tree().create_timer(3.0).timeout
+	print("[lighthouse] lantern voxel %d (LANTERN=%d), beam %s" % [world.get_voxel((lp as Vector3i).x, (lp as Vector3i).y, (lp as Vector3i).z), Palette.LANTERN, _beam != null])
+	await _shot(dir, "lighthouse_day")
+	sky.time_of_day = 0.92
+	rig.dist = 22.0
+	rig.pitch = 0.05
+	await get_tree().create_timer(1.5).timeout
+	print("[lighthouse] beam visible at night: %s" % [_beam != null and _beam.visible])
+	await _shot(dir, "lighthouse_night")
+	get_tree().quit()
+
+
+## The lighthouse's night beam, once its lantern is actually in the world (a column the
+## player had already built in keeps their voxels instead of the lighthouse).
+func _tick_lighthouse() -> void:
+	if _beam != null or world == null or world.gen == null or not world.ready_for_play:
+		return
+	var lp: Variant = world.gen.starter.get("lighthouse")
+	if not (lp is Vector3i):
+		return
+	var c: Vector3i = lp
+	if not world.store.is_column_generated(Vector2i(c.x >> 5, c.z >> 5)):
+		return
+	_beam = LighthouseBeam.new()
+	add_child(_beam)
+	_beam.setup(sky, (Vector3(c) + Vector3(0.5, 0.5, 0.5)) * VS)
+	if world.get_voxel(c.x, c.y, c.z) != Palette.LANTERN:
+		_beam.set_process(false)   # no lighthouse here in this world
+		_beam.visible = false
+		print("[lighthouse] not built in this world (the site was already built on)")
+
+
 func _tick_atlas(delta: float) -> void:
+	_tick_lighthouse()
 	if world == null or world.gen == null:
 		return
 	if _atlas_gen != world.gen:
 		_atlas_gen = world.gen
 		var n: ArchipelagoGen = world.gen.native
 		atlas.setup(world.gen.islands, seed_value, n.column_height, n.column_island, VoxelWorld.SEA_MID)
-	hud.chart_islands = atlas.chart_labels() + (npc_villages.chart_labels() if npc_villages != null else [])
+	hud.chart_islands = atlas.chart_labels() + (npc_villages.chart_labels() if npc_villages != null else []) \
+			+ (creatures.camps.chart_labels() if creatures != null and creatures.camps != null else []) \
+			+ (creatures.outposts.chart_labels() if creatures != null and creatures.outposts != null else []) \
+			+ (creatures.hulk.chart_labels() if creatures != null and creatures.hulk != null else [])
 	_atlas_t -= delta
 	if _atlas_t > 0.0 or player.is_seated():
 		return
@@ -523,6 +594,8 @@ func _on_dug(pos: Vector3, mat: int, count: int) -> void:
 				tool_tier = int(active_def.tool_data.get("tier", 1))
 			if mat == Palette.COPPER_VEIN:
 				spawn_item_drop(pos, &"copper_ore", maxi(1, (count + 1) / 2))
+			elif mat == Palette.CALAMINE:
+				spawn_item_drop(pos, &"calamine_ore", maxi(1, (count + 1) / 2))
 			elif mat == Palette.IRON_VEIN:
 				if tool_tier >= 2:
 					spawn_item_drop(pos, &"sea_iron_ore", maxi(1, (count + 1) / 2))

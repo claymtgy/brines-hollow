@@ -56,6 +56,9 @@ func has_bait() -> bool:
 
 
 func holding_fish() -> bool:
+	# Aboard a skiff the catch goes straight into the live-well, out of the gulls' reach.
+	if player != null and player.is_seated() and player.boat.kind != Boat.KIND_ROWBOAT:
+		return false
 	var d := active_item()
 	return d != null and d.has_tag("fish")
 

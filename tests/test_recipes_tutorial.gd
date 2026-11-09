@@ -41,6 +41,9 @@ func _init() -> void:
 		for m in Tutorial.MISSIONS:
 			via = via or m.rewards.get("recipes", []).has(rid)
 		via = via or RecipeBook.MERCHANT_SCROLLS.has(rid)
+		via = via or RecipeBook.FOUND_SCROLLS.has(rid) or rid == RecipeBook.MINE_SCROLL
+		for list in RecipeBook.SECRET.values():
+			via = via or list.has(rid)
 		if not via:
 			reachable = false
 			print("     unreachable: ", rid)

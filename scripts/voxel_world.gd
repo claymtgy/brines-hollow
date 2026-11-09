@@ -436,6 +436,11 @@ func generate(seed_value: int) -> void:
 	gen.plan_starter()
 	if layout >= 2:
 		gen.plan_villages()
+		gen.plan_camps()
+		gen.plan_underground()
+		gen.plan_wrecks()
+		gen.plan_outposts()
+		gen.plan_hulk()
 	store.set_generator(gen.native)
 	for p: Vector3i in gen.stamp_lights:
 		_add_light(p, Palette.LANTERN)
@@ -835,7 +840,7 @@ func apply_command(cmd: Dictionary) -> void:
 
 
 const STONE_MATS := [Palette.STONE, Palette.SANDSTONE_A, Palette.SANDSTONE_B, Palette.SANDSTONE_C, Palette.COBBLE,
-	Palette.COPPER_VEIN, Palette.IRON_VEIN]
+	Palette.COPPER_VEIN, Palette.IRON_VEIN, Palette.CALAMINE]
 const WOOD_MATS := [Palette.TRUNK, Palette.PLANK, Palette.DARK_WOOD, Palette.ROOF_RED, Palette.ROOF_BLUE, Palette.SHUTTER]
 
 
@@ -918,7 +923,7 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 				for dx in range(-r, r + 1):
 					if dx * dx + dy * dy + dz * dz <= r * r:
 						var vm := store.get_voxel(c.x + dx, c.y + dy, c.z + dz)
-						if vm == Palette.COPPER_VEIN or vm == Palette.IRON_VEIN:
+						if vm == Palette.COPPER_VEIN or vm == Palette.IRON_VEIN or vm == Palette.CALAMINE:
 							vein_counts[vm] = int(vein_counts.get(vm, 0)) + 1
 
 	if allow_stone and allow_wood:

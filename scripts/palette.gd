@@ -16,6 +16,8 @@ enum {
 	COPPER_VEIN, IRON_VEIN,
 	# walk-through plants drawn as little crossed sprites (flowers are plants too)
 	TUFT_GRASS, TUFT_DRY,
+	# calamine (zinc ore for fine sea-brass), in the old brass mines
+	CALAMINE,
 	COUNT
 }
 
@@ -68,6 +70,7 @@ static var COLORS: PackedColorArray = PackedColorArray([
 	Color8(150, 92, 80),      # IRON_VEIN (rusty red-brown)
 	Color8(120, 162, 92),     # TUFT_GRASS
 	Color8(186, 182, 112),    # TUFT_DRY
+	Color8(132, 178, 170),    # CALAMINE (pale blue-green crust)
 ])
 
 ## How strongly each material's brightness varies voxel-to-voxel.
@@ -80,6 +83,7 @@ const VARIATION := [
 	0.0, 0.0, 0.0, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.03, 0.0,
 	0.22, 0.20,
 	0.16, 0.14,
+	0.24,
 ]
 
 const NAMES := [
@@ -90,6 +94,7 @@ const NAMES := [
 	"Yellow Flower", "Pink Flower", "Shutter Blue", "Sea Glow", "Driftwood",
 	"Skin", "Eye", "Cheek", "Coat", "Hat", "Coat", "Hat", "Trouser", "Boot", "Metal", "Handle", "Button",
 	"Copper Vein", "Brine-Iron Vein", "Grass Tuft", "Dry Grass Tuft",
+	"Calamine Vein",
 ]
 
 ## Materials offered in Build mode, in hotbar order.

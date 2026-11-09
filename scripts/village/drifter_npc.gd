@@ -11,6 +11,8 @@ const PROFESSION_NAMES := ["Fisher", "Farmer", "Carpenter", "Smoker & Cook", "La
 var idx := 0                      # roster index (stable across peers)
 var def: DrifterDef
 var recruited := false
+var castaway := false              # trapped in a shipwreck on an outer island
+var voyage := false                # host: recruited far from home, sails back when unwatched
 var wreck_pos := Vector3.ZERO     # metres: where they washed up
 var model: CharacterModel
 var label: Label3D
@@ -70,7 +72,10 @@ func profession_name() -> String:
 func refresh_label() -> void:
 	if label == null:
 		return
-	label.text = "%s the %s%s" % [def.name, profession_name(), "" if recruited else "\n(stranded)"]
+	var tag := "" if recruited else ("\n(trapped in the wreck)" if castaway else "\n(stranded)")
+	if voyage:
+		tag = "\n(sailing home)"
+	label.text = "%s the %s%s" % [def.name, profession_name(), tag]
 
 
 func set_quest_marker(p_text: String) -> void:

@@ -238,6 +238,15 @@ func _draw() -> void:
 				draw_colored_polygon(PackedVector2Array([i_uv + Vector2(-3, -2), i_uv + Vector2(3, -2), i_uv + Vector2(0, -5)]), vc)
 				draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 9), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 7, vc)
 				continue
+			if il.get("camp", false):
+				# Mud-Claw camps: a red claw (crossed out once cleared)
+				var cc := Color(0.62, 0.14, 0.10) if not il.get("cleared", false) else Color(0.35, 0.30, 0.26)
+				draw_arc(i_uv, 3.0, -PI * 0.9, PI * 0.2, 8, cc, 1.5)
+				draw_line(i_uv + Vector2(-1, 0), i_uv + Vector2(3, -2), cc, 1.5)
+				if il.get("cleared", false):
+					draw_line(i_uv + Vector2(-4, -4), i_uv + Vector2(4, 4), cc, 1.0)
+				draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 10), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 6, cc)
+				continue
 			var col := Color(0.55, 0.12, 0.10) if il.get("home", false) else Color(0.18, 0.12, 0.08)
 			draw_string(ThemeDB.fallback_font, i_uv + Vector2(-40, 3), nm, HORIZONTAL_ALIGNMENT_CENTER, 80, 8, col)
 
