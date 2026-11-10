@@ -11,6 +11,7 @@ enum Type {
 	KEYBOARD_MOUSE,
 	XBOX,
 	DUALSENSE,
+	STEAM_DECK,
 	GENERIC
 }
 
@@ -35,12 +36,15 @@ func _update_dualsense_state() -> void:
 			dualsense.reset_triggers()
 
 
+## On a PC, start with keyboard & mouse prompts even if a pad is plugged in (Steam Input,
+## virtual pads and wheels all report as joypads); the first real pad press switches over
+## (track_input_event). The Steam Deck starts on pad prompts.
 func _check_initial_devices() -> void:
 	var joys := Input.get_connected_joypads()
 	if not joys.is_empty():
 		active_device_id = joys[0]
-		var joy_name := Input.get_joy_name(active_device_id)
-		current_type = detect_type_from_name(joy_name)
+		if GameSettings.is_steam_deck():
+			current_type = detect_type_from_name(Input.get_joy_name(active_device_id))
 	_update_dualsense_state()
 
 
@@ -49,7 +53,10 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 		active_device_id = device
 		var joy_name := Input.get_joy_name(device)
 		var detected := detect_type_from_name(joy_name)
-		current_type = detected
+		# Godot reports pads that were already plugged in as "connected" at launch; that alone
+		# shouldn't flip the prompts. The first real press does (track_input_event).
+		if current_type != Type.KEYBOARD_MOUSE or GameSettings.is_steam_deck():
+			current_type = detected
 		_update_dualsense_state()
 		controller_connected.emit(device, joy_name, detected)
 		controller_type_changed.emit(current_type)
@@ -80,15 +87,23 @@ func detect_type_from_name(joy_name: String) -> Type:
 	if lower.contains("xbox") or lower.contains("x-box") or lower.contains("xinput") or lower.contains("microsoft"):
 		return Type.XBOX
 
+	# Steam Deck / Valve Virtual Controller
+	if lower.contains("steam") or lower.contains("deck") or lower.contains("valve"):
+		return Type.STEAM_DECK
+
 	return Type.GENERIC
 
 
 ## Call from _unhandled_input / _input to detect dynamic input method switching.
 func track_input_event(e: InputEvent) -> void:
 	if e is InputEventJoypadButton or e is InputEventJoypadMotion:
-		# Filter motion deadzone jitter
-		if e is InputEventJoypadMotion and absf((e as InputEventJoypadMotion).axis_value) < 0.2:
-			return
+		# Only a deliberate push counts: sticks past half-way, triggers pulled past half-way.
+		# (Some pads and virtual devices report triggers at rest as -1, and sticks drift.)
+		if e is InputEventJoypadMotion:
+			var jm := e as InputEventJoypadMotion
+			var trigger := jm.axis == JOY_AXIS_TRIGGER_LEFT or jm.axis == JOY_AXIS_TRIGGER_RIGHT
+			if (trigger and jm.axis_value < 0.5) or (not trigger and absf(jm.axis_value) < 0.5):
+				return
 		if current_type == Type.KEYBOARD_MOUSE:
 			active_device_id = e.device
 			var joy_name := Input.get_joy_name(active_device_id)
@@ -107,7 +122,7 @@ func get_glyph(action: StringName) -> String:
 	match current_type:
 		Type.DUALSENSE:
 			return _get_dualsense_glyph(action)
-		Type.XBOX, Type.GENERIC:
+		Type.XBOX, Type.STEAM_DECK, Type.GENERIC:
 			return _get_xbox_glyph(action)
 		_:
 			return _get_keyboard_glyph(action)
@@ -130,8 +145,9 @@ func _get_dualsense_glyph(action: StringName) -> String:
 		&"next_item": return "D-Pad Right"
 		&"brush_up": return "D-Pad Up"
 		&"brush_down": return "D-Pad Down"
-		&"snap": return "Touchpad / Select"
+		&"snap": return "D-Pad Up"
 		&"inventory_toggle": return "Touchpad"
+		&"quest_log_toggle": return "Hold Touchpad"
 		&"build_menu_toggle": return "L2"
 		&"menu_toggle": return "Options"
 		&"swap_shoulder": return "R3"
@@ -155,8 +171,9 @@ func _get_xbox_glyph(action: StringName) -> String:
 		&"next_item": return "D-Pad Right"
 		&"brush_up": return "D-Pad Up"
 		&"brush_down": return "D-Pad Down"
-		&"snap": return "View / Back"
+		&"snap": return "D-Pad Up"
 		&"inventory_toggle": return "View"
+		&"quest_log_toggle": return "Hold View"
 		&"build_menu_toggle": return "LT"
 		&"menu_toggle": return "Menu"
 		&"swap_shoulder": return "RS"
@@ -182,6 +199,7 @@ func _get_keyboard_glyph(action: StringName) -> String:
 		&"brush_down": return "Z"
 		&"snap": return "G"
 		&"inventory_toggle": return "I / Tab"
+		&"quest_log_toggle": return "J"
 		&"build_menu_toggle": return "B"
 		&"menu_toggle": return "Esc"
 		&"swap_shoulder": return "V"
@@ -255,6 +273,31 @@ func pulse_catch() -> void:
 
 func pulse_row() -> void:
 	vibrate(0.22, 0.15, 0.18)
+
+
+func play_haptic_pulse(intensity: float, duration: float = 0.12) -> void:
+	vibrate(intensity * 0.6, intensity, duration)
+
+
+func play_trigger_resistance(left: float, right: float) -> void:
+	if current_type == Type.DUALSENSE and dualsense != null:
+		if right > 0.0:
+			dualsense.apply_fishing_cast(right)
+		else:
+			dualsense.reset_triggers()
+	elif left > 0.0 or right > 0.0:
+		vibrate(left * 0.3, right * 0.5, 0.08)
+
+
+func apply_weapon_charge(charge_ratio: float) -> void:
+	var strength := clampf(charge_ratio, 0.0, 1.0)
+	play_trigger_resistance(0.0, strength)
+	if is_equal_approx(strength, 1.0):
+		vibrate(0.8, 0.9, 0.15)
+
+
+func apply_diving_winch_crank() -> void:
+	vibrate(0.35, 0.25, 0.08)
 
 
 # -------------------------------------------------------------------------
@@ -371,7 +414,9 @@ func setup_input_map() -> void:
 		"brush_down": [JOY_BUTTON_DPAD_DOWN],        # D-Pad Down
 		"prev_item": [JOY_BUTTON_DPAD_LEFT],         # D-Pad Left
 		"next_item": [JOY_BUTTON_DPAD_RIGHT],        # D-Pad Right
-		"snap": [JOY_BUTTON_BACK],                   # View / Touchpad / Select
+		# View / Select is read by Main directly: tap = inventory, hold = quest log.
+		# Grid snap on a pad is D-Pad Up while placing blueprints (Player._unhandled_input).
+		"snap": [],
 		"menu_toggle": [JOY_BUTTON_START],           # Menu / Options
 	}
 	for action in joy_buttons:

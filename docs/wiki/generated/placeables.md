@@ -35,6 +35,25 @@ Build these with the Blueprints tool (pays the cost from your pack) or craft the
 | Mooring Bollard | 4 Driftwood, 1 Iron Ingot | on the ground |
 | Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | on the ground |
 | Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | on the ground |
+| Phosphor Brazier | 4 Copper Ore, 2 Polished Sea Glass, 4 Limestone | on the ground |
+| Spike Barricade | 6 Driftwood, 1 Iron Ingot | on the ground |
+| Town Sparring Ring | 12 Sand, 4 Wood Plank, 4 Driftwood | on the ground |
+| Regatta Checkpoint Buoy | 4 Wood Plank, 1 Sea-Brass Ingot | on the ground |
+| Submerged Diving Bell | 6 Sea-Brass Ingot, 8 Wood Plank, 4 Cobblestone | on the ground |
+| Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | between the tide lines |
+| Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | on the ground |
+| Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | on the ground |
+| Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | between the tide lines |
+| Undertow Gauntlet Altar | 12 Cobblestone, 4 Polished Sea Glass | between the tide lines |
+| Ancient Tide Regulator | 20 Cobblestone, 2 Ancient Weapon Fragment | on the ground |
+| Architect's Drafting Desk | 8 Wood Plank, 4 Driftwood, 1 Sea-Brass Ingot | on the ground |
+| Taxidermy Fish Mount | 2 Wood Plank, 2 Driftwood, 1 Silver Mackerel | on the ground |
+| Glass Living Aquarium | 6 Polished Sea Glass, 2 Sea-Brass Ingot, 2 Sand | on the ground |
+| Heraldic Settlement Banner | 4 Shore-Sheep Wool, 4 Driftwood, 1 Sea-Brass Ingot | on the ground |
+| Oak Aging Cask | 6 Wood Plank, 2 Iron Ingot, 2 Driftwood | on the ground |
+| Tidal Oyster Rack | 6 Wood Plank, 4 Kelp Fronds, 2 Limestone | between the tide lines |
+| Mangrove Beehive | 8 Wood Plank, 1 Marsh Honey, 4 Forest Foliage | on the ground |
+| Communal Banquet Table | 12 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | on the ground |
 
 ## Voxel blueprints
 

@@ -230,6 +230,15 @@ static func dodge_protects(dodge_elapsed: float) -> bool:
 	return dodge_elapsed >= 0.0 and dodge_elapsed <= DODGE_TIME
 
 
+const HARPOON_SWEET_SPOT_MIN := 2.5
+const HARPOON_SWEET_SPOT_MAX := 4.2
+const HARPOON_SWEET_SPOT_MULT := 1.35
+
+
+static func is_harpoon_sweet_spot(dist: float, weapon_type: int) -> bool:
+	return weapon_type == WeaponDef.WeaponType.HARPOON and dist >= HARPOON_SWEET_SPOT_MIN and dist <= HARPOON_SWEET_SPOT_MAX
+
+
 ## Knockback impulse (m/s) away from the source.
 static func knockback(from: Vector3, to: Vector3, power: float) -> Vector3:
 	var d := to - from

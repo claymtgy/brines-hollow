@@ -6,7 +6,7 @@ extends Node3D
 
 const VS := VoxelWorld.VS
 const WALK_SPEED := 1.5          # m/s
-const PROFESSION_NAMES := ["Fisher", "Farmer", "Carpenter", "Smoker & Cook", "Lamplighter", "Trader"]
+const PROFESSION_NAMES := ["Fisher", "Farmer", "Carpenter", "Smoker & Cook", "Lamplighter", "Trader", "Rancher"]
 
 var idx := 0                      # roster index (stable across peers)
 var def: DrifterDef
@@ -219,8 +219,8 @@ func _process(delta: float) -> void:
 		position = position.lerp(_net_pos, 1.0 - exp(-delta * 10.0))
 		facing = lerp_angle(facing, _net_yaw, 1.0 - exp(-delta * 10.0))
 	model.rotation.y = facing
-	# rod / hoe / hammer / none / lantern / ledger-plan while working, empty hands otherwise
-	model.set_tool([3, 4, 1, -1, 8, 2][clampi(int(def.profession), 0, 5)] if activity == 2 else -1)
+	# rod / hoe / hammer / none / lantern / ledger-plan / shears-hoe while working, empty hands otherwise
+	model.set_tool([3, 4, 1, -1, 8, 2, 4][clampi(int(def.profession), 0, 6)] if activity == 2 else -1)
 	model.animate(delta, speed, true, false)
 	if activity == 2 and fmod(Time.get_ticks_msec() / 1000.0 + idx * 0.37, 2.2) < delta:
 		model.swing()   # busy at work

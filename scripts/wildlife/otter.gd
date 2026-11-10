@@ -9,7 +9,7 @@ const SHY_RANGE := 5.0
 const SWIM_SPEED := 1.8
 const FOLLOW_SPEED := 3.6
 const GIFT_EVERY := 150.0
-const GIFTS := [[&"kelp_frond", 2], [&"sea_glass", 1], [&"shore_crab", 1], [&"kelp_frond", 3]]
+const GIFTS := [[&"kelp_frond", 2], [&"sea_glass", 1], [&"shore_crab", 1], [&"kelp_frond", 3], [&"abyssal_pearl", 1], [&"sea_salt", 2]]
 
 var body: Node3D
 var paws: Node3D
@@ -66,6 +66,27 @@ func befriend(pid: int) -> void:
 	friend_id = pid
 	_gift_t = 45.0
 	set_state(State.LURED)
+
+
+func interact(player: Node) -> void:
+	if player == null:
+		return
+	var pid: int = player.get("peer_id") if "peer_id" in player else 1
+	if friend_id == 0:
+		if player.get("inventory") != null and player.inventory.has_item(&"raw_fish"):
+			player.inventory.remove_item(&"raw_fish", 1)
+			befriend(pid)
+	elif friend_id == pid:
+		command_dive_forage(pid)
+
+
+func command_dive_forage(pid: int) -> bool:
+	if friend_id != pid:
+		return false
+	_dive_t = 3.0
+	_gift_t = 0.5
+	set_state(State.FLEE)
+	return true
 
 
 func simulate(dt: float, ctx: Dictionary) -> void:

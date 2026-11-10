@@ -49,7 +49,7 @@ func _init() -> void:
 	_tier_label.position = Vector2(0, 0)
 	_tier_label.size = Vector2(190, 18)
 	_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tier_label.add_theme_font_size_override("font_size", 11)
+	_tier_label.add_theme_font_size_override("font_size", 14)
 	_tier_label.add_theme_color_override("font_color", BRASS_ACCENT)
 	_tier_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_tier_label.add_theme_constant_override("outline_size", 4)
@@ -59,7 +59,7 @@ func _init() -> void:
 	_readout_label.position = Vector2(0, 192)
 	_readout_label.size = Vector2(190, 24)
 	_readout_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_readout_label.add_theme_font_size_override("font_size", 10)
+	_readout_label.add_theme_font_size_override("font_size", 14)
 	_readout_label.add_theme_color_override("font_color", CREAM)
 	_readout_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_readout_label.add_theme_constant_override("outline_size", 4)
@@ -270,7 +270,7 @@ func _draw() -> void:
 
 
 func _draw_player_chevron(center_pos: Vector2, yaw: float) -> void:
-	var fwd := Vector2(sin(yaw), -cos(yaw))
+	var fwd := Vector2(-sin(yaw), -cos(yaw))
 	var right := Vector2(-fwd.y, fwd.x)
 
 	var p_tip := center_pos + fwd * 7.0

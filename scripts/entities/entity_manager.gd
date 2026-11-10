@@ -356,6 +356,8 @@ func _authority_place(type: StringName, coord: Vector3i, rot: int, _peer: int) -
 	var ent := spawn_entity(type, coord, rot)
 	if _net():
 		net_spawn.rpc(type, coord, rot, ent.serialize())
+	if main != null and main.get("player") != null:
+		main.player.quest_event(QuestDef.ObjectiveType.PLACE_ENTITY, type)
 	return ent
 
 
@@ -812,9 +814,11 @@ func spawn_starter() -> void:
 	if main == null or main.world == null or main.world.gen == null:
 		return
 	var sp: Vector3i = Vector3i(main.world.gen.spawn)
+	_ruin_starter_hut()
+	# No crafting stations: the castaway makes their own campfire and workbench. What's here
+	# is salvage and the old homestead's leftovers.
 	var layout := [
-		[&"workbench", Vector3i(5, 0, 2)], [&"campfire", Vector3i(7, 0, -3)],
-		[&"hearth_pot", Vector3i(3, 0, 7)], [&"driftwood_chest", Vector3i(-5, 0, 2)],
+		[&"driftwood_chest", Vector3i(-5, 0, 2)],
 		[&"fisher_bed", Vector3i(-6, 0, -5)], [&"barber_mirror", Vector3i(5, 0, -6)],
 		[&"feed_trough", Vector3i(8, 0, 4)], [&"poultry_coop", Vector3i(-8, 0, 6)],
 	]
@@ -822,7 +826,33 @@ func spawn_starter() -> void:
 		var c: Vector3i = sp + (e[1] as Vector3i)
 		c.y = _ground_y(c.x, c.z, sp.y + 12)
 		if c.y > 0 and not overlaps_any(e[0], c, 0):
-			_authority_place(e[0], c, 0, 1)
+			var ent := _authority_place(e[0], c, 0, 1)
+			if ent is ChestEntity:
+				for it: Array in SALVAGE:
+					(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+
+
+## What washed up with the castaway, in the chest by the hut (enough for a first campfire).
+const SALVAGE := [[&"driftwood", 8], [&"stone", 6], [&"kelp_frond", 2]]
+
+
+## New worlds only (runs once, with spawn_starter): storm damage on the starter hut, so
+## patching it up is the castaway's first build. Saved and synced like any terrain edit.
+func _ruin_starter_hut() -> void:
+	var gen: WorldGen = main.world.gen
+	if gen.starter.is_empty():
+		return
+	var rot: int = gen.starter.hut_r
+	var pf := Prefabs.rotated(5, rot)
+	var base: Vector3i = (gen.starter.hut as Vector3i) - (pf.anchor as Vector3i)
+	var s: Vector3i = pf.size
+	for cz in range((base.z >> 5) - 1, ((base.z + s.z) >> 5) + 2):
+		for cx in range((base.x >> 5) - 1, ((base.x + s.x) >> 5) + 2):
+			if not main.world.store.is_column_generated(Vector2i(cx, cz)):
+				main.world.store.generate_column(Vector2i(cx, cz))
+	for c: Vector3i in Prefabs.hut_ruin_cells(rot):
+		var w := base + c
+		main.world.set_voxel(w.x, w.y, w.z, 0)
 
 
 func _ground_y(x: int, z: int, from_y: int) -> int:

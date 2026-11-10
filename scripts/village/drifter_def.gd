@@ -8,7 +8,8 @@ enum Profession {
 	CARPENTER,    ## Refines logs into lumber and planks
 	SMOKER_CHEF,  ## Smokes fish and cooks hearty meals
 	LAMPLIGHTER,  ## Lights beacons at dusk, tolls alarm bell
-	TRADER        ## Sells town surplus to visiting merchant boats
+	TRADER,       ## Sells town surplus to visiting merchant boats
+	RANCHER       ## Tends livestock and gathers milk, wool, and eggs
 }
 
 enum Routine {
@@ -115,6 +116,12 @@ func tick_work(delta_sec: float, town_depot: StorageContainer) -> Dictionary:
 				town_depot.withdraw(&"smoked_fish_ration", 2)
 				town_depot.deposit(&"brass_guilder", 3)
 				produced[&"brass_guilder"] = 3
+
+		Profession.RANCHER:
+			# Tends livestock and gathers milk, wool, or eggs into town depot
+			var produce: StringName = [&"salt_milk", &"sea_wool", &"sea_egg"].pick_random()
+			town_depot.deposit(produce, 2)
+			produced[produce] = 2
 
 	return produced
 

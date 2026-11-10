@@ -4,6 +4,8 @@ extends Node3D
 
 var model: CharacterModel
 var peer_id := 0
+var player_name: String = ""
+var label: Label3D = null
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _speed := 0.0
@@ -22,8 +24,8 @@ func setup(id: int) -> void:
 	model = CharacterModel.new()
 	add_child(model)
 	model.setup(Palette.COAT_B, Palette.HAT_B)
-	var label := Label3D.new()
-	label.text = "Player %d" % id if id != 1 else "Host"
+	label = Label3D.new()
+	label.text = player_name if player_name != "" else ("Player %d" % id if id != 1 else "Host")
 	label.position = Vector3(0, 2.15, 0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.font_size = 40
@@ -32,6 +34,12 @@ func setup(id: int) -> void:
 	label.pixel_size = 0.004
 	label.no_depth_test = true
 	add_child(label)
+
+
+func set_player_name(p_name: String) -> void:
+	player_name = p_name
+	if label != null:
+		label.text = player_name
 
 
 func apply_state(pos: Vector3, yaw: float, speed: float, flags: int, tool: int, swings: int) -> void:

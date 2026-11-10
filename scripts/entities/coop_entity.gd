@@ -78,9 +78,9 @@ func get_interaction_prompt(player: Player) -> String:
 		var slot: ItemSlot = player.inventory.get_active_item()
 		if slot != null and not slot.is_empty() and slot.item_id in FEED_ITEMS:
 			if feed_count >= max_feed:
-				return "Coop: Feed Full (%d/%d)" % [feed_count, max_feed]
-			return "F  Fill Coop Feed with %s (%d/%d)" % [slot.item_id, feed_count, max_feed]
-	return "Coop: %d Ducks (%d/%d Feed, %d Eggs)" % [resident_birds, feed_count, max_feed, egg_count]
+				return "Coop · Feed Full · %d/%d" % [feed_count, max_feed]
+			return "F  Fill Coop Feed with %s · %d/%d" % [slot.item_id, feed_count, max_feed]
+	return "Coop · %d Ducks · %d/%d Feed · %d Eggs" % [resident_birds, feed_count, max_feed, egg_count]
 
 
 func client_interact(player: Player) -> void:

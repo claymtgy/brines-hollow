@@ -195,10 +195,20 @@ func _process(dt: float) -> void:
 
 # ---------------------------------------------------------------- interaction
 
+func is_stormy() -> bool:
+	var em := EntityManager.current
+	var sky: Node = em.main.sky if (em != null and em.main != null) else null
+	if sky != null and sky.get("weather") != null and "params" in sky.weather:
+		return int(sky.weather.params.get("state", 0)) == WeatherModel.State.STORM or float(sky.weather.params.get("storm", 0.0)) > 0.5
+	return false
+
+
 func get_interaction_prompt(_player: Player) -> String:
 	if not can_ring():
-		return "Harbour Bell (still humming)"
-	return "F  Ring the harbour bell (calls everyone, scares off nearby raiders)  ·  hold F to pick up"
+		return "Harbour Bell · Still humming"
+	if is_stormy():
+		return "F  Ring War Alarm · Invites Storm Incursion (High Risk)  ·  Hold F to pick up"
+	return "F  Ring Harbour Bell · Alerts village & scares raiders  ·  Hold F to pick up"
 
 
 func client_interact(player: Player) -> void:
@@ -210,6 +220,11 @@ func client_interact(player: Player) -> void:
 func server_action(action: StringName, _args: Dictionary, _peer: int) -> Dictionary:
 	if action != &"ring":
 		return {}
+	if is_stormy() and StormIncursionManager.current != null:
+		if not StormIncursionManager.current.active:
+			StormIncursionManager.current.start_incursion(position)
+			ring(position + Vector3.UP * 2.0, "Storm War Alarm")
+			return {"toast": "War Bell Tolled! Storm Incursion incoming!"}
 	if not ring(position + Vector3.UP * 2.0, "Harbour Bell"):
 		return {"toast": "The bell is still humming."}
 	var w := WildlifeDirector.current

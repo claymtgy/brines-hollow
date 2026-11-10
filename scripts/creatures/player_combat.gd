@@ -98,8 +98,13 @@ func process_input(delta: float, can_input: bool) -> bool:
 		if _dodge_t > CombatMath.DODGE_TIME:
 			_dodge_t = -1.0
 			player.model.rotation.x = 0.0
+			if player.model.has_method("animate_dodge"):
+				player.model.animate_dodge(-1.0)
 		else:
-			player.model.rotation.x = -TAU * (_dodge_t / CombatMath.DODGE_TIME)
+			if player.model.has_method("animate_dodge"):
+				player.model.animate_dodge(_dodge_t / CombatMath.DODGE_TIME)
+			else:
+				player.model.rotation.x = -TAU * (_dodge_t / CombatMath.DODGE_TIME)
 
 	if _parry_t >= 0.0:
 		_parry_t += delta
@@ -198,6 +203,10 @@ func on_land_plunge() -> void:
 	if net != null and net.has_method("local_aoe_strike"):
 		hits = net.local_aoe_strike(player.position, CombatMath.PLUNGE_AOE_RADIUS, plunge_stats, player.swimming)
 
+	CombatAudio.play_sound("plunge_land", player.position)
+	if player.get_parent() != null:
+		CombatFX.spawn_plunge_shockwave(player.get_parent() as Node3D, player.position, CombatMath.PLUNGE_AOE_RADIUS)
+
 	if hits > 0:
 		trigger_hit_stop(CombatMath.HITSTOP_HEAVY)
 	_shake = 0.28
@@ -248,14 +257,50 @@ func attack(wd: ItemDef, is_charged: bool = false) -> bool:
 		_strike_in = 0.10
 		combo_timer = CombatMath.COMBO_WINDOW
 
-	# Forward momentum lunge
+	# Directional soft aim assist & lunge
+	_apply_soft_aim(float(base_stats.reach_m) + 1.2)
 	player.facing = player.rig.yaw + PI
 	var fwd := Vector3(sin(player.facing), 0.0, cos(player.facing))
 	player.vel += fwd * float(strike_stats.lunge_speed)
 
-	player.model.swing()
+	# Audio and slash trail juice
+	var wt := int(base_stats.weapon_type)
+	var is_thrust := (wt == WeaponDef.WeaponType.HARPOON)
+	var sfx := "swing_heavy" if (is_charged or combo_step == 3 or wt == WeaponDef.WeaponType.ANCHOR_MAUL) else ("swing_thrust" if is_thrust else "swing_light")
+	CombatAudio.play_sound(sfx, player.position)
+
+	if player.get_parent() != null:
+		CombatFX.spawn_slash_trail(player.get_parent() as Node3D, player.position + Vector3.UP * 0.9, player.facing, combo_step, wt, is_charged, is_riposte)
+
+	if player.model.has_method("swing_attack"):
+		player.model.swing_attack(combo_step, is_charged, is_thrust)
+	else:
+		player.model.swing()
 	player.swing_count += 1
 	return true
+
+
+func _apply_soft_aim(reach: float) -> void:
+	if net == null or not ("creatures" in net):
+		return
+	var origin := player.position
+	var aim_fwd := Vector3(sin(player.rig.yaw + PI), 0.0, cos(player.rig.yaw + PI))
+	var best_dist := reach
+	var best_dir := Vector3.ZERO
+	for c in net.creatures.values():
+		if c.state == Creature.State.DEAD:
+			continue
+		var to_c: Vector3 = c.position - origin
+		to_c.y = 0.0
+		var dist := to_c.length()
+		if dist <= reach and dist > 0.1:
+			var dir := to_c.normalized()
+			var angle_deg := rad_to_deg(aim_fwd.angle_to(dir))
+			if angle_deg < 45.0 and dist < best_dist:
+				best_dist = dist
+				best_dir = dir
+	if best_dir != Vector3.ZERO:
+		player.rig.yaw = atan2(best_dir.x, best_dir.z) - PI
 
 
 func _resolve_strike() -> void:
@@ -276,11 +321,12 @@ func _resolve_strike() -> void:
 func trigger_hit_stop(duration: float) -> void:
 	_hit_stop_t = duration
 	if DisplayServer.get_name() != "headless":
-		Engine.time_scale = 0.1
-		var tree := get_tree()
-		if tree != null:
-			tree.create_timer(duration, true, false, true).timeout.connect(func():
-				Engine.time_scale = 1.0)
+		if duration >= CombatMath.HITSTOP_HEAVY:
+			Engine.time_scale = 0.25
+			var tree := get_tree()
+			if tree != null:
+				tree.create_timer(duration * 0.45, true, false, true).timeout.connect(func():
+					Engine.time_scale = 1.0)
 
 
 func try_dodge() -> bool:
@@ -301,6 +347,7 @@ func try_dodge() -> bool:
 	_dodge_dir = wish.normalized() if wish.length() > 0.2 else b.z  # no input: hop backwards
 	_dodge_t = 0.0
 	_dodge_cd = CombatMath.DODGE_COOLDOWN
+	CombatAudio.play_sound("dodge", player.position)
 	return true
 
 

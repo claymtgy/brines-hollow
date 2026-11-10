@@ -218,6 +218,10 @@ func _run() -> void:
 	player.select_hotbar_slot(5)
 	assert_test.call("With hatchet equipped: can harvest TRUNK and DIRT, but NOT STONE",
 		player.can_harvest_voxel(Palette.TRUNK) and player.can_harvest_voxel(Palette.DIRT) and not player.can_harvest_voxel(Palette.STONE))
+	assert_test.call("A hatchet fells trees (has_axe_equipped)", player.has_axe_equipped() and player.can_cut_wood())
+	player.select_hotbar_slot(0)
+	assert_test.call("A pickaxe chips wood but does not count as a hatchet", player.can_cut_wood() and not player.has_axe_equipped())
+	player.select_hotbar_slot(5)
 
 	# Empty slot 6 (bare hands) -> can harvest DIRT and GRASS, NOT STONE or TRUNK
 	player.inventory.slots[6] = ItemSlot.new()

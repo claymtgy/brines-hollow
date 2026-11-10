@@ -6,6 +6,7 @@ Salinity is how salty the soil can be (tidal mud near the sea is saltier). Regro
 
 | Crop | Seed | Harvest | Soil | Salinity | Grows in | Yield | Regrows |
 |---|---|---|---|---|---|---|---|
+| Brackish Rye | Brackish Rye Seed | Brackish Rye | Any damp ground | 15-65% | 110 s | 3-5 | no |
 | Root Potato | Root Potato Eye | Root Potato | Sweet soil (fresh water) | 0-20% | 140 s | 3-5 | no |
 | Tide Kale | Tide Kale Spores | Tide Kale | Any damp ground | 10-70% | 100 s | 1-3 | no |
 | Sea Samphire | Samphire Cutting | Sea Samphire | Brackish tidal mud | 35-100% | 110 s | 2-3 | yes |

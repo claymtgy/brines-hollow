@@ -32,6 +32,7 @@ var current_breath: float = BASE_MAX_BREATH
 var is_defeated: bool = false
 var is_exhausted: bool = false
 var is_rested: bool = false
+var has_diving_helmet: bool = false
 
 ## Active meals in stomach: Array of Dictionaries
 ## Each entry: {
@@ -116,7 +117,12 @@ func get_swim_speed_multiplier() -> float:
 	return mult
 
 
+var has_cold_protection: bool = false
+
+
 func has_cold_immunity() -> bool:
+	if has_cold_protection:
+		return true
 	for meal in active_meals:
 		if bool(meal.get("cold_immunity", false)):
 			return true
@@ -397,8 +403,11 @@ func tick(delta: float, is_submerged: bool = false, is_exerting: bool = false) -
 	# 5. Breath & Aquatic Stamina Exhaustion
 	var max_br: float = get_max_breath()
 	if is_submerged:
-		# Underwater: burn oxygen. Burn 50% faster if out of stamina or exhausted
+		# Underwater: burn oxygen. Burn 50% faster if out of stamina or exhausted.
+		# Brass diving helmet reduces oxygen drain by 80% (5x dive time).
 		var oxygen_drain: float = 1.5 if (current_stamina <= 0.0 or is_exhausted) else 1.0
+		if has_diving_helmet:
+			oxygen_drain *= 0.2
 		var old_br: float = current_breath
 		current_breath = maxf(0.0, current_breath - oxygen_drain * delta)
 		if not is_equal_approx(old_br, current_breath):

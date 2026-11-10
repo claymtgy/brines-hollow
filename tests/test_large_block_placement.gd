@@ -178,6 +178,29 @@ func _initialize() -> void:
 	player.position = Vector3(10.5, 12.0, 10.5) * VoxelWorld.VS
 	check(player._brush_hits_self(Vector3i(10, 12, 10), 1), "Placing directly where player is standing in air IS blocked by _brush_hits_self")
 
+	# -------------------------------------------------------------------------
+	# 6. Only a hatchet fells a whole tree; a pick only chips the trunk
+	# -------------------------------------------------------------------------
+	print("\n-- 6. Tree felling: hatchet vs pick")
+	var plant := func(x: int, z: int) -> void:
+		for y in range(20, 30):
+			world.set_voxel(x, y, z, Palette.TRUNK)
+		for y in range(27, 32):
+			for dz in range(-2, 3):
+				for dx in range(-2, 3):
+					if dx != 0 or dz != 0:
+						world.set_voxel(x + dx, y, z + dz, Palette.LEAVES_DARK)
+	var felled := [0]
+	world.tree_felled.connect(func(_p: Vector3, _h: float, _c: float, _pine: bool, _n: int) -> void: felled[0] += 1)
+	plant.call(30, 30)
+	world.apply_command({"t": "dig", "p": Vector3i(30, 21, 30), "r": 0, "allow_stone": true, "allow_wood": true, "fell": false})
+	check(world.get_voxel(30, 21, 30) == 0 and world.get_voxel(30, 25, 30) == Palette.TRUNK and felled[0] == 0,
+		"A pick (fell=false) removes only the struck trunk block; the tree stands")
+	plant.call(45, 45)
+	world.apply_command({"t": "dig", "p": Vector3i(45, 21, 45), "r": 0, "allow_stone": false, "allow_wood": true, "fell": true})
+	check(world.get_voxel(45, 25, 45) == 0 and world.get_voxel(46, 29, 45) == 0 and felled[0] == 1,
+		"A hatchet (fell=true) brings down the whole trunk and canopy")
+
 	print("\n==================================================")
 	print("Large Block Placement Suite: %d / %d tests passed!" % [passed_tests, total_tests])
 	print("==================================================")

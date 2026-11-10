@@ -9,98 +9,132 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
 | Builder's Hammer | 2 Driftwood, 1 Wood Plank | 1 Builder's Hammer | anywhere | instant | known |
-| Campfire (Pine Logs) | 3 Pine Wood, 4 Limestone | 1 Campfire | anywhere | instant | known |
+| Campfire (Pine Logs) | 3 Pine Wood, 4 Limestone | 1 Campfire | anywhere | instant | locked |
 | Campfire Skillet | 4 Driftwood, 4 Limestone | 1 Campfire | anywhere | instant | known |
 | Carpentry Workbench | 4 Driftwood, 4 Wood Plank | 1 Carpentry Workbench | anywhere | instant | known |
-| Copper Hatchet | 2 Pine Wood, 2 Sea-Brass Ingot | 1 Copper Hatchet | anywhere | instant | known |
-| Copper Pickaxe | 2 Pine Wood, 3 Sea-Brass Ingot | 1 Copper Pickaxe | anywhere | instant | known |
+| Copper Hatchet | 2 Pine Wood, 2 Sea-Brass Ingot | 1 Copper Hatchet | anywhere | instant | locked |
+| Copper Pickaxe | 2 Pine Wood, 3 Sea-Brass Ingot | 1 Copper Pickaxe | anywhere | instant | locked |
 | Driftwood Hoe | 2 Driftwood, 1 Wood Plank | 1 Driftwood Hoe | anywhere | instant | known |
 | Driftwood Pickaxe | 2 Driftwood, 2 Wood Plank | 1 Driftwood Pickaxe | anywhere | instant | known |
-| Iron Hatchet | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hatchet | anywhere | instant | known |
-| Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | anywhere | instant | known |
-| Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | anywhere | instant | known |
-| Iron Shovel | 2 Tarred Wood, 1 Iron Ingot | 1 Iron Shovel | anywhere | instant | known |
+| Iron Hatchet | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hatchet | anywhere | instant | locked |
+| Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | anywhere | instant | locked |
+| Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | anywhere | instant | locked |
+| Iron Shovel | 2 Tarred Wood, 1 Iron Ingot | 1 Iron Shovel | anywhere | instant | locked |
 | Parchment Shore Chart | 2 Shore Wheat | 1 Parchment Shore Chart | anywhere | instant | find Shore Wheat; recruit a Trader; Wren: "Beyond the Shallows" |
-| Pine Sapling | 2 Forest Foliage, 1 Pine Wood | 2 Pine Sapling | anywhere | instant | known |
+| Pine Sapling | 2 Forest Foliage, 1 Pine Wood | 2 Pine Sapling | anywhere | instant | locked |
 | Pine Sapling (Driftwood) | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | anywhere | instant | known |
-| Pine Wood Planks | 1 Pine Wood | 4 Wood Plank | anywhere | instant | known |
-| Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | anywhere | instant | known |
-| Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | anywhere | instant | known |
+| Pine Wood Planks | 1 Pine Wood | 4 Wood Plank | anywhere | instant | locked |
+| Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | anywhere | instant | locked |
+| Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | anywhere | instant | locked |
 | Smelting Furnace | 8 Limestone, 4 Driftwood | 1 Smelting Furnace | anywhere | instant | known |
 | Stone Hatchet | 2 Driftwood, 2 Limestone | 1 Stone Hatchet | anywhere | instant | known |
 | Stone Hoe | 2 Driftwood, 2 Limestone | 1 Stone Hoe | anywhere | instant | known |
 | Stone Pickaxe | 2 Driftwood, 3 Limestone | 1 Stone Pickaxe | anywhere | instant | known |
 | Stone Shovel | 2 Driftwood, 2 Limestone | 1 Stone Shovel | anywhere | instant | known |
-| Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | anywhere | instant | known |
+| Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | anywhere | instant | locked |
 | Whittled Fishing Rod | 2 Driftwood, 1 Kelp Fronds | 1 Whittled Fishing Rod | anywhere | instant | known |
 | Wood Planks | 1 Driftwood | 4 Wood Plank | anywhere | instant | known |
 | Wooden Hatchet | 2 Driftwood, 1 Wood Plank | 1 Wooden Hatchet | anywhere | instant | known |
 | Wooden Shovel | 1 Driftwood, 2 Wood Plank | 1 Wooden Shovel | anywhere | instant | known |
 
-## Workbench (46)
+## Workbench (78)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
+| Ancient Tide Regulator | 20 Cobblestone, 2 Ancient Weapon Fragment | 1 Ancient Tide Regulator | Workbench | 2 s | locked |
+| Architect's Drafting Desk | 8 Wood Plank, 4 Driftwood, 1 Sea-Brass Ingot | 1 Architect's Drafting Desk | Workbench | 2 s | locked |
+| Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 6 s | locked |
+| Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 2 s | locked |
+| Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 6 s | locked |
+| Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 2 s | locked |
 | Barber's Looking Glass | 3 Wood Plank, 2 Polished Sea Glass | 1 Barber's Looking Glass | Workbench | 2 s | recruit a Carpenter; merchant scroll; rare scroll (wrecks, sumps, caves) |
-| Blacksmith's Anvil | 2 Iron Ingot, 4 Limestone | 1 Blacksmith's Anvil | Workbench | 2 s | known |
+| Bayberry & Honey Candle | 2 Natural Beeswax, 1 Marsh Honey | 2 Bayberry & Honey Candle | Workbench | instant | locked |
+| Blacksmith's Anvil | 2 Iron Ingot, 4 Limestone | 1 Blacksmith's Anvil | Workbench | 2 s | locked |
 | Brine Saltery | 6 Wood Plank, 4 Limestone | 1 Brine Saltery | Workbench | 2 s | find Sea Salt |
 | Campfire | 4 Driftwood, 4 Limestone | 1 Campfire | Workbench | 2 s | known |
 | Carpentry Workbench | 8 Driftwood | 1 Carpentry Workbench | Workbench | 2 s | known |
 | Clay Salt Pan | 4 Limestone, 4 Sand | 1 Clay Salt Pan | Workbench | 2 s | recruit a Farmer; Wren: "Let the Tide Work"; rare scroll (wrecks, sumps, caves) |
-| Coastal Sloop | 36 Wood Plank, 10 Shore-Sheep Wool, 4 Sea-Brass Ingot, 2 Iron Ingot | 1 Coastal Sloop (kit) | Workbench | 12 s | known |
+| Coastal Sloop | 36 Wood Plank, 10 Shore-Sheep Wool, 4 Sea-Brass Ingot, 2 Iron Ingot | 1 Coastal Sloop (kit) | Workbench | 12 s | locked |
 | Coastal Teahouse | 6 Wood Plank, 2 Polished Sea Glass | 1 Coastal Teahouse | Workbench | 2 s | find Kelp Fronds |
-| Dock Cat's Basket | 6 Kelp Fronds, 2 Driftwood, 1 Silver Mackerel | 1 Dock Cat's Basket | Workbench | 2 s | known |
+| Communal Banquet Table | 12 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | 1 Communal Banquet Table | Workbench | 2 s | locked |
+| Deck Harpoon Swivel | 4 Iron Ingot, 2 Sea-Brass Ingot, 2 Driftwood | 1 Deck Harpoon Swivel | Workbench | instant | locked |
+| Dock Cat's Basket | 6 Kelp Fronds, 2 Driftwood, 1 Silver Mackerel | 1 Dock Cat's Basket | Workbench | 2 s | locked |
 | Driftwood Chest | 6 Driftwood | 1 Driftwood Chest | Workbench | 2 s | known |
 | Driftwood Rucksack | 4 Driftwood, 2 Shore-Sheep Wool | 1 Driftwood Rucksack | Workbench | 3 s | find Shore-Sheep Wool |
 | Fisher's Bunk | 8 Wood Plank, 6 Forest Foliage | 1 Fisher's Bunk | Workbench | 2 s | known |
 | Fisher's Smokehouse | 12 Wood Plank, 6 Cobblestone | 1 Fisher's Smokehouse | Workbench | 2 s | find Cliff Salmon; recruit a Smoker & Chef; Wren: "A Warm Belly" |
-| Guard Dog Kennel | 10 Wood Plank, 4 Driftwood, 2 Silver Mackerel | 1 Guard Dog Kennel | Workbench | 2 s | known |
-| Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | 1 Harbour Bell | Workbench | 2 s | known |
+| Glass Living Aquarium | 6 Polished Sea Glass, 2 Sea-Brass Ingot, 2 Sand | 1 Glass Living Aquarium | Workbench | 2 s | locked |
+| Guard Dog Kennel | 10 Wood Plank, 4 Driftwood, 2 Silver Mackerel | 1 Guard Dog Kennel | Workbench | 2 s | locked |
+| Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | 1 Harbour Bell | Workbench | 2 s | locked |
 | Hearth Stew Pot | 6 Cobblestone, 2 Wood Plank | 1 Hearth Stew Pot | Workbench | 2 s | find Brine Oyster; Wren: "A Warm Belly" |
 | Heavy Oilskin Coat | 4 Shore-Sheep Wool, 1 Marsh Honey | 1 Heavy Oilskin Coat | Workbench | 6 s | find Shore-Sheep Wool |
+| Heraldic Settlement Banner | 4 Shore-Sheep Wool, 4 Driftwood, 1 Sea-Brass Ingot | 1 Heraldic Settlement Banner | Workbench | 2 s | locked |
 | Hydrographic Sea Chart | 1 Parchment Shore Chart, 1 Ghost Squid | 1 Hydrographic Sea Chart | Workbench | 2 s | find Ghost Squid |
 | Kelp-Oil Lantern Post | 3 Driftwood, 2 Kelp Fronds, 1 Limestone | 1 Kelp-Oil Lantern Post | Workbench | 2 s | known |
 | Latched Pen Gate | 6 Wood Plank, 2 Driftwood | 1 Latched Pen Gate | Workbench | 2 s | known |
 | Live-Capture Trap | 4 Driftwood, 2 Wood Plank, 2 Kelp Fronds | 1 Live-Capture Trap | Workbench | 2 s | known |
-| Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 3 s | known |
 | Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 2 s | known |
-| Mooring Bollard | 4 Driftwood, 1 Iron Ingot | 1 Mooring Bollard | Workbench | 2 s | known |
+| Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 3 s | known |
+| Mangrove Beehive | 8 Wood Plank, 1 Marsh Honey, 4 Forest Foliage | 1 Mangrove Beehive | Workbench | 2 s | locked |
+| Mariner's Chart Desk | 4 Wood Plank, 1 Sea-Brass Ingot, 2 Driftwood | 1 Mariner's Chart Desk | Workbench | instant | locked |
+| Mooring Bollard | 4 Driftwood, 1 Iron Ingot | 1 Mooring Bollard | Workbench | 2 s | locked |
+| Oak Aging Cask | 6 Wood Plank, 2 Iron Ingot, 2 Driftwood | 1 Oak Aging Cask | Workbench | 2 s | locked |
 | Ocean Caster Rod | 3 Tarred Wood, 1 Sea-Brass Ingot | 1 Ocean Caster Rod | Workbench | 4 s | find Sea-Brass Ingot; recruit a Fisher |
+| Ocean Schooner | 64 Wood Plank, 24 Tarred Wood, 20 Shore-Sheep Wool, 12 Sea-Brass Ingot, 8 Iron Ingot | 1 Ocean Schooner (kit) | Workbench | 20 s | locked |
 | Oilskin Scarecrow | 4 Driftwood, 4 Forest Foliage, 2 Wood Plank | 1 Oilskin Scarecrow | Workbench | 2 s | known |
-| Outrigger Skiff | 24 Wood Plank, 8 Driftwood, 10 Kelp Fronds, 4 Shore-Sheep Wool | 1 Outrigger Skiff (kit) | Workbench | 6 s | known |
+| Outrigger Skiff | 24 Wood Plank, 8 Driftwood, 10 Kelp Fronds, 4 Shore-Sheep Wool | 1 Outrigger Skiff (kit) | Workbench | 6 s | locked |
+| Phosphor Brazier | 4 Copper Ore, 2 Polished Sea Glass, 4 Limestone | 1 Phosphor Brazier | Workbench | 2 s | locked |
 | Pine Sapling | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | Workbench | 2 s | known |
+| Regatta Checkpoint Buoy | 4 Wood Plank, 1 Sea-Brass Ingot | 1 Regatta Checkpoint Buoy | Workbench | 2 s | locked |
+| Sailor's Sea Cot | 4 Wood Plank, 2 Shore-Sheep Wool | 1 Sailor's Sea Cot | Workbench | instant | locked |
+| Salvage Diving Winch | 4 Iron Ingot, 2 Sea-Brass Ingot, 3 Driftwood | 1 Salvage Diving Winch | Workbench | instant | locked |
 | Sealed Pantry Barrel | 6 Wood Plank, 2 Kelp Fronds, 1 Limestone | 1 Sealed Pantry Barrel | Workbench | 2 s | known |
 | Shearing Shears | 2 Limestone, 2 Driftwood | 1 Shearing Shears | Workbench | 2 s | known |
-| Shepherd's Whistle | 2 Wood Plank, 1 Polished Sea Glass | 1 Shepherd's Whistle | Workbench | 2 s | known |
+| Shepherd's Whistle | 2 Wood Plank, 1 Polished Sea Glass | 1 Shepherd's Whistle | Workbench | 2 s | locked |
+| Ship Deck Lantern | 2 Sea-Brass Ingot, 1 Polished Sea Glass | 1 Ship Deck Lantern | Workbench | instant | locked |
 | Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 2 s | known |
 | Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 4 s | known |
 | Smelting Furnace | 8 Limestone, 4 Driftwood | 1 Smelting Furnace | Workbench | 2 s | known |
+| Spike Barricade | 6 Driftwood, 1 Iron Ingot | 1 Spike Barricade | Workbench | 2 s | locked |
 | Stone Hatchet | 2 Driftwood, 2 Limestone | 1 Stone Hatchet | Workbench | instant | known |
 | Stone Hoe | 2 Driftwood, 2 Limestone | 1 Stone Hoe | Workbench | instant | known |
 | Stone Pickaxe | 2 Driftwood, 3 Limestone | 1 Stone Pickaxe | Workbench | instant | known |
 | Stone Shovel | 2 Driftwood, 2 Limestone | 1 Stone Shovel | Workbench | instant | known |
 | Stone Well | 12 Cobblestone, 6 Wood Plank, 4 Kelp Fronds | 1 Stone Well | Workbench | 2 s | rare scroll (wrecks, sumps, caves) |
-| Storage Crate | 6 Wood Plank | 1 Storage Crate | Workbench | 2 s | recruit a Carpenter; Wren: "Make Your Mark"; rare scroll (wrecks, sumps, caves) |
-| Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | Workbench | instant | known |
-| Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | 1 Tide Hearth | Workbench | 2 s | known |
-| Tide-Barge | 40 Wood Plank, 12 Driftwood, 2 Iron Ingot, 10 Kelp Fronds | 1 Tide-Barge (kit) | Workbench | 10 s | known |
+| Storage Crate | 6 Wood Plank | 1 Storage Crate | Workbench | 2 s | recruit a Carpenter; rare scroll (wrecks, sumps, caves) |
+| Submerged Diving Bell | 6 Sea-Brass Ingot, 8 Wood Plank, 4 Cobblestone | 1 Submerged Diving Bell | Workbench | 2 s | locked |
+| Tailor Borean Parka | 4 Borean Mammoth-Seal Fur, 2 Shore-Sheep Wool | 1 Borean Insulated Parka | Workbench | instant | locked |
+| Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | Workbench | instant | locked |
+| Taxidermy Fish Mount | 2 Wood Plank, 2 Driftwood, 1 Silver Mackerel | 1 Taxidermy Fish Mount | Workbench | 2 s | locked |
+| Tidal Oyster Rack | 6 Wood Plank, 4 Kelp Fronds, 2 Limestone | 1 Tidal Oyster Rack | Workbench | 2 s | known |
+| Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 4 s | locked |
+| Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 2 s | locked |
+| Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | 1 Tide Hearth | Workbench | 2 s | locked |
+| Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 2 s | locked |
+| Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 6 s | locked |
+| Tide-Barge | 40 Wood Plank, 12 Driftwood, 2 Iron Ingot, 10 Kelp Fronds | 1 Tide-Barge (kit) | Workbench | 10 s | locked |
+| Town Sparring Ring | 12 Sand, 4 Wood Plank, 4 Driftwood | 1 Town Sparring Ring | Workbench | 2 s | known |
+| Undertow Gauntlet Altar | 12 Cobblestone, 4 Polished Sea Glass | 1 Undertow Gauntlet Altar | Workbench | 2 s | locked |
+| Watertight Cargo Crate | 6 Wood Plank, 1 Iron Ingot | 1 Watertight Cargo Crate | Workbench | instant | locked |
 | Watertight Sea Barrel | 6 Wood Plank, 2 Kelp Fronds | 1 Watertight Sea Barrel | Workbench | 2 s | find Silver Mackerel; find Tidepool Flounder; recruit a Fisher; Wren: "A Line in the Water" |
-| Wicker Crab Pot | 3 Driftwood, 4 Kelp Fronds | 1 Wicker Crab Pot | Workbench | 2 s | recruit a Fisher; Wren: "Tools of the Trade" |
+| Wicker Crab Pot | 3 Driftwood, 4 Kelp Fronds | 1 Wicker Crab Pot | Workbench | 2 s | recruit a Fisher; Wren: "Let the Tide Work" |
 | Wooden Pail | 4 Wood Plank, 1 Driftwood | 1 Wooden Pail | Workbench | 2 s | known |
 
-## Cooking (9)
+## Cooking (11)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
+| Archipelago Maritime Stout | 2 Brackish Rye, 1 Marsh Honey | 1 Archipelago Maritime Stout | Hearth Pot | 8 s | locked |
 | Charred Sea Mackerel | 1 Silver Mackerel | 1 Charred Sea Mackerel | Campfire | 4 s | find Silver Mackerel; Wren: "A Line in the Water" |
 | Crisp Tidepool Flounder | 1 Tidepool Flounder | 1 Crisp Tidepool Flounder | Campfire | 4 s | find Tidepool Flounder |
+| Crusty Brackish Rye Bread | 2 Brackish Rye, 1 Sea Salt | 1 Crusty Brackish Rye Bread | Hearth Pot | 6 s | locked |
 | Hearty Clam Chowder | 2 Brine Oyster, 1 Root Potato, 1 Salt-Goat Milk | 1 Hearty Clam Chowder | Hearth Pot | 8 s | find Brine Oyster; recruit a Smoker & Chef |
 | Honey-Glazed Abyssal Crab | 2 Shore Crab, 1 Marsh Honey, 1 Sea Salt | 1 Honey-Glazed Abyssal Crab | Hearth Pot | 12 s | find Shore Crab; merchant scroll |
 | Leviathan Feast | 1 Abyssal Leviathan Ray, 1 Marsh Honey, 2 Sea Samphire | 3 Leviathan Feast | Hearth Pot | 20 s | secret: land a Abyssal Leviathan Ray |
 | Phosphor Ink Broth | 1 Ghost Squid, 1 Gloom-Crawler Gland, 2 Kelp Fronds | 2 Phosphor Ink Broth | Hearth Pot | 12 s | secret: land a Ghost Squid |
 | Samphire Bouillabaisse | 1 Cliff Salmon, 1 Shore Crab, 2 Sea Samphire | 1 Samphire Bouillabaisse | Hearth Pot | 10 s | recruit a Smoker & Chef; merchant scroll; rare scroll (wrecks, sumps, caves) |
 | Shore-Wheat Hardtack | 3 Shore Wheat, 1 Sea Salt | 2 Shore-Wheat Hardtack | Hearth Pot | 6 s | find Shore Wheat |
-| Skillet Shore-Egg | 1 Shore-Duck Egg, 1 Sea Samphire | 1 Shore-Duck Egg | Campfire | 4 s | known |
+| Skillet Shore-Egg | 1 Shore-Duck Egg, 1 Sea Samphire | 1 Shore-Duck Egg | Campfire | 4 s | locked |
 
 ## Smokehouse (3)
 
@@ -115,7 +149,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
 | Pickled Samphire Jar | 3 Sea Samphire, 2 Sea Salt | 1 Pickled Samphire Jar | Saltery | 8 s | find Sea Samphire; recruit a Farmer |
-| Salt-Cured Goat Cheese | 2 Salt-Goat Milk, 1 Sea Salt | 1 Salt-Goat Cheese | Saltery | 8 s | known |
+| Salt-Cured Goat Cheese | 2 Salt-Goat Milk, 1 Sea Salt | 1 Salt-Goat Cheese | Saltery | 8 s | locked |
 
 ## Brewing (2)
 
@@ -124,24 +158,26 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Peppermint Kelp Tea | 2 Kelp Fronds, 1 Marsh Honey | 1 Peppermint Kelp Tea | Brewery | 5 s | find Kelp Fronds; recruit a Lamplighter |
 | Roasted Chicory Sea-Brew | 1 Root Potato, 1 Sea Salt | 1 Roasted Chicory Sea-Brew | Brewery | 5 s | recruit a Trader; merchant scroll; rare scroll (wrecks, sumps, caves) |
 
-## Forge (16)
+## Forge (18)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
 | Fine Sea-Brass (quenched) | 1 Copper Ore, 1 Calamine Ore, 1 Flask of Spring Water | 3 Sea-Brass Ingot | Furnace | instant | scroll in an old brass mine |
 | Fire Sea Glass | 3 Sand | 2 Polished Sea Glass | Furnace | instant | known |
-| Forge Brass Diving Helm | 4 Sea-Brass Ingot, 2 Polished Sea Glass | 1 brass_diving_helmet | Anvil | instant | known |
-| Forge Copper Hatchet | 2 Pine Wood, 2 Sea-Brass Ingot | 1 Copper Hatchet | Anvil | instant | known |
-| Forge Copper Pickaxe | 2 Pine Wood, 3 Sea-Brass Ingot | 1 Copper Pickaxe | Anvil | instant | known |
-| Forge Harpoon Lance | 3 Tarred Wood, 1 Iron Ingot | 1 Harpoon Lance | Anvil | instant | known |
-| Forge Iron Hatchet | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hatchet | Anvil | instant | known |
-| Forge Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | Anvil | instant | known |
-| Forge Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | Anvil | instant | known |
-| Forge Iron Shovel | 2 Tarred Wood, 1 Iron Ingot | 1 Iron Shovel | Anvil | instant | known |
-| Forge Mariner's Cutlass | 2 Iron Ingot, 1 Tarred Wood | 1 Rusty Cutlass | Anvil | instant | known |
+| Forge Brass Diving Helm | 4 Sea-Brass Ingot, 2 Polished Sea Glass | 1 Brass Diving Helmet | Anvil | instant | locked |
+| Forge Copper Hatchet | 2 Pine Wood, 2 Sea-Brass Ingot | 1 Copper Hatchet | Anvil | instant | locked |
+| Forge Copper Pickaxe | 2 Pine Wood, 3 Sea-Brass Ingot | 1 Copper Pickaxe | Anvil | instant | locked |
+| Forge Glacial Ice Lance | 2 Glacial Ivory Tusk, 4 Iron Ingot, 2 Driftwood | 1 Glacial Ice Lance | Anvil | instant | locked |
+| Forge Harpoon Lance | 3 Tarred Wood, 1 Iron Ingot | 1 Harpoon Lance | Anvil | instant | locked |
+| Forge Iron Hatchet | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hatchet | Anvil | instant | locked |
+| Forge Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | Anvil | instant | locked |
+| Forge Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | Anvil | instant | locked |
+| Forge Iron Shovel | 2 Tarred Wood, 1 Iron Ingot | 1 Iron Shovel | Anvil | instant | locked |
+| Forge Mariner's Cutlass | 2 Iron Ingot, 1 Tarred Wood | 1 Rusty Cutlass | Anvil | instant | locked |
+| Forge Volcanic Basalt Armor | 4 Volcanic Basalt Plate, 6 Sea-Brass Ingot, 4 Iron Ingot | 1 Volcanic Basalt Armor | Anvil | instant | locked |
 | Harpoon Lance | 3 Tarred Wood, 1 Iron Ingot | 1 Harpoon Lance | Workbench | 5 s | find Sea-Brass Ingot |
 | Kiln-Fired Cobblestone | 2 Limestone, 1 Loam Soil | 4 Cobblestone | Furnace | instant | known |
 | Rusty Cutlass | 2 Iron Ingot, 1 Tarred Wood | 1 Rusty Cutlass | Workbench | 5 s | find Sea-Brass Ingot |
-| Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | Furnace | instant | known |
-| Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | Furnace | instant | known |
+| Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | Furnace | instant | locked |
+| Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | Furnace | instant | locked |
 

@@ -121,6 +121,7 @@ func _build() -> void:
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(980, 580)
+	UiTheme.keep_on_screen(panel)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(panel)
 
@@ -149,7 +150,7 @@ func _build() -> void:
 	var sub := Label.new()
 	sub.text = "Chronicles, errands, and charters of the archipelago  ·  [J / Esc] Close"
 	sub.theme_type_variation = &"Small"
-	sub.add_theme_font_size_override("font_size", 13)
+	sub.add_theme_font_size_override("font_size", 14)
 	title_col.add_child(sub)
 
 	var close_btn := Button.new()
@@ -265,11 +266,11 @@ func refresh() -> void:
 		var is_cur: bool = (bi == current_tab)
 		_tab_buttons[bi].modulate = Color(1.0, 0.96, 0.80) if is_cur else Color(0.80, 0.78, 0.74)
 
-	_tab_buttons[0].text = "Active Quests (%d)" % qm.active_quests.size()
-	_tab_buttons[1].text = "Completed Quests (%d)" % qm.completed_quests.size()
+	_tab_buttons[0].text = "Active Quests · %d" % qm.active_quests.size()
+	_tab_buttons[1].text = "Completed Quests · %d" % qm.completed_quests.size()
 	if _tab_buttons.size() > 2:
 		var book := recipe_counts()
-		_tab_buttons[2].text = "Recipe Book (%d / %d)" % [book.x, book.y]
+		_tab_buttons[2].text = "Recipe Book · %d / %d" % [book.x, book.y]
 	if current_tab == Tab.RECIPES:
 		_render_recipe_book()
 		return
@@ -294,8 +295,8 @@ func refresh() -> void:
 			if def != null:
 				quest_list.append(def)
 
-	_tab_buttons[0].text = "Active Quests (%d)" % qm.active_quests.size()
-	_tab_buttons[1].text = "Completed Quests (%d)" % qm.completed_quests.size()
+	_tab_buttons[0].text = "Active Quests · %d" % qm.active_quests.size()
+	_tab_buttons[1].text = "Completed Quests · %d" % qm.completed_quests.size()
 
 	# Clear left list
 	for c in _quest_list_container.get_children():
@@ -415,21 +416,21 @@ func _render_station_recipes(st: StringName) -> void:
 			lbl.text = "%s
     %s" % [r.name, ", ".join(parts)]
 		else:
-			lbl.text = "???   (%s)" % RecipeBook.source_of(r.id)
+			lbl.text = "??? · %s" % RecipeBook.source_of(r.id)
 			lbl.modulate = Color(0.75, 0.72, 0.66)
 		lbl.add_theme_font_size_override("font_size", 14)
 		row.add_child(lbl)
 		if knows and book != null and book.can_copy(r.id):
 			var copy := Button.new()
 			copy.text = "Copy to scroll"
-			copy.tooltip_text = "Write this recipe out to give or trade (2 Shore Wheat for the parchment)."
+			copy.tooltip_text = "Write recipe scroll · Costs 2 Shore Wheat"
 			var rid: StringName = r.id
 			copy.pressed.connect(func() -> void:
 				if book.copy_scroll(rid, player.inventory):
 					if main.get("hud") != null:
 						main.hud.show_toast("Copied %s onto a scroll. Give it to a friend or sell it." % r.name)
 				elif main.get("hud") != null:
-					main.hud.show_toast("You need 2 Shore Wheat (and a free slot) to write out a scroll.")
+					main.hud.show_toast("You need 2 Shore Wheat and a free inventory slot to write a scroll.")
 				refresh())
 			row.add_child(copy)
 	if hidden > 0:
@@ -494,7 +495,7 @@ func _make_quest_list_card(qd: QuestDef, is_selected: bool) -> PanelContainer:
 	var g := Label.new()
 	g.text = "From: %s" % qd.giver_name
 	g.theme_type_variation = &"Small"
-	g.add_theme_font_size_override("font_size", 12)
+	g.add_theme_font_size_override("font_size", 14)
 	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cv.add_child(g)
 
@@ -505,10 +506,10 @@ func _make_quest_list_card(qd: QuestDef, is_selected: bool) -> PanelContainer:
 			done_steps += 1
 	var status_lbl := Label.new()
 	status_lbl.theme_type_variation = &"Small"
-	status_lbl.add_theme_font_size_override("font_size", 11)
+	status_lbl.add_theme_font_size_override("font_size", 14)
 	var qm: QuestManager = main.get("quests") if main != null else null
 	if qm != null and qm.paused_reward_quests.has(qd.id):
-		status_lbl.text = "⏸ Rewards Paused (Bag Full)"
+		status_lbl.text = "⏸ Rewards Paused · Inventory Full"
 		status_lbl.add_theme_color_override("font_color", Color(1.0, 0.65, 0.38))
 	elif current_tab == Tab.COMPLETED or qd.is_complete():
 		status_lbl.text = "✓ Completed"
@@ -570,7 +571,7 @@ func _render_details(qd: QuestDef) -> void:
 	status_badge.theme_type_variation = &"InkLabel"
 	var is_paused := (qm != null and qm.paused_reward_quests.has(qd.id))
 	if is_paused:
-		status_badge.text = "Status: Rewards Paused (Inventory Full)"
+		status_badge.text = "Status: Rewards Paused · Inventory Full"
 		status_badge.add_theme_color_override("font_color", Color(0.85, 0.42, 0.12))
 	elif current_tab == Tab.COMPLETED or qd.is_complete():
 		status_badge.text = "Status: Completed"

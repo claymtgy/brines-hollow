@@ -319,3 +319,40 @@ static func _build_hut() -> void:
 	g.setv(d0 + DOOR_W + 2, 13, 0, Palette.DARK_WOOD)
 	_add("Fisher's Hut", g, Vector3i((X1 + 2) / 2, 0, (Z1 + 2) / 2), [Vector3i(d0 + DOOR_W + 2, 12, 0), Vector3i(lx, WALL_H + 1, ridge_z)], "solid")
 
+
+
+## The starter hut as a new castaway finds it: a storm took a corner of the roof and the back
+## wall, and the shutters with them. Returns the cells to clear, relative to the stamped hut's
+## base (origin - rotated anchor), for rotation `r`. Lanterns and their chains are left alone.
+static func hut_ruin_cells(r: int) -> Array[Vector3i]:
+	const HUT := 5
+	const X1 := 24
+	const Z1 := 18
+	const RY := WALL_H + 1
+	var src: Dictionary = all()[HUT]
+	var s: Vector3i = src.size
+	var sd: PackedByteArray = src.data
+	var out: Array[Vector3i] = []
+	for y in s.y:
+		for z in s.z:
+			for x in s.x:
+				var m := sd[x + s.x * (z + s.z * y)]
+				if m == 0 or m == Palette.CLEAR or m == Palette.LANTERN or m == Palette.METAL:
+					continue
+				var h := ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & 0xFF
+				var gone := false
+				if m == Palette.SHUTTER:
+					gone = true
+				elif y >= RY:
+					# A ragged hole through the roof over the back-right of the hut.
+					var edge := 13 + (h % 3)
+					var chimney := m == Palette.COBBLE or m == Palette.STONE   # the stack still stands
+					gone = not chimney and x >= edge and x <= X1 - 1 and z >= 4 + (h % 2)
+				elif y >= 3:
+					# The back-right corner of the walls has come down, raggedly.
+					var corner := (z == Z1 and x >= 16) or (x == X1 and z >= 9)
+					gone = corner and y >= 3 + (h % 6)
+				if gone:
+					var q := _rot_xz(x, z, s.x, s.z, r)
+					out.append(Vector3i(q.x, y, q.y))
+	return out

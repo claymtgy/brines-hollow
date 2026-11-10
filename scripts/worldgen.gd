@@ -42,6 +42,9 @@ var villages: Array = []
 ## Mud-Claw camps on the outer islands (big archipelago only; see plan_camps), voxel units:
 ## [{island, center: Vector3 (feet), chest: Vector3i, gate: Vector2, domes: [Vector3 feet]}]
 var camps: Array = []
+var sunken_ruins: Dictionary = {}
+var frost_shoals: Dictionary = {}
+var maelstrom_spire: Dictionary = {}
 
 
 ## `layout` holds the native layout parameters (VoxelWorld.layout_params); empty = layout 1.
@@ -1500,6 +1503,153 @@ const HULK_MIN_HOME := 2600     # ~470 m: the far side of the archipelago
 ## The Hollow Flats boss lair (big archipelago), voxel units, or {} if none:
 ## {island, lair: Vector3 (feet), dir: Vector2 (toward the sea), boulders: [Vector3i (feet, on the rocks)]}
 var hulk := {}
+
+const SIREN_MIN_HOME := 2400
+## The Murk-Reef boss trench (big archipelago), voxel units, or {} if none:
+## {island, lair: Vector3, braziers: [Vector3]}
+var siren := {}
+
+
+func plan_siren() -> void:
+	siren = {}
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 4129 + 17
+	var taken := {}
+	for v in villages: taken[int(v.island)] = true
+	for o in outposts: taken[int(o.island)] = true
+	if not hulk.is_empty(): taken[int(hulk.island)] = true
+
+	var candidates: Array = []
+	for i in islands.size():
+		if i == 0 or taken.has(i): continue
+		var c: Vector2 = islands[i].center
+		if c.distance_to(hut) >= SIREN_MIN_HOME:
+			candidates.append(i)
+	if candidates.is_empty():
+		return
+	var isl_idx: int = candidates[0]
+	var isl: Dictionary = islands[isl_idx]
+	var center: Vector2 = isl.center
+	var trench_x := int(center.x)
+	var trench_z := int(center.y)
+	var trench_y := sea_low - 12
+	siren = {
+		"island": isl_idx,
+		"lair": Vector3(trench_x, trench_y, trench_z),
+		"braziers": [
+			Vector3(trench_x + 14, trench_y + 2, trench_z),
+			Vector3(trench_x - 14, trench_y + 2, trench_z),
+			Vector3(trench_x, trench_y + 2, trench_z + 14),
+			Vector3(trench_x, trench_y + 2, trench_z - 14)
+		]
+	}
+	print("[gen] Abyssal Siren Murk-Reef trench: island %d at %s" % [isl_idx, siren.lair])
+
+
+## Plan Biome 3: The Sunken Ruins & Hydrothermal Vents
+func plan_sunken_ruins() -> void:
+	sunken_ruins = {}
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 5003 + 29
+	var taken := {}
+	for v in villages: taken[int(v.island)] = true
+	for o in outposts: taken[int(o.island)] = true
+	if not hulk.is_empty(): taken[int(hulk.island)] = true
+	if not siren.is_empty(): taken[int(siren.island)] = true
+
+	var candidates: Array = []
+	for i in islands.size():
+		if i == 0 or taken.has(i): continue
+		var c: Vector2 = islands[i].center
+		if c.distance_to(hut) >= 1500.0:
+			candidates.append(i)
+	if candidates.is_empty():
+		return
+	var isl_idx: int = candidates[candidates.size() - 1]
+	var isl: Dictionary = islands[isl_idx]
+	var center: Vector2 = isl.center
+	var ruin_x := int(center.x)
+	var ruin_z := int(center.y)
+	var ruin_y := sea_low - 22
+	sunken_ruins = {
+		"island": isl_idx,
+		"center": Vector3(ruin_x, ruin_y, ruin_z),
+		"vault_chests": [
+			Vector3i(ruin_x + 8, ruin_y, ruin_z + 8),
+			Vector3i(ruin_x - 8, ruin_y, ruin_z - 8)
+		],
+		"thermal_vents": [
+			Vector3(ruin_x + 16, ruin_y, ruin_z - 12),
+			Vector3(ruin_x - 16, ruin_y, ruin_z + 12)
+		]
+	}
+	print("[gen] Biome 3 Sunken Ruins & Hydrothermal Vents: island %d at %s" % [isl_idx, sunken_ruins.center])
+
+
+## Plan Biome 4: The Frost-Shoals & Glacial Ice Packs
+func plan_frost_shoals() -> void:
+	frost_shoals = {}
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 6113 + 37
+	var taken := {}
+	for v in villages: taken[int(v.island)] = true
+	for o in outposts: taken[int(o.island)] = true
+	if not hulk.is_empty(): taken[int(hulk.island)] = true
+	if not siren.is_empty(): taken[int(siren.island)] = true
+	if not sunken_ruins.is_empty(): taken[int(sunken_ruins.island)] = true
+
+	var candidates: Array = []
+	for i in islands.size():
+		if i == 0 or taken.has(i): continue
+		var c: Vector2 = islands[i].center
+		if c.distance_to(hut) >= 1100.0:
+			candidates.append(i)
+	if candidates.is_empty():
+		return
+	var isl_idx: int = candidates[0]
+	var isl: Dictionary = islands[isl_idx]
+	var center: Vector2 = isl.center
+	var fx := int(center.x)
+	var fz := int(center.y)
+	var fy := sea_low - 4
+	frost_shoals = {
+		"island": isl_idx,
+		"lair": Vector3(fx, fy, fz),
+		"pack_ice": [
+			Vector3(fx + 20, sea_low, fz + 10),
+			Vector3(fx - 20, sea_low, fz - 10),
+			Vector3(fx + 10, sea_low, fz - 20),
+			Vector3(fx - 10, sea_low, fz + 20)
+		]
+	}
+	print("[gen] Biome 4 The Frost-Shoals & Pack Ice: island %d at %s" % [isl_idx, frost_shoals.lair])
+
+
+## Plan The Climax: The Maelstrom Spire (World Hydro-Engine)
+func plan_maelstrom_spire() -> void:
+	var cx := int(wx * 0.5)
+	var cz := int(wz * 0.5)
+	var cy := sea_low - 18
+	maelstrom_spire = {
+		"center": Vector3(cx, cy, cz),
+		"vortex_radius": 55.0,
+		"conduits": [
+			Vector3(cx + 25, cy + 4, cz),
+			Vector3(cx - 25, cy + 4, cz),
+			Vector3(cx, cy + 4, cz + 25),
+			Vector3(cx, cy + 4, cz - 25)
+		]
+	}
+	print("[gen] The Maelstrom Spire planned at world center %s" % maelstrom_spire.center)
 
 
 ## Plan the Barnacled Hulk's strand: a low beach (below half tide, so it floods and drains)

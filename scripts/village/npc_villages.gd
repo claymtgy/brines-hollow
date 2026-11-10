@@ -258,6 +258,16 @@ func talk_to(n: VillagerNPC) -> void:
 		"elder":
 			_elder_talk(n, v, who)
 		_:
+			if main != null and main.get("quests") != null:
+				if main.quests.is_quest_completed(&"story_siren_hunt"):
+					dialogue.say(who, "The deep trench has gone quiet... you felled the Abyssal Siren! Mariners across the sound drink to your name.")
+					return
+				elif main.quests.is_quest_completed(&"story_storm_fortress"):
+					dialogue.say(who, "Heard the harbour bell ring through the storm! You stood your ground against the reavers and held the line!")
+					return
+				elif main.quests.is_quest_completed(&"chore_regatta_trial"):
+					dialogue.say(who, "Saw your boat flying through the buoys out in the sound! Quickest tack in the whole archipelago!")
+					return
 			var lines: Array = FLAVOUR.get(n.role, ["Fine day for it."])
 			var t := int(main.sky.time_of_day * 24.0) if main.sky != null else 0
 			dialogue.say(who, lines[(t + int(n._seed)) % lines.size()])

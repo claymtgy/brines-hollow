@@ -44,6 +44,7 @@ func _init() -> void:
 		via = via or RecipeBook.FOUND_SCROLLS.has(rid) or rid == RecipeBook.MINE_SCROLL
 		for list in RecipeBook.SECRET.values():
 			via = via or list.has(rid)
+		via = via or RecipeBook.auto_key(rid) != &""   # learned on first holding its key ingredient
 		if not via:
 			reachable = false
 			print("     unreachable: ", rid)
@@ -92,14 +93,33 @@ func _init() -> void:
 	var ok_rewards := true
 	for m in Tutorial.MISSIONS:
 		for o: Array in m.objectives:
-			ok_types = ok_types and int(o[1]) >= 0 and int(o[1]) <= QuestDef.ObjectiveType.TALK_TO
+			ok_types = ok_types and int(o[1]) >= 0 and int(o[1]) < QuestDef.ObjectiveType.size()
 		for r in m.rewards.get("recipes", []):
 			ok_rewards = ok_rewards and RecipeDB.has_recipe(r)
-		for it: Array in m.rewards.get("items", []):
+		for it: Array in m.rewards.get("items", []) + m.get("gifts", []):
 			ok_rewards = ok_rewards and ItemDB.has_item(StringName(it[0]))
 	check(Tutorial.MISSIONS.size() == 7, "seven tutorial missions")
 	check(ok_types, "tutorial objectives use valid objective types")
-	check(ok_rewards, "tutorial rewards reference real items and recipes")
+	check(ok_rewards, "tutorial rewards and gifts reference real items and recipes")
+	var ok_journal := true
+	for st: Array in Tutorial.JOURNAL.steps:
+		ok_journal = ok_journal and int(st[1]) >= 0 and int(st[1]) < QuestDef.ObjectiveType.size() and String(st[4]) != ""
+	check(ok_journal, "washed-ashore journal steps are valid and each has a hint")
+	for it: Array in Tutorial.GREETING_GIFTS:
+		check(ItemDB.has_item(StringName(it[0])), "Wren's greeting gift %s exists" % it[0])
+
+	# Opening: starter recipes stay known, advanced ones wait for their ingredient.
+	var fresh2 := RecipeBook.new()
+	check(fresh2.knows(&"hand_craft_campfire"), "a castaway can hand-craft a campfire")
+	check(fresh2.knows(&"hand_craft_workbench"), "a castaway can hand-craft a workbench")
+	check(not fresh2.knows(&"craft_sluice_gate"), "iron recipes start hidden")
+	var inv2 := Inventory.new()
+	inv2.item_added.connect(func(id: StringName, _n: int) -> void: fresh2.on_item_acquired(id, inv2))
+	inv2.add_item(&"iron_ingot", 1)
+	check(fresh2.knows(&"craft_sluice_gate"), "first iron ingot teaches iron recipes")
+	var old := RecipeBook.new()
+	old.deserialize(["place_crab_pot"])   # a version-1 profile
+	check(old.knows(&"craft_sluice_gate") and old.knows(&"place_crab_pot"), "old profiles keep recipes they knew by default")
 
 	print("Summary: %d / %d tests passed!" % [passed, total])
 	quit(0 if passed == total else 1)

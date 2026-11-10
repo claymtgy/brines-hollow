@@ -198,6 +198,50 @@ static func get_theme() -> Theme:
 	return t
 
 
+## Keeps a centred modal panel on screen: if its laid-out size is bigger than the canvas
+## (a 1280x720 / Steam Deck canvas with a wide page), the full-screen container that centres
+## it is scaled down about the screen centre just enough to fit, with `margin` px to spare.
+## Bigger screens stay 1:1. (Containers reset their children's scale, so the scale goes on
+## the outermost container, whose parent is a plain Control.) Mouse input follows the scale.
+static func keep_on_screen(panel: Control, margin := 12.0) -> void:
+	var fit := func() -> void:
+		if not panel.is_inside_tree():
+			return
+		var target: Control = panel
+		while target.get_parent() is Container:
+			target = target.get_parent() as Control
+		if target == panel:
+			return   # not centred by a container: nothing safe to scale
+		var vp := target.get_viewport_rect().size
+		var need := panel.get_combined_minimum_size()
+		var k := minf(1.0, minf((vp.x - margin * 2.0) / maxf(need.x, 1.0), (vp.y - margin * 2.0) / maxf(need.y, 1.0)))
+		if k >= 0.999:
+			target.scale = Vector2.ONE
+			return
+		# An oversized child gets pinned to the container's top-left, so pick the pivot that
+		# lands the panel's centre on the screen centre after scaling.
+		var centre := panel.size * 0.5   # in the target's own (unscaled) coordinates
+		var node: Control = panel
+		while node != target:
+			centre += node.position
+			node = node.get_parent() as Control
+		# The container grows to the oversized panel, so aim at the viewport centre, not its own.
+		var screen := vp * 0.5 - target.position
+		target.pivot_offset = (screen - centre * k) / (1.0 - k)
+		target.scale = Vector2(k, k)
+	panel.resized.connect(fit)
+	panel.visibility_changed.connect(fit)
+	var hook := func() -> void:
+		var vp := panel.get_viewport()
+		if vp != null and not vp.size_changed.is_connected(fit):
+			vp.size_changed.connect(fit)
+		fit.call_deferred()
+	if panel.is_inside_tree():
+		hook.call()
+	else:
+		panel.tree_entered.connect(hook, CONNECT_ONE_SHOT)
+
+
 ## A key-cap badge: [F]
 static func keycap(text: String) -> PanelContainer:
 	var p := PanelContainer.new()

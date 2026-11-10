@@ -19,6 +19,10 @@ const YIELD_INTERVAL_DUCK := 120.0    # 2 mins for egg / down feather
 var animal_id: int = 0
 var species: StringName = &"salt_goat"
 var animal_name: String = "Salt-Goat"
+var is_tamed: bool = true
+var taming_feeds: int = 0
+const TAMING_FEEDS_NEEDED: int = 3
+var tame_cooldown: float = 0.0
 
 # Needs (0 to 100)
 var hunger: float = 85.0
@@ -82,8 +86,10 @@ func _init(p_species: StringName = &"salt_goat", p_name: String = "") -> void:
 	species = p_species
 	if p_name != "":
 		animal_name = p_name
+		is_tamed = true
 	else:
-		animal_name = _default_name_for_species(p_species)
+		is_tamed = false
+		animal_name = "Wild %s" % species_display_name()
 	visual_root = Node3D.new()
 	add_child(visual_root)
 	_build_visuals()
@@ -108,6 +114,16 @@ func _default_name_for_species(sp: StringName) -> String:
 			return ["Pip", "Quigley", "Waddles", "Drake", "Puddle", "Splash"].pick_random()
 		_:
 			return "Animal"
+
+
+func get_suggested_name() -> String:
+	return _default_name_for_species(species)
+
+
+func set_custom_name(new_name: String) -> void:
+	if new_name.strip_edges() != "":
+		animal_name = new_name.strip_edges()
+		is_tamed = true
 
 
 func species_display_name() -> String:
@@ -301,6 +317,11 @@ func get_interaction_prompt(player: Node) -> String:
 	var slot: ItemSlot = player.inventory.get_active_item()
 	var held_id: StringName = slot.item_id if (slot != null and not slot.is_empty()) else &""
 
+	if not is_tamed:
+		if held_id in FEED_ITEMS:
+			return "F  Offer %s to Tame (%d/%d feeds)" % [ItemDB.get_item(held_id).name if ItemDB.get_item(held_id) != null else held_id, taming_feeds, TAMING_FEEDS_NEEDED]
+		return "%s (Wild · Hold wheat or kale to tame)" % animal_name
+
 	if species == &"shore_sheep" and held_id == &"shearing_shears":
 		if wool_grown:
 			return "F  Shear %s" % animal_name
@@ -330,6 +351,26 @@ func interact(player: Node) -> Dictionary:
 
 	var slot: ItemSlot = player.inventory.get_active_item()
 	var held_id: StringName = slot.item_id if (slot != null and not slot.is_empty()) else &""
+
+	# 0. Taming Progression for Wild Animals
+	if not is_tamed:
+		if held_id in FEED_ITEMS:
+			if tame_cooldown > 0.0:
+				return {"ok": false, "msg": "%s is chewing warily. Wait a moment." % animal_name}
+			player.inventory.remove_item(held_id, 1)
+			taming_feeds += 1
+			tame_cooldown = 2.5
+			pop_emote("♥", Color(1.0, 0.45, 0.6))
+			if taming_feeds < TAMING_FEEDS_NEEDED:
+				return {"ok": true, "msg": "Offered %s to %s! Trust is growing (%d/%d feeds)." % [held_id, animal_name, taming_feeds, TAMING_FEEDS_NEEDED]}
+			else:
+				is_tamed = true
+				var suggested := get_suggested_name()
+				animal_name = suggested
+				pop_emote("♥ ♥ ♥", Color(1.0, 0.88, 0.35))
+				return {"ok": true, "tamed": true, "suggested_name": suggested, "msg": "Tamed! Named %s! (Suggested: %s)" % [suggested, suggested]}
+		else:
+			return {"ok": false, "msg": "%s is skittish. Hold wheat or kale to earn its trust!" % animal_name}
 
 	# 1. Shearing
 	if species == &"shore_sheep" and held_id == &"shearing_shears":
@@ -409,6 +450,8 @@ func simulate(dt: float, main: Node) -> void:
 	# Cooldowns & Needs
 	if pet_cooldown > 0.0:
 		pet_cooldown -= dt
+	if tame_cooldown > 0.0:
+		tame_cooldown -= dt
 
 	# Needs degradation
 	hunger = maxf(0.0, hunger - (dt / 12.0))
@@ -702,6 +745,8 @@ func net_apply(a: Array) -> void:
 func net_update(dt: float) -> void:
 	if pet_cooldown > 0.0:
 		pet_cooldown -= dt
+	if tame_cooldown > 0.0:
+		tame_cooldown -= dt
 	if _net_pos is Vector3:
 		var target: Vector3 = _net_pos
 		if position.distance_to(target) > 4.0:

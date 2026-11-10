@@ -76,6 +76,10 @@ var _water_mask_rect: Vector4 = Vector4.ZERO
 var _water_mask_center: Vector2 = Vector2(-99999, -99999)
 var _water_mask_t: float = 0.0
 var _dirty_water_mask: bool = true
+var _last_mask_water_level: float = -999.0
+var _tree_hits: Dictionary = {}
+var last_felled_grid: Prefabs.Grid = null
+var last_felled_grid_offset: Vector3 = Vector3.ZERO
 ## Positions (metres) that keep terrain loaded. Main sets this every frame.
 var focus_points: Array = []
 
@@ -354,10 +358,14 @@ func update_water_mask(center_m: Vector3, force := false) -> void:
 	if gen == null or sky == null or sky.water_mat == null:
 		return
 	var c_xz := Vector2(center_m.x, center_m.z)
-	if not force and not _dirty_water_mask and (_water_mask_center.distance_squared_to(c_xz) < 36.0):
+	var water_changed: bool = absf(sky.water_level_vox - _last_mask_water_level) >= 0.08
+	if not force and not _dirty_water_mask and not water_changed and (_water_mask_center.distance_squared_to(c_xz) < 36.0):
 		return
+	if water_changed:
+		_water_conn_cache.clear()
 	_water_mask_center = c_xz
 	_dirty_water_mask = false
+	_last_mask_water_level = sky.water_level_vox
 
 	var size_m := 160.0
 	var origin_x := center_m.x - size_m * 0.5
@@ -441,6 +449,10 @@ func generate(seed_value: int) -> void:
 		gen.plan_wrecks()
 		gen.plan_outposts()
 		gen.plan_hulk()
+		gen.plan_siren()
+		gen.plan_sunken_ruins()
+		gen.plan_frost_shoals()
+		gen.plan_maelstrom_spire()
 	store.set_generator(gen.native)
 	for p: Vector3i in gen.stamp_lights:
 		_add_light(p, Palette.LANTERN)
@@ -553,8 +565,9 @@ func _process(delta: float) -> void:
 			prof_max[k] = maxi(prof_max[k], dt)
 	_update_lod_holes()
 	if ready_for_play and sky != null:
+		var water_changed: bool = absf(sky.water_level_vox - _last_mask_water_level) >= 0.08
 		_water_mask_t -= delta
-		if _water_mask_t <= 0.0 or _dirty_water_mask:
+		if _water_mask_t <= 0.0 or _dirty_water_mask or water_changed:
 			_water_mask_t = 0.35
 			var c_m: Vector3 = focus_points[0] if not focus_points.is_empty() else Vector3(WX * 0.5 * VS, 0.0, WZ * 0.5 * VS)
 			update_water_mask(c_m)
@@ -830,7 +843,10 @@ func _update_lod_holes() -> void:
 func apply_command(cmd: Dictionary) -> void:
 	match cmd.get("t", ""):
 		"dig":
-			_dig(cmd.p, cmd.r, bool(cmd.get("allow_stone", true)), bool(cmd.get("allow_wood", true)))
+			# "fell": only a hatchet brings a whole tree down (older commands without the flag did).
+			_dig(cmd.p, cmd.r, bool(cmd.get("allow_stone", true)), bool(cmd.get("allow_wood", true)), bool(cmd.get("fell", true)), int(cmd.get("tool_tier", 0)))
+		"flatten":
+			_flatten(cmd.p, int(cmd.get("r", 2)), int(cmd.get("target_y", cmd.p.y)))
 		"place":
 			_place(cmd.p, cmd.r, cmd.m)
 		"prefab":
@@ -852,7 +868,7 @@ static func is_wood_mat(m: int) -> bool:
 	return m in WOOD_MATS
 
 
-func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true) -> void:
+func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true, fell: bool = true, tool_tier: int = 0) -> void:
 	var center_mat := store.get_voxel(c.x, c.y, c.z)
 	var removed_count := 0
 	var primary_mat := center_mat
@@ -861,7 +877,7 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 	# Detect if any tree trunk voxel is touched by this cut BEFORE removing the sphere
 	var hit_trunk := false
 	var trunk_seed := c
-	if allow_wood:
+	if allow_wood and fell:
 		if center_mat == Palette.TRUNK:
 			hit_trunk = true
 			trunk_seed = c
@@ -970,8 +986,27 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 			primary_mat = best_m
 
 	# If chopping a tree trunk, fell the ENTIRE tree (base stump, full trunk, branches, and full canopy)!
-	if allow_wood and (hit_trunk or center_mat == Palette.TRUNK or primary_mat == Palette.TRUNK):
+	if allow_wood and fell and (hit_trunk or center_mat == Palette.TRUNK or primary_mat == Palette.TRUNK):
+		# Durability hits: lower tier axes require more hits before the tree falls
+		if tool_tier > 0:
+			var t_key := Vector2i(tree_cx, tree_cz)
+			if not _tree_hits.has(t_key):
+				# Tier 1 (driftwood): 6 hits; Tier 2 (stone): 4 hits; Tier 3 (copper): 3 hits; Tier 4 (iron): 2 hits
+				_tree_hits[t_key] = maxi(1, 7 - tool_tier)
+			_tree_hits[t_key] -= 1
+			if int(_tree_hits[t_key]) > 0:
+				# Not felled yet: play wood chip hit fx and do not fell tree
+				dug.emit((Vector3(c) + Vector3.ONE * 0.5) * VS, Palette.TRUNK, 1)
+				return
+			_tree_hits.erase(t_key)
+
 		var canopy_rad := 14
+		var grid_r := canopy_rad
+		var grid_sx := grid_r * 2 + 1
+		var grid_sz := grid_r * 2 + 1
+		var grid_sy := 46
+		var tree_grid := Prefabs.Grid.new(grid_sx, grid_sy, grid_sz)
+
 		var t_min_col := Vector2i(maxi(0, (tree_cx - canopy_rad) >> 5), maxi(0, (tree_cz - canopy_rad) >> 5))
 		var t_max_col := Vector2i(mini(NCX - 1, (tree_cx + canopy_rad) >> 5), mini(NCZ - 1, (tree_cz + canopy_rad) >> 5))
 		for cz in range(t_min_col.y, t_max_col.y + 1):
@@ -1001,11 +1036,13 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 						continue
 					var m := store.get_voxel(vx, vy, vz)
 					if m == Palette.TRUNK and abs(dx) <= 4 and abs(dz) <= 4:
+						tree_grid.setv(dx + grid_r, dy, dz + grid_r, m)
 						store.set_voxel(vx, vy, vz, 0)
 						felled_trunk_count += 1
 						found_layer = true
 						top_y = maxi(top_y, vy)
 					elif (m == Palette.LEAVES or m == Palette.LEAVES_DARK) and dy >= 2:
+						tree_grid.setv(dx + grid_r, dy, dz + grid_r, m)
 						store.set_voxel(vx, vy, vz, 0)
 						found_layer = true
 						top_y = maxi(top_y, vy)
@@ -1023,6 +1060,8 @@ func _dig(c: Vector3i, r: int, allow_stone: bool = true, allow_wood: bool = true
 					empty_layers = 0
 
 		if felled_trunk_count > 0 or dark_leaves + light_leaves > 0:
+			last_felled_grid = tree_grid
+			last_felled_grid_offset = Vector3(-grid_r, 0, -grid_r)
 			primary_mat = Palette.TRUNK
 			removed_count += maxi(12, felled_trunk_count * 4)
 			var base_world_pos := Vector3(float(tree_cx) + 0.5, float(tree_base_y), float(tree_cz) + 0.5) * VS
@@ -1053,6 +1092,42 @@ func _place(c: Vector3i, r: int, m: int) -> void:
 	invalidate_water()
 	if Palette.is_emissive(m) and r == 0:
 		_add_light(c, m)
+
+
+func _flatten(c: Vector3i, r: int, target_y: int) -> void:
+	var min_col := Vector2i(maxi(0, (c.x - r) >> 5), maxi(0, (c.z - r) >> 5))
+	var max_col := Vector2i(mini(NCX - 1, (c.x + r) >> 5), mini(NCZ - 1, (c.z + r) >> 5))
+	for cz in range(min_col.y, max_col.y + 1):
+		for cx in range(min_col.x, max_col.x + 1):
+			var col := Vector2i(cx, cz)
+			if not store.is_column_generated(col):
+				store.generate_column(col)
+
+	var removed_count := 0
+	var primary_mat := 0
+	var max_reach_y := target_y + 16
+	for dz in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if dx * dx + dz * dz > r * r + 1:
+				continue
+			var vx := c.x + dx
+			var vz := c.z + dz
+			for vy in range(target_y + 1, max_reach_y + 1):
+				var m := store.get_voxel(vx, vy, vz)
+				if m != 0:
+					store.set_voxel(vx, vy, vz, 0)
+					removed_count += 1
+					if primary_mat == 0:
+						primary_mat = m
+
+	if removed_count > 0:
+		for cz in range(min_col.y, max_col.y + 1):
+			for cx in range(min_col.x, max_col.x + 1):
+				var col := Vector2i(cx, cz)
+				for cy in range(maxi(0, target_y >> 5), mini(NCY - 1, max_reach_y >> 5) + 1):
+					_requeue[Vector3i(cx, cy, cz)] = true
+		dug.emit((Vector3(c.x, target_y, c.z) + Vector3.ONE * 0.5) * VS, primary_mat, removed_count)
+		invalidate_water()
 
 
 func apply_prefab(id: int, origin: Vector3i, rot: int, _mark := true) -> void:

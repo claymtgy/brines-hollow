@@ -154,11 +154,12 @@ func launch_spot(p: Player) -> Variant:
 	return null
 
 
-const KITS := {&"skiff_kit": Boat.KIND_SKIFF, &"barge_kit": Boat.KIND_BARGE, &"sloop_kit": Boat.KIND_SLOOP}
+const KITS := {&"skiff_kit": Boat.KIND_SKIFF, &"barge_kit": Boat.KIND_BARGE, &"sloop_kit": Boat.KIND_SLOOP, &"schooner_kit": Boat.KIND_SCHOONER}
 const KIT_HINT := {
 	Boat.KIND_SKIFF: "Skiff launched. F to board, W to raise the sail.",
 	Boat.KIND_BARGE: "Tide-Barge launched. F to board; Shift+F beside it to stow or take cargo.",
 	Boat.KIND_SLOOP: "Coastal Sloop launched. F to board, W to raise the sail: she points higher than a skiff.",
+	Boat.KIND_SCHOONER: "Ocean Schooner launched. 6 seats, twin gaff masts, and 36-slot hold. Ready for the deep sea!",
 }
 
 
@@ -245,7 +246,8 @@ func _host_hold(peer: int, bid: int, op: StringName, item: StringName, n: int) -
 	var b: Boat = boats.get(bid)
 	var back: Array = []
 	var toast := ""
-	if b == null or b.hold == null:
+	var h: Inventory = b.get_hold() if b != null else null
+	if b == null or h == null:
 		if op == &"stow":
 			back = [[item, n]]
 		_give(peer, back, "There's no hold here.")
@@ -256,17 +258,17 @@ func _host_hold(peer: int, bid: int, op: StringName, item: StringName, n: int) -
 			_give(peer, [[item, n]], "")
 		return
 	if op == &"stow":
-		var left := b.hold.add_item(item, n)
+		var left := h.add_item(item, n)
 		var it: ItemDef = ItemDB.get_item(item)
-		toast = "Stowed %d %s in the barge's hold (%d/%d)" % [n - left, it.name if it != null else String(item), b.hold_used(), Boat.HOLD_SLOTS]
+		toast = "Stowed %d %s in the boat's hold (%d/%d)" % [n - left, it.name if it != null else String(item), b.hold_used(), h.slots.size()]
 		if left > 0:
 			back = [[item, left]]
 			toast += "  ·  the hold is full"
 	else:
-		for s: ItemSlot in b.hold.slots:
+		for s: ItemSlot in h.slots:
 			if not s.is_empty():
 				var id: StringName = s.item_id
-				var got := b.hold.remove_item(id, s.count)
+				var got := h.remove_item(id, s.count)
 				back = [[id, got]]
 				var it2: ItemDef = ItemDB.get_item(id)
 				toast = "Took %d %s from the hold" % [got, it2.name if it2 != null else String(id)]
@@ -322,7 +324,13 @@ func _save_fleet() -> Variant:
 	for b: Boat in boats.values():
 		if b.kind == Boat.KIND_ROWBOAT:
 			continue
-		out.append({"kind": b.kind, "pos": b.position, "yaw": b.yaw, "hold": b.hold.serialize() if b.hold != null else null})
+		out.append({
+			"kind": b.kind,
+			"pos": b.position,
+			"yaw": b.yaw,
+			"hold": b.hold.serialize() if b.hold != null else null,
+			"fixtures": b.serialize_fixtures()
+		})
 	return out
 
 
@@ -338,9 +346,20 @@ func _spawn_saved() -> void:
 		if b.hold != null and rec.get("hold") != null:
 			b.hold.deserialize(rec.hold)
 			_send_hold(b)
+		if rec.has("fixtures") and b.has_method("deserialize_fixtures"):
+			b.deserialize_fixtures(rec.fixtures)
+			if _is_host() and main != null and main.is_net and multiplayer.multiplayer_peer != null:
+				fixture_sync.rpc(b.id, rec.fixtures)
 	if not _saved_fleet.is_empty():
 		print("[boat] relaunched %d saved boat(s)" % _saved_fleet.size())
 	_saved_fleet = []
+
+
+@rpc("authority", "call_remote", "reliable")
+func fixture_sync(bid: int, data: Variant) -> void:
+	var b: Boat = boats.get(bid)
+	if b != null and data is Array and b.has_method("deserialize_fixtures"):
+		b.deserialize_fixtures(data)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -421,7 +440,7 @@ func interact() -> void:
 
 func _nearest_barge(pos: Vector3) -> Boat:
 	for b: Boat in boats.values():
-		if b.hold != null and Vector2(pos.x - b.position.x, pos.z - b.position.z).length() < BOARD_RANGE + 0.6 \
+		if b.get_hold() != null and Vector2(pos.x - b.position.x, pos.z - b.position.z).length() < BOARD_RANGE + 0.6 \
 				and absf(pos.y - b.position.y) < 2.5:
 			return b
 	return null

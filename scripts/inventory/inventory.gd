@@ -12,6 +12,7 @@ signal active_hotbar_changed(index: int)
 const DEFAULT_BASE_CAPACITY := 24
 const MAX_HOTBAR_SLOTS := 8
 
+var creative_mode: bool = false
 var capacity: int = DEFAULT_BASE_CAPACITY
 var slots: Array[ItemSlot] = []
 var active_hotbar_index: int = 0
@@ -212,6 +213,10 @@ func get_item_count(p_id: StringName) -> int:
 	return total
 
 
+func count_item(p_id: StringName) -> int:
+	return get_item_count(p_id)
+
+
 # -------------------------------------------------------------------------
 # Slot Manipulation & Quick Sort
 # -------------------------------------------------------------------------
@@ -339,6 +344,11 @@ func get_active_item() -> ItemSlot:
 	if active_hotbar_index < 0 or active_hotbar_index >= MAX_HOTBAR_SLOTS:
 		return null
 	return slots[active_hotbar_index]
+
+
+func selected_item_id() -> StringName:
+	var active := get_active_item()
+	return active.item_id if (active != null and not active.is_empty()) else &""
 
 
 func set_active_hotbar_index(index: int) -> void:

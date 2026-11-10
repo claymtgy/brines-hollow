@@ -170,6 +170,24 @@ static func _register_basic_and_tools() -> void:
 	))
 
 	register_recipe(RecipeDef.new(
+		&"refine_fish_oil", "Refined Fish Oil (Mackerel)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"silver_mackerel", "count": 2}],
+		&"fish_oil", 1, 0.0, [&"oil", &"fuel", &"refining"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"refine_fish_oil_salmon", "Refined Fish Oil (Salmon)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"cliff_salmon", "count": 1}],
+		&"fish_oil", 1, 0.0, [&"oil", &"fuel", &"refining"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"refine_fish_oil_flounder", "Refined Fish Oil (Flounder)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"tidepool_flounder", "count": 2}],
+		&"fish_oil", 1, 0.0, [&"oil", &"fuel", &"refining"]
+	))
+
+	register_recipe(RecipeDef.new(
 		&"craft_pine_plank", "Pine Wood Planks", RecipeDef.Category.BASIC, &"none",
 		[{"item_id": &"pine_wood", "count": 1}],
 		&"wood_plank", 4, 0.0, [&"timber", &"building"]
@@ -283,6 +301,32 @@ static func _register_basic_and_tools() -> void:
 		[{"item_id": &"wood_plank", "count": 36}, {"item_id": &"sea_wool", "count": 10},
 			{"item_id": &"sea_brass_ingot", "count": 4}, {"item_id": &"iron_ingot", "count": 2}],
 		&"sloop_kit", 1, 12.0, [&"maritime", &"boat"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_schooner_kit", "Ocean Schooner", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 64}, {"item_id": &"dark_wood", "count": 24},
+			{"item_id": &"sea_wool", "count": 20}, {"item_id": &"sea_brass_ingot", "count": 12}, {"item_id": &"iron_ingot", "count": 8}],
+		&"schooner_kit", 1, 20.0, [&"maritime", &"boat"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_tide_wheel", "Tide Mill Water Wheel", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 16}, {"item_id": &"iron_ingot", "count": 4}, {"item_id": &"driftwood", "count": 8}],
+		&"tide_wheel", 1, 6.0, [&"engineering", &"power"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_automated_grain_mill", "Automated Grain Mill", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"stone", "count": 12}, {"item_id": &"wood_plank", "count": 8}, {"item_id": &"sea_brass_ingot", "count": 2}],
+		&"automated_grain_mill", 1, 6.0, [&"engineering", &"station"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_automated_sawmill", "Automated Sawmill", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 12}, {"item_id": &"iron_ingot", "count": 6}, {"item_id": &"sea_brass_ingot", "count": 2}],
+		&"automated_sawmill", 1, 6.0, [&"engineering", &"station"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_sluice_gate", "Tidal Sluice Gate", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 8}, {"item_id": &"iron_ingot", "count": 2}],
+		&"sluice_gate", 1, 4.0, [&"engineering", &"water"]
 	))
 
 	register_recipe(RecipeDef.new(
@@ -429,6 +473,58 @@ static func _register_basic_and_tools() -> void:
 		[{"item_id": &"sea_brass_ingot", "count": 4}, {"item_id": &"sea_glass", "count": 2}],
 		&"diving_helmet" if ItemDB.has_item(&"diving_helmet") else &"brass_diving_helmet", 1, 0.0, [&"armor", &"head"]
 	))
+	register_recipe(RecipeDef.new(
+		&"anvil_volcanic_basalt_armor", "Forge Volcanic Basalt Armor", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"caldera_basalt_plate", "count": 4}, {"item_id": &"sea_brass_ingot", "count": 6}, {"item_id": &"iron_ingot", "count": 4}],
+		&"volcanic_basalt_armor", 1, 0.0, [&"armor", &"volcanic", &"chest"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_borean_parka", "Tailor Borean Parka", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"borean_fur", "count": 4}, {"item_id": &"sea_wool", "count": 2}],
+		&"borean_parka", 1, 0.0, [&"armor", &"frost", &"chest"]
+	))
+	register_recipe(RecipeDef.new(
+		&"anvil_glacial_ice_lance", "Forge Glacial Ice Lance", RecipeDef.Category.FORGE, &"anvil",
+		[{"item_id": &"glacial_tusk", "count": 2}, {"item_id": &"iron_ingot", "count": 4}, {"item_id": &"driftwood", "count": 2}],
+		&"glacial_ice_lance", 1, 0.0, [&"weapon", &"frost", &"harpoon"]
+	))
+
+	# Modular Boat Deck Fixtures
+	register_recipe(RecipeDef.new(
+		&"craft_deck_lantern", "Ship Deck Lantern", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"sea_brass_ingot", "count": 2}, {"item_id": &"sea_glass", "count": 1}],
+		&"deck_lantern", 1, 0.0, [&"maritime", &"boat_fixture", &"light"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_cargo_crate", "Watertight Cargo Crate", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 6}, {"item_id": &"iron_ingot", "count": 1}],
+		&"cargo_crate", 1, 0.0, [&"maritime", &"boat_fixture", &"storage"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_harpoon_swivel", "Deck Harpoon Swivel", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"iron_ingot", "count": 4}, {"item_id": &"sea_brass_ingot", "count": 2}, {"item_id": &"driftwood", "count": 2}],
+		&"harpoon_swivel", 1, 0.0, [&"maritime", &"boat_fixture", &"weapon"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_sea_cot", "Sailor's Sea Cot", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 4}, {"item_id": &"sea_wool", "count": 2}],
+		&"sea_cot", 1, 0.0, [&"maritime", &"boat_fixture", &"rest"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_navigation_table", "Mariner's Chart Desk", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 4}, {"item_id": &"sea_brass_ingot", "count": 1}, {"item_id": &"driftwood", "count": 2}],
+		&"navigation_table", 1, 0.0, [&"maritime", &"boat_fixture", &"navigation"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_diving_winch", "Salvage Diving Winch", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"iron_ingot", "count": 4}, {"item_id": &"sea_brass_ingot", "count": 2}, {"item_id": &"driftwood", "count": 3}],
+		&"diving_winch", 1, 0.0, [&"maritime", &"boat_fixture", &"salvage", &"diving"]
+	))
+	register_recipe(RecipeDef.new(
+		&"craft_scented_candle", "Bayberry & Honey Candle", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"beeswax", "count": 2}, {"item_id": &"marsh_honey", "count": 1}],
+		&"scented_candle", 2, 0.0, [&"decor", &"light", &"candle"]
+	))
 
 	# Additional Carpentry Workbench Recipes (&"workbench")
 	register_recipe(RecipeDef.new(
@@ -518,6 +614,16 @@ static func _register_culinary_and_hearth() -> void:
 		&"cook_hardtack", "Shore-Wheat Hardtack", RecipeDef.Category.COOKING, &"hearth_pot",
 		[{"item_id": &"shore_wheat", "count": 3}, {"item_id": &"sea_salt", "count": 1}],
 		&"shore_hardtack", 2, 6.0, [&"food", &"bread", &"travel"]
+	))
+	register_recipe(RecipeDef.new(
+		&"cook_brackish_rye_bread", "Crusty Brackish Rye Bread", RecipeDef.Category.COOKING, &"hearth_pot",
+		[{"item_id": &"brackish_rye", "count": 2}, {"item_id": &"sea_salt", "count": 1}],
+		&"brackish_rye_bread", 1, 6.0, [&"food", &"bread"]
+	))
+	register_recipe(RecipeDef.new(
+		&"cook_maritime_stout", "Archipelago Maritime Stout", RecipeDef.Category.COOKING, &"hearth_pot",
+		[{"item_id": &"brackish_rye", "count": 2}, {"item_id": &"marsh_honey", "count": 1}],
+		&"maritime_stout", 1, 8.0, [&"food", &"beverage"]
 	))
 
 

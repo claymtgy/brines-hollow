@@ -34,10 +34,13 @@ var fishing: FishingController = FishingController.new(1)
 var vitality: VitalityController = VitalityController.new()
 var combat: PlayerCombat = null   # Agent C: attached by CreatureNet
 var fishing_cast_power: float = 0.0
+var player_name: String = "Captain"
+var nameplate: Label3D = null
 
 var vel := Vector3.ZERO
 var on_ground := false
 var swimming := false
+var creative_mode := false
 var facing := 0.0
 var water_level := 0.0      # metres, set by Main
 var input_enabled := true
@@ -46,9 +49,13 @@ var is_sprinting := false
 var swing_count := 0
 
 var tool := 0
+var tool_wheel: ToolWheelUI
+var _told_use_hatchet := false   # one nudge per session when a pick hits a trunk
 var hammer_build_mode := 1  # 0 = Fabricated Pieces (Prefabs), 1 = Individual Blocks, 2 = Furniture
 var brush := 0
 var mat_index := 0
+var pickaxe_flatten_mode: bool = false
+var _line_anchor := Vector3i(-99999, -99999, -99999)
 var prefab_id := 5
 var prefab_rot := 0
 var snap := true
@@ -79,6 +86,12 @@ var boat: Boat = null
 var seat := 0
 
 
+func set_creative_mode(enabled: bool) -> void:
+	creative_mode = enabled
+	if inventory != null:
+		inventory.creative_mode = enabled
+
+
 func is_seated() -> bool:
 	return boat != null and is_instance_valid(boat)
 
@@ -103,6 +116,12 @@ func unboard(stand_at: Vector3) -> void:
 	rig.extra_dist = 0.0
 
 
+func set_player_name(p_name: String) -> void:
+	player_name = p_name
+	if nameplate != null:
+		nameplate.text = player_name
+
+
 func _ready() -> void:
 	# --- Entities (Agent A): placement, interaction and pick-up controller
 	placement = PlacementController.new()
@@ -112,6 +131,18 @@ func _ready() -> void:
 	model = CharacterModel.new()
 	add_child(model)
 	model.setup(Palette.COAT_A, Palette.HAT_A, customizer)
+
+	nameplate = Label3D.new()
+	nameplate.name = "PlayerNameplate"
+	nameplate.text = player_name
+	nameplate.position = Vector3(0, 2.15, 0)
+	nameplate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	nameplate.font_size = 38
+	nameplate.outline_size = 10
+	nameplate.modulate = Color(1.0, 0.98, 0.92)
+	nameplate.pixel_size = 0.004
+	nameplate.no_depth_test = true
+	add_child(nameplate)
 
 	customizer.appearance_changed.connect(func() -> void:
 		if model:
@@ -129,6 +160,10 @@ func _ready() -> void:
 	)
 
 	vitality.player_defeated.connect(func(pos: Vector3) -> void:
+		if SparringRingEntity.is_in_sparring_ring(position):
+			SparringRingEntity.handle_sparring_defeat(self)
+			vitality.revive(position)
+			return
 		if hud:
 			hud.show_toast("Defeated! Awakening safely ashore...")
 		if world and world.gen:
@@ -177,26 +212,16 @@ void fragment() {
 	add_child(_ghost)
 	_setup_fishing_visuals()
 
-	# Starter inventory setup (Hotbar slots 0..5 + Backpack slots 8..9)
+	# Starter kit: a castaway's three tools and an armful of salvage. The axe, hoe, seeds and
+	# cutlass are handed over by Wren with the lesson that uses them (see Tutorial.MISSIONS).
 	ItemDB.init_db()
 	inventory.add_item(&"driftwood_pickaxe", 1)
 	inventory.add_item(&"builders_hammer", 1)
 	inventory.add_item(&"whittle_rod", 1)
-	inventory.add_item(&"driftwood_hoe", 1)
-	inventory.add_item(&"rusty_cutlass", 1)   # Agent C: optional combat starter
-	inventory.add_item(&"driftwood_axe", 1)
-	if inventory.capacity > 10:
-		inventory.slots[10] = ItemSlot.new(&"driftwood", 15)
-		if inventory.capacity > 11:
-			inventory.slots[11] = ItemSlot.new(&"pine_sapling", 4)
+	if inventory.capacity > 8:
+		inventory.slots[8] = ItemSlot.new(&"driftwood", 10)
 	else:
-		inventory.add_item(&"driftwood", 15)
-	if inventory.capacity > 9:
-		inventory.slots[8] = ItemSlot.new(&"seed_shore_wheat", 5)
-		inventory.slots[9] = ItemSlot.new(&"seed_samphire", 3)
-	else:
-		inventory.add_item(&"seed_shore_wheat", 5)
-		inventory.add_item(&"seed_samphire", 3)
+		inventory.add_item(&"driftwood", 10)
 
 	inventory.slot_changed.connect(func(slot_idx: int, _slot: ItemSlot) -> void:
 		if slot_idx == inventory.active_hotbar_index:
@@ -373,6 +398,14 @@ func _physics_process(delta: float) -> void:
 	elif swimming and wish.length_squared() > 0.01:
 		vitality.drain_stamina_continuous(4.0, delta)
 
+	vitality.has_diving_helmet = inventory.has_item(&"brass_diving_helmet") or inventory.has_item(&"diving_helmet")
+	vitality.has_cold_protection = inventory.get_cold_protection() >= 0.5 or inventory.has_item(&"borean_parka")
+	if swimming and BoreanLair.current != null:
+		var lm := BoreanLair.current.lair_m()
+		if lm != Vector3.ZERO and position.distance_to(lm) < 180.0 and not vitality.has_cold_immunity():
+			vitality.drain_stamina_continuous(8.0, delta)
+			if vitality.current_stamina <= 0.0:
+				vitality.take_damage(6.0 * delta, &"cold", position)
 	vitality.tick(delta, is_submerged, is_sprinting or (swimming and wish.length_squared() > 0.01))
 
 	var swim_mult := inventory.get_swim_speed_multiplier() * vitality.get_swim_speed_multiplier()
@@ -553,9 +586,24 @@ func has_pickaxe_equipped() -> bool:
 	return def != null and (def.has_tag("pickaxe") or def.has_tag("chisel") or bool(def.tool_data.get("breaks_rock", false)))
 
 
+func has_shovel_equipped() -> bool:
+	var def := get_active_item_def()
+	return def != null and def.has_tag("shovel")
+
+
+func can_flatten() -> bool:
+	return has_pickaxe_equipped() or has_shovel_equipped()
+
+
+## A hatchet: the only tool that fells a whole tree, and the fastest on any wood.
 func has_axe_equipped() -> bool:
 	var def := get_active_item_def()
-	return def != null and (def.has_tag("axe") or def.has_tag("hammer") or has_pickaxe_equipped())
+	return def != null and def.has_tag("axe")
+
+
+## Can the held tool cut wood blocks at all? (A pick can chip at a trunk; only a hatchet fells it.)
+func can_cut_wood() -> bool:
+	return has_axe_equipped() or has_pickaxe_equipped()
 
 
 func can_harvest_voxel(mat: int) -> bool:
@@ -637,9 +685,25 @@ func _sync_tool_from_hotbar() -> void:
 		_set_tool(-1)
 
 
+func open_tool_wheel() -> void:
+	if tool_wheel != null:
+		tool_wheel.player = self
+		tool_wheel.open_wheel()
+
+
+func close_tool_wheel() -> int:
+	if tool_wheel != null:
+		return tool_wheel.close_wheel()
+	return -1
+
+
 func _set_tool(new_tool: int) -> void:
 	if tool == 3 and new_tool != 3 and fishing != null:
 		fishing.reset()
+	if new_tool != 1:
+		_line_anchor = Vector3i(-99999, -99999, -99999)
+	if new_tool != 0:
+		pickaxe_flatten_mode = false
 	if controller:
 		controller.reset_triggers()
 	tool = new_tool
@@ -676,10 +740,16 @@ func _unhandled_input(e: InputEvent) -> void:
 			build_menu_ui.toggle_catalogue()
 		else:
 			set_hammer_build_mode((hammer_build_mode + 1) % 3)
-	elif tool == 1 and not is_hammer_equipped() and e.is_action_pressed("alt_use"):
+	elif can_flatten() and e.is_action_pressed("alt_use") and not e.is_echo():
+		_flatten_at_target()
+	elif has_pickaxe_equipped() and e.is_action_pressed("rotate") and not e.is_echo():
+		toggle_pickaxe_flatten_mode()
+	elif tool == 1 and not is_hammer_equipped() and e.is_action_pressed("alt_use") and not e.is_echo():
 		cycle_brush_size()
 	elif e.is_action_pressed("next_item"): _cycle(1)
 	elif e.is_action_pressed("prev_item"): _cycle(-1)
+	elif e.is_action_pressed("brush_up") and tool == 2 and e is InputEventJoypadButton:
+		snap = not snap   # blueprints have no brush size, so D-Pad Up toggles grid snap on a pad
 	elif e.is_action_pressed("brush_up"):
 		brush = mini(brush + 1, BRUSHES.size() - 1)
 		_on_brush_changed()
@@ -767,6 +837,37 @@ func _on_brush_changed() -> void:
 	if hud != null:
 
 		hud.show_toast("Placement Size: %s" % sz_str)
+
+
+func toggle_pickaxe_flatten_mode() -> void:
+	pickaxe_flatten_mode = not pickaxe_flatten_mode
+	if hud != null:
+		if pickaxe_flatten_mode:
+			hud.show_toast("Flatten Land Mode: ON - Level ground to targeted height")
+		else:
+			hud.show_toast("Standard Mode")
+
+
+func _flatten_at_target() -> void:
+	if target.is_empty():
+		return
+	var cell: Vector3i = target.cell
+	var active_def := get_active_item_def()
+	var tier: int = int(active_def.tool_data.get("tier", 1)) if active_def != null else 1
+	var flat_r := 2
+	command_requested.emit({
+		"t": "flatten",
+		"p": cell,
+		"r": flat_r,
+		"target_y": cell.y,
+		"tool_tier": tier,
+	})
+	_use_cd = 0.22
+	if model != null:
+		model.swing()
+	swing_count += 1
+	if rig != null:
+		facing = rig.yaw + PI
 
 
 
@@ -863,6 +964,9 @@ func _process(delta: float) -> void:
 	model.rotation = Vector3(0, facing, 0)
 	model.set_fishing_state(fishing.current_state if tool == 3 and fishing != null else 0, fishing_cast_power)
 	model.animate(delta, horizontal_speed, on_ground, swimming)
+	var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+	if not shift_held or tool != 1:
+		_line_anchor = Vector3i(-99999, -99999, -99999)
 	_update_fishing_bobber(delta)
 	_update_target()
 	_update_cursor_highlight(_last_ray_origin, _last_ray_dir, _last_ray_hit)
@@ -889,8 +993,11 @@ func _process(delta: float) -> void:
 	# Agent C: a weapon in the active hotbar slot turns LMB into a swing (RMB parry, C dodge).
 	if combat != null and combat.process_input(delta, input_enabled and can_input):
 		return
-	if input_enabled and can_input and Input.is_action_pressed("use") and _use_cd <= 0.0 and tool != 3 and not target.is_empty():
-		_use_tool()
+	if input_enabled and can_input and _use_cd <= 0.0 and not target.is_empty():
+		if can_flatten() and Input.is_action_pressed("alt_use"):
+			_flatten_at_target()
+		elif Input.is_action_pressed("use") and tool != 3:
+			_use_tool()
 
 
 func _update_target() -> void:
@@ -971,7 +1078,38 @@ func _update_cursor_highlight(origin: Vector3, dir: Vector3, hit: Dictionary) ->
 		var alpha_mult := 0.95 if in_reach else 0.52
 		var active_def := get_active_item_def()
 		var is_farm_item := active_def != null and (active_def.has_tag("hoe") or active_def.has_tag("seed"))
-		if tool == 0 or tool == 1 or tool == -1:
+		var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+		if can_flatten() and (pickaxe_flatten_mode or Input.is_action_pressed("alt_use")) and (tool == 0 or tool == -1):
+			var flat_r := 2
+			var hsz := Vector3((2 * flat_r + 1) * VS * 1.02, VS * 0.25, (2 * flat_r + 1) * VS * 1.02)
+			(_highlight.mesh as BoxMesh).size = hsz
+			_hl_mat.set_shader_parameter("size", hsz)
+			_hl_mat.set_shader_parameter("color", Color(1.0, 0.75, 0.25, alpha_mult))
+			_highlight.global_position = (Vector3(hcell.x, hcell.y, hcell.z) + Vector3(0.5, 0.125, 0.5)) * VS
+			_highlight.visible = true
+		elif tool == 1 and brush == 0 and shift_held and _line_anchor.x != -99999 and (Vector3(hcell) - Vector3(_line_anchor)).length() <= 16.0:
+			var hc := hcell + hnorm
+			var delta := hc - _line_anchor
+			var adx := absi(delta.x)
+			var ady := absi(delta.y)
+			var adz := absi(delta.z)
+			var line_c := hc
+			if adx >= ady and adx >= adz:
+				line_c = Vector3i(hc.x, _line_anchor.y, _line_anchor.z)
+			elif ady >= adx and ady >= adz:
+				line_c = Vector3i(_line_anchor.x, hc.y, _line_anchor.z)
+			else:
+				line_c = Vector3i(_line_anchor.x, _line_anchor.y, hc.z)
+			var min_p := Vector3i(mini(_line_anchor.x, line_c.x), mini(_line_anchor.y, line_c.y), mini(_line_anchor.z, line_c.z))
+			var max_p := Vector3i(maxi(_line_anchor.x, line_c.x), maxi(_line_anchor.y, line_c.y), maxi(_line_anchor.z, line_c.z))
+			var span := max_p - min_p + Vector3i.ONE
+			var hsz := Vector3(span.x, span.y, span.z) * VS * 1.02
+			(_highlight.mesh as BoxMesh).size = hsz
+			_hl_mat.set_shader_parameter("size", hsz)
+			_hl_mat.set_shader_parameter("color", Color(0.4, 0.9, 1.0, alpha_mult))
+			_highlight.global_position = (Vector3(min_p) + Vector3(span) * 0.5) * VS
+			_highlight.visible = true
+		elif tool == 0 or tool == 1 or tool == -1:
 			var hc := hcell if tool <= 0 else hcell + hnorm
 			var hr: int = mini(BRUSHES[brush], 1) if tool == -1 else int(BRUSHES[brush])
 			var hsz := Vector3.ONE * (2 * hr + 1) * VS * 1.02
@@ -1017,6 +1155,24 @@ func _use_tool() -> void:
 			var mat := world.get_voxel(cell.x, cell.y, cell.z)
 			if controller:
 				controller.apply_mining(mat)
+			if has_pickaxe_equipped() and pickaxe_flatten_mode:
+				var active_def := get_active_item_def()
+				var tier: int = int(active_def.tool_data.get("tier", 1)) if active_def != null else 1
+				var flat_r: int = maxi(1, int(BRUSHES[brush])) if brush > 0 else 2
+				command_requested.emit({
+					"t": "flatten",
+					"p": cell,
+					"r": flat_r,
+					"target_y": cell.y,
+					"tool_tier": tier,
+				})
+				_use_cd = 0.22
+				if model != null:
+					model.swing()
+				swing_count += 1
+				if rig != null:
+					facing = rig.yaw + PI
+				return
 			if not can_harvest_voxel(mat):
 				if hud != null:
 					if VoxelWorld.is_stone_mat(mat):
@@ -1033,17 +1189,65 @@ func _use_tool() -> void:
 			var active_def := get_active_item_def()
 			var tier: int = int(active_def.tool_data.get("tier", 1)) if active_def != null else 1
 			var dig_r: int = mini(BRUSHES[brush], 1) if tool == -1 else int(BRUSHES[brush])
+			var axe := has_axe_equipped()
 			command_requested.emit({
 				"t": "dig",
 				"p": cell,
 				"r": dig_r,
 				"allow_stone": has_pickaxe_equipped(),
-				"allow_wood": has_axe_equipped()
+				"allow_wood": can_cut_wood(),
+				"fell": axe,
+				"tool_tier": tier,
 			})
 			_use_cd = maxf(0.08, (0.16 + dig_r * 0.03) / sqrt(float(maxi(1, tier))))
+			# Wood: a hatchet bites fast, a pick only chips.
+			if VoxelWorld.is_wood_mat(mat):
+				_use_cd *= 0.55 if axe else 1.8
+				if mat == Palette.TRUNK and not axe and hud != null and not _told_use_hatchet:
+					_told_use_hatchet = true
+					hud.show_toast("A pick only chips at a trunk. A hatchet fells the whole tree.")
 
 		1:
 			var c: Vector3i = cell + (target.normal as Vector3i)
+			var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+
+			if brush == 0 and shift_held and _line_anchor.x != -99999:
+				var delta := c - _line_anchor
+				var adx := absi(delta.x)
+				var ady := absi(delta.y)
+				var adz := absi(delta.z)
+				if adx >= ady and adx >= adz:
+					c = Vector3i(c.x, _line_anchor.y, _line_anchor.z)
+				elif ady >= adx and ady >= adz:
+					c = Vector3i(_line_anchor.x, c.y, _line_anchor.z)
+				else:
+					c = Vector3i(_line_anchor.x, _line_anchor.y, c.z)
+
+				var dist := maxi(maxi(absi(c.x - _line_anchor.x), absi(c.y - _line_anchor.y)), absi(c.z - _line_anchor.z))
+				if dist > 0:
+					var step_dir := Vector3(c - _line_anchor).normalized()
+					var placed_count := 0
+					for step in range(1, dist + 1):
+						var pt := _line_anchor + Vector3i(round(step_dir.x * step), round(step_dir.y * step), round(step_dir.z * step))
+						if _brush_hits_self(pt, 0):
+							continue
+						var cost := BuildCosts.brush_cost(world, pt, 0, current_material())
+						if not _pay_or_warn(cost):
+							break
+						command_requested.emit({"t": "place", "p": pt, "r": 0, "m": current_material()})
+						placed_count += 1
+					if placed_count > 0:
+						quest_event(QuestDef.ObjectiveType.PLACE_VOXELS, &"")
+						if controller:
+							controller.pulse_place()
+					_line_anchor = c
+					_use_cd = 0.2
+					if model != null:
+						model.swing()
+					swing_count += 1
+					if rig != null:
+						facing = rig.yaw + PI
+					return
 
 			var r: int = BRUSHES[brush]
 			if _brush_hits_self(c, r):
@@ -1056,6 +1260,7 @@ func _use_tool() -> void:
 				_use_cd = 0.4
 				return
 			command_requested.emit({"t": "place", "p": c, "r": r, "m": current_material()})
+			_line_anchor = c
 			quest_event(QuestDef.ObjectiveType.PLACE_VOXELS, &"")
 			if controller:
 				controller.pulse_place()
@@ -1165,6 +1370,7 @@ func _plant_seed_at_target() -> void:
 		if controller:
 			controller.apply_farming_sow()
 		var plot := farm.get_plot(cell)
+		quest_event(QuestDef.ObjectiveType.PLANT_CROP, plot.crop_id)
 		if hud:
 			hud.show_toast("Planted %s (Soil Salinity: %.0f%%)!" % [plot.crop_id, plot.salinity * 100.0])
 	else:

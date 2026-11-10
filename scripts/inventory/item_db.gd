@@ -120,7 +120,34 @@ static func _register_materials() -> void:
 		ItemDef.new(&"chitin_plate", "Heavy Chitin Plate", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"armor_mat"]),
 		ItemDef.new(&"gloom_gland", "Gloom-Crawler Gland", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"glow"]),
 		ItemDef.new(&"hulk_pearl", "The Hulk's Pearl", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary", &"decor"]),
+		ItemDef.new(&"siren_heart", "Heart of the Siren", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary", &"abyssal"]),
+		ItemDef.new(&"abyssal_chitin", "Abyssal Chitin", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"armor_mat", &"abyssal"]),
+		ItemDef.new(&"phosphor_cluster", "Phosphor Cluster", ItemDef.Category.MATERIAL, 999, -1, [&"ore", &"light", &"chemical"]),
+		ItemDef.new(&"fish_oil", "Refined Fish Oil", ItemDef.Category.MATERIAL, 99, -1, [&"oil", &"fuel", &"refined"]),
+		ItemDef.new(&"ancient_weapon_fragment", "Ancient Weapon Fragment", ItemDef.Category.MATERIAL, 99, -1, [&"salvage", &"legendary"]),
+		ItemDef.new(&"reaver_crest", "Sea-Reaver War Crest", ItemDef.Category.MATERIAL, 99, -1, [&"trophy", &"metal"]),
 		ItemDef.new(&"calamine_ore", "Calamine Ore", ItemDef.Category.MATERIAL, 999, -1, [&"ore", &"metal"]),
+		ItemDef.new(&"brass_diving_helmet", "Brass Diving Helmet", ItemDef.Category.TOOL, 1, -1, [&"gear", &"diving", &"armor"]),
+		ItemDef.new(&"angler_lure", "Bioluminescent Angler Lure", ItemDef.Category.MATERIAL, 99, -1, [&"trophy", &"light"]),
+		ItemDef.new(&"abyssal_pearl", "Black Abyssal Pearl", ItemDef.Category.MATERIAL, 99, -1, [&"treasure", &"gem"]),
+		ItemDef.new(&"diving_bell", "Submerged Diving Bell", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"diving"]),
+		ItemDef.new(&"caldera_basalt_plate", "Volcanic Basalt Plate", ItemDef.Category.MATERIAL, 999, -1, [&"salvage", &"armor_mat", &"volcanic"]),
+		ItemDef.new(&"geothermal_core", "Geothermal Core", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary", &"relic"]),
+		ItemDef.new(&"wheat_flour", "Shore Wheat Flour", ItemDef.Category.MATERIAL, 99, -1, [&"food", &"ingredient"]),
+		ItemDef.new(&"undertow_crest", "Undertow Champion's Crest", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary"]),
+		ItemDef.new(&"regulator_keystone", "Ancient Regulator Keystone", ItemDef.Category.MATERIAL, 1, -1, [&"relic", &"legendary", &"quest"]),
+		ItemDef.new(&"tide_wheel", "Tide Mill Water Wheel", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"engineering"]),
+		ItemDef.new(&"automated_grain_mill", "Automated Grain Mill", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"engineering"]),
+		ItemDef.new(&"automated_sawmill", "Automated Sawmill", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"engineering"]),
+		ItemDef.new(&"sluice_gate", "Tidal Sluice Gate", ItemDef.Category.SPECIAL, 10, -1, [&"placeable", &"engineering"]),
+		ItemDef.new(&"tide_regulator", "Ancient Tide Regulator", ItemDef.Category.SPECIAL, 1, -1, [&"placeable", &"relic"]),
+		ItemDef.new(&"glacial_tusk", "Glacial Ivory Tusk", ItemDef.Category.MATERIAL, 99, -1, [&"trophy", &"material", &"frost"]),
+		ItemDef.new(&"borean_fur", "Borean Mammoth-Seal Fur", ItemDef.Category.MATERIAL, 99, -1, [&"textile", &"material", &"frost"]),
+		ItemDef.new(&"deluge_core", "Core of the Great Deluge", ItemDef.Category.MATERIAL, 1, -1, [&"trophy", &"legendary", &"relic"]),
+		ItemDef.new(&"beeswax", "Natural Beeswax", ItemDef.Category.MATERIAL, 50, -1, [&"crafting", &"material", &"wax"]),
+		ItemDef.new(&"exotic_spice", "Exotic Eastern Spice", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"luxury", &"cooking"]),
+		ItemDef.new(&"dye_indigo", "Imperial Indigo Dye", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"dye", &"crafting"]),
+		ItemDef.new(&"silk_bolt", "High-Seas Silk Bolt", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"textile"]),
 	]
 	for o in ores:
 		register_item(o)
@@ -147,6 +174,12 @@ static func _register_crops_and_farming() -> void:
 		ItemDef.new(&"down_feather", "Down Feather", ItemDef.Category.MATERIAL, 99, -1, [&"feather", &"crafting", &"textile"]),
 		ItemDef.new(&"goat_cheese", "Salt-Goat Cheese", ItemDef.Category.FOOD, 20, -1, [&"food", &"meal", &"dairy", &"cheese"]),
 		ItemDef.new(&"marsh_honey", "Marsh Honey", ItemDef.Category.FOOD, 50, -1, [&"sweet", &"cooking"]),
+		ItemDef.new(&"seed_brackish_rye", "Brackish Rye Seed", ItemDef.Category.MATERIAL, 99, -1, [&"seed", &"hybrid", &"brackish_soil"]),
+		ItemDef.new(&"brackish_rye", "Brackish Rye", ItemDef.Category.FOOD, 99, -1, [&"crop", &"grain", &"hybrid"]),
+		ItemDef.new(&"aged_brine_cheese", "Aged Brine-Cured Cheese", ItemDef.Category.FOOD, 20, -1, [&"food", &"dairy", &"cured"]),
+		ItemDef.new(&"vintage_maritime_ale", "Vintage Maritime Cask Ale", ItemDef.Category.FOOD, 20, -1, [&"food", &"beverage", &"fermented"]),
+		ItemDef.new(&"brackish_rye_bread", "Crusty Brackish Rye Bread", ItemDef.Category.FOOD, 20, -1, [&"food", &"bread"]),
+		ItemDef.new(&"maritime_stout", "Archipelago Maritime Stout", ItemDef.Category.FOOD, 20, -1, [&"food", &"beverage"]),
 
 		# Cooked Meals & Gourmet Provisions
 		ItemDef.new(&"smoked_fish_ration", "Smoked Fish Ration", ItemDef.Category.FOOD, 20, -1, [&"food", &"meal", &"preserved"]),
@@ -183,6 +216,10 @@ static func _register_crops_and_farming() -> void:
 		&"salt_milk": {"hp_bonus": 15, "stamina_bonus": 20, "regen_hp_sec": 0.8, "duration_sec": 600.0},
 		&"sea_egg": {"hp_bonus": 12, "stamina_bonus": 15, "regen_hp_sec": 0.5, "duration_sec": 600.0},
 		&"goat_cheese": {"hp_bonus": 35, "stamina_bonus": 30, "regen_hp_sec": 1.2, "duration_sec": 1200.0},
+		&"aged_brine_cheese": {"hp_bonus": 50, "stamina_bonus": 45, "regen_hp_sec": 2.0, "duration_sec": 1800.0, "cold_immunity": true},
+		&"vintage_maritime_ale": {"hp_bonus": 30, "stamina_bonus": 50, "stamina_regen_mult": 2.2, "duration_sec": 1200.0, "cold_immunity": true},
+		&"brackish_rye_bread": {"hp_bonus": 35, "stamina_bonus": 40, "regen_hp_sec": 1.5, "duration_sec": 1500.0},
+		&"maritime_stout": {"hp_bonus": 40, "stamina_bonus": 60, "stamina_regen_mult": 2.0, "duration_sec": 1500.0, "cold_immunity": true},
 		&"leviathan_feast": {"hp_bonus": 100, "stamina_bonus": 80, "regen_hp_sec": 3.0, "duration_sec": 2400.0, "cold_immunity": true, "extra_breath_sec": 120.0, "swim_speed": 1.3},
 		&"storm_smoked_eel": {"hp_bonus": 30, "stamina_bonus": 60, "stamina_regen_mult": 2.0, "regen_hp_sec": 1.0, "duration_sec": 1200.0},
 		&"phosphor_broth": {"hp_bonus": 35, "stamina_bonus": 30, "regen_hp_sec": 1.4, "duration_sec": 1500.0, "extra_breath_sec": 90.0, "swim_speed": 1.2},
@@ -209,6 +246,7 @@ static func _register_fish_and_sea() -> void:
 		ItemDef.new(&"abyssal_ray", "Abyssal Leviathan Ray", ItemDef.Category.FOOD, 5, -1, [&"fish", &"legendary", &"trophy"]),
 		ItemDef.new(&"shore_crab", "Shore Crab", ItemDef.Category.FOOD, 20, -1, [&"shellfish", &"trap"]),
 		ItemDef.new(&"brine_oyster", "Brine Oyster", ItemDef.Category.FOOD, 50, -1, [&"shellfish", &"aquaculture"]),
+		ItemDef.new(&"hearty_clam", "Hearty Tide-Clam", ItemDef.Category.FOOD, 50, -1, [&"shellfish", &"seafood", &"cooking"]),
 	]
 	for f in fish:
 		register_item(f)
@@ -249,6 +287,8 @@ static func _register_tools_and_weapons() -> void:
 		ItemDef.new(&"shearing_shears", "Shearing Shears", ItemDef.Category.TOOL, 1, -1, [&"tool", &"shears"]),
 		ItemDef.new(&"wooden_bucket", "Wooden Pail", ItemDef.Category.TOOL, 1, -1, [&"tool", &"bucket", &"pail"]),
 		ItemDef.new(&"animal_whistle", "Shepherd's Whistle", ItemDef.Category.TOOL, 1, -1, [&"tool", &"whistle"]),
+		ItemDef.new(&"glacial_ice_lance", "Glacial Ice Lance", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"harpoon", &"thrust", &"frost"]),
+		ItemDef.new(&"sovereign_trident", "Sovereign Hydro-Trident", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"trident", &"legendary"]),
 	]
 
 	# Tool properties
@@ -296,6 +336,10 @@ static func _register_tools_and_weapons() -> void:
 	tools[25].tool_data = {"tier": 2, "till_power": 1.6, "durability": 140}
 	tools[26].tool_data = {"tier": 4, "till_power": 2.5, "durability": 240}
 	tools[1].tool_data = {"tier": 4, "power": 2.8, "durability": 280}
+	tools[tools.size() - 2].tool_data = {"weapon_type": "harpoon", "damage": 42, "reach": 3.8, "frost": true}
+	tools[tools.size() - 2].weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 42, "attack_rate": 1.1, "reach_m": 3.8, "frost": true}
+	tools[tools.size() - 1].tool_data = {"weapon_type": "trident", "damage": 65, "reach": 4.2, "cavitation": true, "legendary": true}
+	tools[tools.size() - 1].weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 65, "attack_rate": 1.3, "reach_m": 4.2, "cavitation": true, "legendary": true}
 
 	for t in tools:
 		register_item(t)
@@ -315,6 +359,8 @@ static func _register_equipment_and_backpacks() -> void:
 		ItemDef.new(&"oilskin_coat", "Heavy Oilskin Coat", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"body", &"chest"]),
 		ItemDef.new(&"lead_diving_suit", "Reinforced Lead Diving Suit", ItemDef.Category.EQUIPMENT, 1, -1, [&"diving", &"armor", &"body", &"chest"]),
 		ItemDef.new(&"chitin_carapace", "Crab Chitin Carapace", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"body", &"chest"]),
+		ItemDef.new(&"volcanic_basalt_armor", "Volcanic Basalt Armor", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"body", &"chest", &"volcanic"]),
+		ItemDef.new(&"borean_parka", "Borean Insulated Parka", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"body", &"chest", &"frost"]),
 		# Legs
 		ItemDef.new(&"fisherman_waders", "Waterproof Waders", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"legs"]),
 		# Boots
@@ -327,61 +373,64 @@ static func _register_equipment_and_backpacks() -> void:
 		ItemDef.new(&"master_chronometer_chart", "Master Chronometer Chart", ItemDef.Category.EQUIPMENT, 1, -1, [&"map", &"chart", &"navigation"]),
 	]
 
-	# Backpack properties
-	gear[0].equip_slot = &"backpack"
-	gear[0].tool_data = {"capacity": 24}
-	gear[1].equip_slot = &"backpack"
-	gear[1].tool_data = {"capacity": 36}
-	gear[2].equip_slot = &"backpack"
-	gear[2].tool_data = {"capacity": 44}
-
-	# Headgear
-	gear[3].equip_slot = &"head"
-	gear[3].tool_data = {"extra_breath_sec": 60}
-	gear[3].armor_data = {"defense": 2, "extra_breath_sec": 60.0, "max_safe_depth_m": 30.0}
-
-	gear[4].equip_slot = &"head"
-	gear[4].armor_data = {"defense": 2, "cold_protection": 0.25, "max_safe_depth_m": 20.0}
-
-	gear[5].equip_slot = &"head"
-	gear[5].armor_data = {"defense": 6, "extra_breath_sec": 180.0, "max_safe_depth_m": 85.0}
-
-	# Body Armor
-	gear[6].equip_slot = &"body"
-	gear[6].armor_data = {"defense": 4, "cold_protection": 0.35, "max_safe_depth_m": 25.0}
-
-	gear[7].equip_slot = &"body"
-	gear[7].armor_data = {"defense": 10, "cold_protection": 0.5, "max_safe_depth_m": 85.0, "swim_speed_mult": 0.3, "buoyancy_offset": -1.5}
-
-	gear[8].equip_slot = &"body"
-	gear[8].armor_data = {"defense": 8, "crush_reduction": 0.3, "max_safe_depth_m": 50.0}
-
-	# Legs
-	gear[9].equip_slot = &"legs"
-	gear[9].armor_data = {"defense": 3, "cold_protection": 0.25, "max_safe_depth_m": 20.0}
-
-	# Boots
-	gear[10].equip_slot = &"boots"
-	gear[10].tool_data = {"ice_slip_immunity": true}
-	gear[10].armor_data = {"defense": 2, "cold_protection": 0.15}
-
-	gear[11].equip_slot = &"boots"
-	gear[11].armor_data = {"defense": 1, "swim_speed_mult": 1.35, "buoyancy_offset": 0.2}
-
-	gear[12].equip_slot = &"boots"
-	gear[12].armor_data = {"defense": 5, "max_safe_depth_m": 85.0, "swim_speed_mult": 0.35, "buoyancy_offset": -1.5}
-
-	# Map Charts
-	gear[13].equip_slot = &"map"
-	gear[13].tool_data = {"map_tier": 1, "reveals_coastlines": true}
-
-	gear[14].equip_slot = &"map"
-	gear[14].tool_data = {"map_tier": 2, "reveals_coastlines": true, "reveals_tides": true, "reveals_bathymetry": true}
-
-	gear[15].equip_slot = &"map"
-	gear[15].tool_data = {"map_tier": 3, "reveals_coastlines": true, "reveals_tides": true, "reveals_bathymetry": true, "reveals_wind": true, "reveals_caves": true}
-
-	for g in gear:
+	for g: ItemDef in gear:
+		match g.id:
+			&"backpack_canvas":
+				g.equip_slot = &"backpack"
+				g.tool_data = {"capacity": 24}
+			&"backpack_driftwood":
+				g.equip_slot = &"backpack"
+				g.tool_data = {"capacity": 36}
+			&"backpack_seal_leather":
+				g.equip_slot = &"backpack"
+				g.tool_data = {"capacity": 44}
+			&"diving_rebreather":
+				g.equip_slot = &"head"
+				g.tool_data = {"extra_breath_sec": 60}
+				g.armor_data = {"defense": 2, "extra_breath_sec": 60.0, "max_safe_depth_m": 30.0}
+			&"oilskin_souwester":
+				g.equip_slot = &"head"
+				g.armor_data = {"defense": 2, "cold_protection": 0.25, "max_safe_depth_m": 20.0}
+			&"deep_diving_helmet":
+				g.equip_slot = &"head"
+				g.armor_data = {"defense": 6, "extra_breath_sec": 180.0, "max_safe_depth_m": 85.0}
+			&"oilskin_coat":
+				g.equip_slot = &"body"
+				g.armor_data = {"defense": 4, "cold_protection": 0.35, "max_safe_depth_m": 25.0}
+			&"lead_diving_suit":
+				g.equip_slot = &"body"
+				g.armor_data = {"defense": 10, "cold_protection": 0.5, "max_safe_depth_m": 85.0, "swim_speed_mult": 0.3, "buoyancy_offset": -1.5}
+			&"chitin_carapace":
+				g.equip_slot = &"body"
+				g.armor_data = {"defense": 8, "crush_reduction": 0.3, "max_safe_depth_m": 50.0}
+			&"volcanic_basalt_armor":
+				g.equip_slot = &"body"
+				g.armor_data = {"defense": 16, "fire_immunity": true, "boil_immunity": true, "max_safe_depth_m": 120.0}
+			&"borean_parka":
+				g.equip_slot = &"body"
+				g.armor_data = {"defense": 14, "cold_protection": 1.0, "frost_immunity": true, "hypothermia_immunity": true}
+			&"fisherman_waders":
+				g.equip_slot = &"legs"
+				g.armor_data = {"defense": 3, "cold_protection": 0.25, "max_safe_depth_m": 20.0}
+			&"spiked_ice_boots":
+				g.equip_slot = &"boots"
+				g.tool_data = {"ice_slip_immunity": true}
+				g.armor_data = {"defense": 2, "cold_protection": 0.15}
+			&"flippers_seal_leather":
+				g.equip_slot = &"boots"
+				g.armor_data = {"defense": 1, "swim_speed_mult": 1.35, "buoyancy_offset": 0.2}
+			&"lead_diving_boots":
+				g.equip_slot = &"boots"
+				g.armor_data = {"defense": 5, "max_safe_depth_m": 85.0, "swim_speed_mult": 0.35, "buoyancy_offset": -1.5}
+			&"parchment_shore_chart":
+				g.equip_slot = &"map"
+				g.tool_data = {"map_tier": 1, "reveals_coastlines": true}
+			&"hydrographic_sea_chart":
+				g.equip_slot = &"map"
+				g.tool_data = {"map_tier": 2, "reveals_coastlines": true, "reveals_tides": true, "reveals_bathymetry": true}
+			&"master_chronometer_chart":
+				g.equip_slot = &"map"
+				g.tool_data = {"map_tier": 3, "reveals_coastlines": true, "reveals_tides": true, "reveals_bathymetry": true, "reveals_wind": true, "reveals_caves": true}
 		register_item(g)
 
 
@@ -395,7 +444,19 @@ static func _register_special_and_currencies() -> void:
 		ItemDef.new(&"skiff_kit", "Outrigger Skiff (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"barge_kit", "Tide-Barge (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"sloop_kit", "Coastal Sloop (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
+		ItemDef.new(&"schooner_kit", "Ocean Schooner (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"pine_sapling", "Pine Sapling", ItemDef.Category.SPECIAL, 20, -1, [&"placeable", &"sapling", &"forestry"]),
+		ItemDef.new(&"blueprint_scroll", "Architectural Blueprint Scroll", ItemDef.Category.BLUEPRINT, 20, -1, [&"blueprint", &"architecture"]),
+		ItemDef.new(&"deck_lantern", "Ship Deck Lantern", ItemDef.Category.SPECIAL, 5, -1, [&"boat_fixture", &"placeable", &"light"]),
+		ItemDef.new(&"cargo_crate", "Watertight Cargo Crate", ItemDef.Category.SPECIAL, 5, -1, [&"boat_fixture", &"placeable", &"storage"]),
+		ItemDef.new(&"harpoon_swivel", "Deck Harpoon Swivel", ItemDef.Category.SPECIAL, 2, -1, [&"boat_fixture", &"placeable", &"weapon"]),
+		ItemDef.new(&"sea_cot", "Sailor's Sea Cot", ItemDef.Category.SPECIAL, 2, -1, [&"boat_fixture", &"placeable", &"rest"]),
+		ItemDef.new(&"navigation_table", "Mariner's Chart Desk", ItemDef.Category.SPECIAL, 2, -1, [&"boat_fixture", &"placeable", &"navigation"]),
+		ItemDef.new(&"diving_winch", "Salvage Diving Winch", ItemDef.Category.SPECIAL, 2, -1, [&"boat_fixture", &"placeable", &"salvage", &"diving"]),
+		ItemDef.new(&"scented_candle", "Bayberry & Honey Candle", ItemDef.Category.SPECIAL, 20, -1, [&"placeable", &"light", &"decor"]),
+		ItemDef.new(&"oyster_rack", "Tidal Oyster Rack", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"aquaculture", &"homestead"]),
+		ItemDef.new(&"mangrove_beehive", "Mangrove Beehive", ItemDef.Category.SPECIAL, 5, -1, [&"placeable", &"apiculture", &"homestead"]),
+		ItemDef.new(&"banquet_table", "Communal Banquet Table", ItemDef.Category.SPECIAL, 2, -1, [&"placeable", &"furniture", &"community"]),
 	]
 	for s in specials:
 		register_item(s)

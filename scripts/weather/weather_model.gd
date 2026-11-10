@@ -31,6 +31,8 @@ const KEYS := ["cloud", "fog", "rain", "wind", "storm"]
 # boosted: "actual storm" implies "raw storm", which makes the no-back-to-back rule exact.
 const ORDER := [State.STORM, State.CLEAR, State.OVERCAST, State.FOG, State.RAIN]
 
+static var deluge_calmed: bool = false
+
 
 static func _hash(seed_value: int, i: int) -> int:
 	var h := seed_value * 73856093 ^ i * 19349663 ^ 0x5bd1e995
@@ -92,6 +94,10 @@ static func sample(seed_value: int, abs_days: float) -> Dictionary:
 	# Wind direction drifts slowly over days.
 	var ang := float(_hash(seed_value, 7777) % 6283) / 1000.0 + abs_days * 1.3
 	out["wind_dir"] = Vector2(cos(ang), sin(ang))
+	if deluge_calmed:
+		out["storm"] = 0.0
+		out["wind"] = minf(out["wind"], 0.25)
+		out["rain"] = minf(out["rain"], 0.15)
 	return out
 
 

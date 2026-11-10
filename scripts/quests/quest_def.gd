@@ -15,7 +15,11 @@ enum ObjectiveType {
 	CRAFT_ITEM,         ## Craft anything (target = output item id, "" = any)
 	EAT_FOOD,           ## Eat a meal
 	BOARD_BOAT,         ## Board a rowboat
-	TALK_TO             ## Speak with an NPC (target = npc id)
+	TALK_TO,            ## Speak with an NPC (target = npc id)
+	SURVIVE_INCURSION,  ## Repel a storm incursion at the Harbour Bell
+	WIN_SPARRING,       ## Victorious duel inside the Town Sparring Ring
+	COMPLETE_REGATTA,   ## Complete a boat checkpoint course through the buoys
+	PLANT_CROP,         ## Sow seeds in a tilled plot (target = crop id, "" = any)
 }
 
 class QuestStep:

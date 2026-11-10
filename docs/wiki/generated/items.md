@@ -4,23 +4,39 @@
 
 Every item in the game, by category. Value is the base merchant price in Brass Guilders.
 
-## Material (27)
+## Material (47)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Abyssal Chitin | `abyssal_chitin` | 999 | 1 | salvage, armor_mat, abyssal |
+| Ancient Regulator Keystone | `regulator_keystone` | 1 | 1 | relic, legendary, quest |
+| Ancient Weapon Fragment | `ancient_weapon_fragment` | 99 | 1 | salvage, legendary |
+| Bioluminescent Angler Lure | `angler_lure` | 99 | 1 | trophy, light |
+| Black Abyssal Pearl | `abyssal_pearl` | 99 | 1 | treasure, gem |
+| Borean Mammoth-Seal Fur | `borean_fur` | 99 | 1 | textile, material, frost |
+| Brackish Rye Seed | `seed_brackish_rye` | 99 | 1 | seed, hybrid, brackish_soil |
 | Brine-Iron Ore | `sea_iron_ore` | 999 | 1 | ore, metal |
 | Calamine Ore | `calamine_ore` | 999 | 1 | ore, metal |
 | Cobblestone | `cobblestone` | 999 | 1 | stone, masonry |
 | Copper Ore | `copper_ore` | 999 | 1 | ore, metal |
+| Core of the Great Deluge | `deluge_core` | 1 | 1 | trophy, legendary, relic |
 | Down Feather | `down_feather` | 99 | 1 | feather, crafting, textile |
 | Driftwood | `driftwood` | 999 | 1 | timber, wood, shore |
+| Exotic Eastern Spice | `exotic_spice` | 99 | 1 | trade, luxury, cooking |
 | Forest Foliage | `leaves` | 999 | 1 | flora, thatch |
+| Geothermal Core | `geothermal_core` | 1 | 1 | trophy, legendary, relic |
+| Glacial Ivory Tusk | `glacial_tusk` | 99 | 1 | trophy, material, frost |
 | Gloom-Crawler Gland | `gloom_gland` | 999 | 1 | salvage, glow |
+| Heart of the Siren | `siren_heart` | 1 | 1 | trophy, legendary, abyssal |
 | Heavy Chitin Plate | `chitin_plate` | 999 | 1 | salvage, armor_mat |
+| High-Seas Silk Bolt | `silk_bolt` | 99 | 1 | trade, textile |
+| Imperial Indigo Dye | `dye_indigo` | 99 | 1 | trade, dye, crafting |
 | Iron Ingot | `iron_ingot` | 999 | 1 | metal, refined |
 | Kelp Fronds | `kelp_frond` | 999 | 1 | kelp, flora, fuel |
 | Limestone | `stone` | 999 | 1 | stone, quarry |
 | Loam Soil | `dirt` | 999 | 1 | earth, soil |
+| Natural Beeswax | `beeswax` | 50 | 1 | crafting, material, wax |
+| Phosphor Cluster | `phosphor_cluster` | 999 | 1 | ore, light, chemical |
 | Pine Wood | `pine_wood` | 999 | 1 | timber, wood, forest |
 | Polished Sea Glass | `sea_glass` | 999 | 1 | salvage, decor |
 | Root Potato Eye | `seed_root_potato` | 99 | 1 | seed, sweet_soil |
@@ -29,25 +45,34 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Sandstone | `sandstone` | 999 | 1 | stone, shore |
 | Sea Salt | `sea_salt` | 999 | 1 | salt, cure, cooking |
 | Sea-Brass Ingot | `sea_brass_ingot` | 999 | 1 | metal, alloy |
+| Sea-Reaver War Crest | `reaver_crest` | 99 | 1 | trophy, metal |
+| Shore Wheat Flour | `wheat_flour` | 99 | 1 | food, ingredient |
 | Shore Wheat Seed | `seed_shore_wheat` | 99 | 1 | seed, sweet_soil |
 | Shore-Sheep Wool | `sea_wool` | 99 | 1 | textile, crafting |
 | Tarred Wood | `dark_wood` | 999 | 1 | timber, refined |
 | The Hulk's Pearl | `hulk_pearl` | 1 | 1 | trophy, legendary, decor |
 | Tide Kale Spores | `seed_tide_kale` | 99 | 1 | seed, brackish_soil |
+| Undertow Champion's Crest | `undertow_crest` | 1 | 1 | trophy, legendary |
+| Volcanic Basalt Plate | `caldera_basalt_plate` | 999 | 1 | salvage, armor_mat, volcanic |
 | Wood Plank | `wood_plank` | 999 | 1 | timber, refined |
 
-## Food (31)
+## Food (37)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
 | Abyssal Leviathan Ray | `abyssal_ray` | 5 | 1 | fish, legendary, trophy |
+| Aged Brine-Cured Cheese | `aged_brine_cheese` | 20 | 1 | food, dairy, cured |
+| Archipelago Maritime Stout | `maritime_stout` | 20 | 1 | food, beverage |
+| Brackish Rye | `brackish_rye` | 99 | 1 | crop, grain, hybrid |
 | Brine Oyster | `brine_oyster` | 50 | 1 | shellfish, aquaculture |
 | Charred Sea Mackerel | `roasted_mackerel` | 20 | 1 | food, meal, roasted |
 | Cliff Salmon | `cliff_salmon` | 20 | 1 | fish, pelagic, fresh |
 | Crisp Tidepool Flounder | `roasted_flounder` | 20 | 1 | food, meal, roasted |
+| Crusty Brackish Rye Bread | `brackish_rye_bread` | 20 | 1 | food, bread |
 | Flask of Spring Water | `spring_water` | 20 | 1 | drink, water, fresh |
 | Ghost Squid | `ghost_squid` | 20 | 1 | fish, night, luminescent |
 | Hearty Clam Chowder | `hearty_clam_chowder` | 10 | 1 | food, meal, soup, buff |
+| Hearty Tide-Clam | `hearty_clam` | 50 | 1 | shellfish, seafood, cooking |
 | Honey-Glazed Abyssal Crab | `glazed_abyssal_crab` | 10 | 1 | food, meal, banquet, buff |
 | Leviathan Feast | `leviathan_feast` | 5 | 1 | food, meal, banquet, buff, secret |
 | Lightning Eel | `lightning_eel` | 20 | 1 | fish, storm, fresh |
@@ -71,11 +96,13 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Storm-Smoked Eel | `storm_smoked_eel` | 20 | 1 | food, meal, smoked, secret |
 | Tide Kale | `tide_kale` | 99 | 1 | crop, vegetable |
 | Tidepool Flounder | `tidepool_flounder` | 20 | 1 | fish, benthic, fresh |
+| Vintage Maritime Cask Ale | `vintage_maritime_ale` | 20 | 1 | food, beverage, fermented |
 
-## Tool (33)
+## Tool (37)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Brass Diving Helmet | `brass_diving_helmet` | 1 | 1 | gear, diving, armor |
 | Builder's Hammer | `builders_hammer` | 1 | 1 | tool, hammer |
 | Coastal Sloop (kit) | `sloop_kit` | 1 | 1 | maritime, boat |
 | Copper Hatchet | `copper_axe` | 1 | 1 | tool, axe |
@@ -83,6 +110,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Corsair's Brass Sabre | `corsair_sabre` | 1 | 1 | weapon, cutlass, blade |
 | Driftwood Hoe | `driftwood_hoe` | 1 | 1 | tool, hoe |
 | Driftwood Pickaxe | `driftwood_pickaxe` | 1 | 1 | tool, pickaxe |
+| Glacial Ice Lance | `glacial_ice_lance` | 1 | 1 | weapon, harpoon, thrust, frost |
 | Harpoon Lance | `harpoon_lance` | 1 | 1 | weapon, harpoon, thrust |
 | Iron Hatchet | `iron_axe` | 1 | 1 | tool, axe |
 | Iron Hoe | `iron_hoe` | 1 | 1 | tool, hoe |
@@ -92,12 +120,14 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Mason's Chisel | `masons_chisel` | 1 | 1 | tool, chisel |
 | Net Launcher | `net_launcher` | 1 | 1 | weapon, trapper |
 | Ocean Caster Rod | `ocean_caster_rod` | 1 | 1 | tool, fishing_rod |
+| Ocean Schooner (kit) | `schooner_kit` | 1 | 1 | maritime, boat |
 | Outrigger Skiff (kit) | `skiff_kit` | 1 | 1 | maritime, boat |
 | Phosphor Lantern Staff | `phosphor_lantern_staff` | 1 | 1 | weapon, occult, light |
 | Pneumatic Speargun | `pneumatic_speargun` | 1 | 1 | weapon, speargun, ranged |
 | Rusty Cutlass | `rusty_cutlass` | 1 | 1 | weapon, cutlass, blade |
 | Shearing Shears | `shearing_shears` | 1 | 1 | tool, shears |
 | Shepherd's Whistle | `animal_whistle` | 1 | 1 | tool, whistle |
+| Sovereign Hydro-Trident | `sovereign_trident` | 1 | 1 | weapon, trident, legendary |
 | Stone Hatchet | `stone_axe` | 1 | 1 | tool, axe |
 | Stone Hoe | `stone_hoe` | 1 | 1 | tool, hoe |
 | Stone Pickaxe | `stone_pickaxe` | 1 | 1 | tool, pickaxe |
@@ -110,10 +140,11 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Wooden Pail | `wooden_bucket` | 1 | 1 | tool, bucket, pail |
 | Wooden Shovel | `driftwood_shovel` | 1 | 1 | tool, shovel |
 
-## Equipment (16)
+## Equipment (18)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Borean Insulated Parka | `borean_parka` | 1 | 1 | armor, body, chest, frost |
 | Brass Diving Rebreather | `diving_rebreather` | 1 | 1 | diving, head |
 | Canvas Pouch | `backpack_canvas` | 1 | 1 | backpack |
 | Crab Chitin Carapace | `chitin_carapace` | 1 | 1 | armor, body, chest |
@@ -128,21 +159,28 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Seal-Leather Haversack | `backpack_seal_leather` | 1 | 1 | backpack |
 | Seal-Skin Flippers | `flippers_seal_leather` | 1 | 1 | armor, boots, aquatic |
 | Spiked Ice Boots | `spiked_ice_boots` | 1 | 1 | armor, boots |
+| Volcanic Basalt Armor | `volcanic_basalt_armor` | 1 | 1 | armor, body, chest, volcanic |
 | Waterproof Waders | `fisherman_waders` | 1 | 1 | armor, legs |
 | Weighted Lead Boots | `lead_diving_boots` | 1 | 1 | diving, armor, boots |
 
-## Blueprint (2)
+## Blueprint (3)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Architectural Blueprint Scroll | `blueprint_scroll` | 20 | 1 | blueprint, architecture |
 | Blueprint: Dry Dock | `blueprint_dry_dock` | 1 | 1 | blueprint, maritime |
 | Blueprint: Tide Mill | `blueprint_tide_mill` | 1 | 1 | blueprint, engineering |
 
-## Special (32)
+## Special (58)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
+| Ancient Tide Regulator | `tide_regulator` | 1 | 1 | placeable, relic |
+| Architect's Drafting Desk | `drafting_desk` | 5 | 1 | placeable |
+| Automated Grain Mill | `automated_grain_mill` | 5 | 1 | placeable, engineering |
+| Automated Sawmill | `automated_sawmill` | 5 | 1 | placeable, engineering |
 | Barber's Looking Glass | `barber_mirror` | 5 | 1 | placeable |
+| Bayberry & Honey Candle | `scented_candle` | 20 | 1 | placeable, light, decor |
 | Blacksmith's Anvil | `anvil` | 5 | 1 | placeable |
 | Brass Guilder | `brass_guilder` | 9999 | 1 | currency, trade |
 | Brine Saltery | `saltery` | 5 | 1 | placeable |
@@ -150,28 +188,49 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Carpentry Workbench | `workbench` | 5 | 1 | placeable |
 | Clay Salt Pan | `salt_pan` | 10 | 1 | placeable |
 | Coastal Teahouse | `brewery` | 5 | 1 | placeable |
+| Communal Banquet Table | `banquet_table` | 2 | 1 | placeable, furniture, community |
+| Deck Harpoon Swivel | `harpoon_swivel` | 2 | 1 | boat_fixture, placeable, weapon |
 | Dock Cat's Basket | `cat_basket` | 1 | 1 | placeable |
 | Driftwood Chest | `driftwood_chest` | 10 | 1 | placeable |
 | Fisher's Bunk | `fisher_bed` | 5 | 1 | placeable |
 | Fisher's Smokehouse | `smokehouse` | 5 | 1 | placeable |
 | Gilded Ship Wheel | `gilded_ship_wheel` | 1 | 1 | trophy, boss_drop |
+| Glass Living Aquarium | `aquarium` | 5 | 1 | placeable |
 | Guard Dog Kennel | `dog_kennel` | 1 | 1 | placeable |
 | Harbour Bell | `village_bell` | 1 | 1 | placeable |
 | Hearth Stew Pot | `hearth_pot` | 5 | 1 | placeable |
+| Heraldic Settlement Banner | `heraldic_banner` | 10 | 1 | placeable |
 | Kelp-Oil Lantern Post | `lantern_post` | 10 | 1 | placeable |
 | Latched Pen Gate | `pen_gate` | 10 | 1 | placeable |
 | Live-Capture Trap | `live_trap` | 5 | 1 | placeable |
 | Livestock Trough | `feed_trough` | 5 | 1 | placeable |
+| Mangrove Beehive | `mangrove_beehive` | 5 | 1 | placeable, apiculture, homestead |
+| Mariner's Chart Desk | `navigation_table` | 2 | 1 | boat_fixture, placeable, navigation |
 | Mooring Bollard | `mooring_bollard` | 10 | 1 | placeable |
+| Oak Aging Cask | `aging_cask` | 5 | 1 | placeable |
 | Oilskin Scarecrow | `scarecrow` | 5 | 1 | placeable |
+| Phosphor Brazier | `phosphor_brazier` | 5 | 1 | placeable |
 | Pine Sapling | `pine_sapling` | 20 | 1 | placeable, sapling, forestry |
+| Regatta Checkpoint Buoy | `regatta_buoy` | 10 | 1 | placeable |
+| Sailor's Sea Cot | `sea_cot` | 2 | 1 | boat_fixture, placeable, rest |
+| Salvage Diving Winch | `diving_winch` | 2 | 1 | boat_fixture, placeable, salvage, diving |
 | Sealed Pantry Barrel | `pantry_barrel` | 10 | 1 | placeable |
+| Ship Deck Lantern | `deck_lantern` | 5 | 1 | boat_fixture, placeable, light |
 | Shore Poultry Coop | `poultry_coop` | 5 | 1 | placeable |
 | Smelting Furnace | `furnace` | 5 | 1 | placeable |
+| Spike Barricade | `defense_barricade` | 10 | 1 | placeable |
 | Stone Well | `stone_well` | 5 | 1 | placeable |
 | Storage Crate | `storage_crate` | 10 | 1 | placeable |
+| Submerged Diving Bell | `diving_bell` | 5 | 1 | placeable, diving |
+| Taxidermy Fish Mount | `fish_trophy` | 10 | 1 | placeable |
+| Tidal Oyster Rack | `oyster_rack` | 5 | 1 | placeable, aquaculture, homestead |
+| Tidal Sluice Gate | `sluice_gate` | 10 | 1 | placeable, engineering |
 | Tide Hearth | `tide_hearth` | 1 | 1 | placeable |
+| Tide Mill Water Wheel | `tide_wheel` | 5 | 1 | placeable, engineering |
 | Tide Scrip | `tide_scrip` | 9999 | 1 | currency, export |
+| Town Sparring Ring | `sparring_ring` | 1 | 1 | placeable |
+| Undertow Gauntlet Altar | `undertow_altar` | 1 | 1 | placeable |
+| Watertight Cargo Crate | `cargo_crate` | 5 | 1 | boat_fixture, placeable, storage |
 | Watertight Sea Barrel | `sea_barrel` | 10 | 1 | placeable |
 | Wicker Crab Pot | `crab_pot` | 10 | 1 | placeable |
 

@@ -109,6 +109,61 @@ func apply_preset(preset_name: String) -> void:
 			eye_color = CharacterPalette.EyeColor.DARK_PEAT
 			weathering = 0.25
 
+		"coastal_forager":
+			skin_tone = CharacterPalette.SkinTone.PALE_SALT
+			hair_style = CharacterPalette.HairStyle.BRAIDED_TIDES
+			hair_color = CharacterPalette.HairColor.RUST_AUBURN
+			beard_style = CharacterPalette.BeardStyle.CLEAN_SHAVEN
+			beard_color = CharacterPalette.HairColor.RUST_AUBURN
+			hat_style = CharacterPalette.HatStyle.HEADBAND
+			coat_color = CharacterPalette.CoatColor.CORAL_RUST
+			eye_color = CharacterPalette.EyeColor.SEA_TEAL
+			weathering = 0.10
+
+		"tide_diver":
+			skin_tone = CharacterPalette.SkinTone.RUSTIC_OCHRE
+			hair_style = CharacterPalette.HairStyle.SAILOR_BUN
+			hair_color = CharacterPalette.HairColor.RAVEN_BLACK
+			beard_style = CharacterPalette.BeardStyle.CLEAN_SHAVEN
+			beard_color = CharacterPalette.HairColor.RAVEN_BLACK
+			hat_style = CharacterPalette.HatStyle.NONE
+			coat_color = CharacterPalette.CoatColor.NAVY_BLUE
+			eye_color = CharacterPalette.EyeColor.DARK_PEAT
+			weathering = 0.15
+
+		"lighthouse_keeper_daughter":
+			skin_tone = CharacterPalette.SkinTone.PALE_SALT
+			hair_style = CharacterPalette.HairStyle.WILD_CURLS
+			hair_color = CharacterPalette.HairColor.STRAW_BLONDE
+			beard_style = CharacterPalette.BeardStyle.CLEAN_SHAVEN
+			beard_color = CharacterPalette.HairColor.STRAW_BLONDE
+			hat_style = CharacterPalette.HatStyle.WATCH_CAP
+			coat_color = CharacterPalette.CoatColor.OILSKIN_YELLOW
+			eye_color = CharacterPalette.EyeColor.AMBER_DRIFT
+			weathering = 0.08
+
+		"reef_navigator":
+			skin_tone = CharacterPalette.SkinTone.DEEP_UMBER
+			hair_style = CharacterPalette.HairStyle.BRAIDED_TIDES
+			hair_color = CharacterPalette.HairColor.RAVEN_BLACK
+			beard_style = CharacterPalette.BeardStyle.CLEAN_SHAVEN
+			beard_color = CharacterPalette.HairColor.RAVEN_BLACK
+			hat_style = CharacterPalette.HatStyle.FISHER_CAP
+			coat_color = CharacterPalette.CoatColor.KELP_GREEN
+			eye_color = CharacterPalette.EyeColor.SEA_TEAL
+			weathering = 0.12
+
+		"dirty_old_sailor", "wren":
+			skin_tone = CharacterPalette.SkinTone.WEATHERED_TAN
+			hair_style = CharacterPalette.HairStyle.CROPPED
+			hair_color = CharacterPalette.HairColor.SALT_WHITE
+			beard_style = CharacterPalette.BeardStyle.FULL_SALT_BUSH
+			beard_color = CharacterPalette.HairColor.SALT_WHITE
+			hat_style = CharacterPalette.HatStyle.SOUWESTER
+			coat_color = CharacterPalette.CoatColor.OILSKIN_YELLOW
+			eye_color = CharacterPalette.EyeColor.STORM_GREY
+			weathering = 0.85
+
 		_:
 			# Default starter
 			skin_tone = CharacterPalette.SkinTone.WEATHERED_TAN

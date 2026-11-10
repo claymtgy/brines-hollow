@@ -32,10 +32,14 @@ const SKIFF_SEATS := [Vector3(0.0, 0.01, -1.15), Vector3(0.0, 0.01, 0.55)]
 ## off the wind is "in irons"), with a little cuddy cabin forward. Seats three.
 const KIND_BARGE := 2
 const KIND_SLOOP := 3
+const KIND_SCHOONER := 4
 const BARGE_SEATS := [Vector3(0.0, 0.01, -1.9), Vector3(-0.55, 0.01, 0.3), Vector3(0.55, 0.01, 0.3), Vector3(0.0, 0.01, 1.4)]
 const SLOOP_SEATS := [Vector3(0.0, 0.01, -2.05), Vector3(-0.4, 0.01, -1.1), Vector3(0.4, 0.01, -1.1)]
+const SCHOONER_SEATS := [Vector3(0.0, 0.01, -3.2), Vector3(-0.6, 0.01, -1.8), Vector3(0.6, 0.01, -1.8), Vector3(-0.6, 0.01, 0.8), Vector3(0.6, 0.01, 0.8), Vector3(0.0, 0.01, 2.5)]
 const HOLD_SLOTS := 27
+const SCHOONER_HOLD_SLOTS := 36
 const SLOOP_SAIL := 1.35        # sail force relative to the skiff
+const SCHOONER_SAIL := 1.65     # powerful double-masted gaff rig
 
 var id := 0
 var kind := KIND_ROWBOAT
@@ -66,6 +70,16 @@ var hold: Inventory = null      # barge: the cargo hold (authority's copy is the
 var moored := false             # empty and tied up at a mooring bollard: no drifting
 var _moor_t := 0.0
 
+var has_lantern := false
+var lantern_lit := true
+var _bow_lantern: OmniLight3D = null
+var _lantern_mesh: MeshInstance3D = null
+var small_hold: Inventory = null
+var reinforced_hull := false
+var outrigger_rigged := false
+var _water_lap_cd := 0.0
+var deck_fixtures: Dictionary = {}  # slot_idx: int -> Dictionary {"id": StringName, "node": Node3D, "hold": Inventory}
+
 
 func setup(p_id: int, p_world: VoxelWorld, p_sky: SkyCycle, pos: Vector3, p_yaw: float, p_kind := KIND_ROWBOAT) -> void:
 	id = p_id
@@ -82,6 +96,14 @@ func setup(p_id: int, p_world: VoxelWorld, p_sky: SkyCycle, pos: Vector3, p_yaw:
 		half_beam = 0.95
 		half_len = 2.9
 		occupants = [0, 0, 0]
+	elif kind == KIND_SCHOONER:
+		half_beam = 1.35
+		half_len = 4.2
+		occupants = [0, 0, 0, 0, 0, 0]
+		hold = Inventory.new(SCHOONER_HOLD_SLOTS)
+		reinforced_hull = true
+	if kind == KIND_ROWBOAT or kind == KIND_SKIFF:
+		small_hold = Inventory.new(6)
 	world = p_world
 	sky = p_sky
 	position = pos
@@ -99,9 +121,9 @@ func is_barge() -> bool:
 	return kind == KIND_BARGE
 
 
-## Skiff and sloop: driven by the wind (W/S work the sail).
+## Skiff, sloop and schooner: driven by the wind (W/S work the sail).
 func has_sail() -> bool:
-	return kind == KIND_SKIFF or kind == KIND_SLOOP
+	return kind == KIND_SKIFF or kind == KIND_SLOOP or kind == KIND_SCHOONER
 
 
 func display_name() -> String:
@@ -109,6 +131,7 @@ func display_name() -> String:
 		KIND_SKIFF: return "skiff"
 		KIND_BARGE: return "Tide-Barge"
 		KIND_SLOOP: return "Coastal Sloop"
+		KIND_SCHOONER: return "Ocean Schooner"
 	return "rowboat"
 
 
@@ -117,17 +140,348 @@ func seats_list() -> Array:
 		KIND_SKIFF: return SKIFF_SEATS
 		KIND_BARGE: return BARGE_SEATS
 		KIND_SLOOP: return SLOOP_SEATS
+		KIND_SCHOONER: return SCHOONER_SEATS
 	return SEATS
 
 
+func get_hold() -> Inventory:
+	return hold if hold != null else small_hold
+
+
 func hold_used() -> int:
-	if hold == null:
+	var h := get_hold()
+	if h == null:
 		return 0
 	var n := 0
-	for s: ItemSlot in hold.slots:
+	for s: ItemSlot in h.slots:
 		if not s.is_empty():
 			n += 1
 	return n
+
+
+func install_lantern() -> void:
+	if has_lantern:
+		return
+	has_lantern = true
+	lantern_lit = true
+	_build_lantern()
+
+
+func toggle_lantern() -> void:
+	if not has_lantern:
+		return
+	lantern_lit = not lantern_lit
+	if _bow_lantern != null:
+		_bow_lantern.visible = lantern_lit
+	if _lantern_mesh != null:
+		_lantern_mesh.visible = lantern_lit
+
+
+func _build_lantern() -> void:
+	if _bow_lantern != null or visual == null:
+		return
+	_lantern_mesh = MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.25, 0.35, 0.25)
+	_lantern_mesh.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.75, 0.3)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.85, 0.4)
+	mat.emission_energy_multiplier = 2.0
+	_lantern_mesh.material_override = mat
+	_lantern_mesh.position = Vector3(0, 0.45, half_len - 0.25)
+	visual.add_child(_lantern_mesh)
+
+	_bow_lantern = OmniLight3D.new()
+	_bow_lantern.light_color = Color(1.0, 0.88, 0.55)
+	_bow_lantern.light_energy = 1.6
+	_bow_lantern.omni_range = 14.0
+	_bow_lantern.position = Vector3(0, 0.55, half_len - 0.2)
+	visual.add_child(_bow_lantern)
+
+
+# ---------------------------------------------------------------- modular deck fixtures
+
+func get_deck_slots() -> Array[Dictionary]:
+	match kind:
+		KIND_SLOOP:
+			return [
+				{"index": 0, "name": "Bow Mount", "pos": Vector3(0.0, 0.45, 1.8), "allowed": [&"deck_lantern", &"harpoon_swivel"]},
+				{"index": 1, "name": "Port Deck", "pos": Vector3(-0.6, 0.25, 0.2), "allowed": [&"cargo_crate", &"deck_lantern", &"diving_winch"]},
+				{"index": 2, "name": "Cuddy Cabin", "pos": Vector3(0.0, 0.25, 1.0), "allowed": [&"sea_cot", &"navigation_table", &"cargo_crate"]}
+			]
+		KIND_SCHOONER:
+			return [
+				{"index": 0, "name": "Bow Pulpit", "pos": Vector3(0.0, 0.65, 3.4), "allowed": [&"deck_lantern", &"harpoon_swivel"]},
+				{"index": 1, "name": "Foredeck Starboard", "pos": Vector3(0.7, 0.35, 1.6), "allowed": [&"cargo_crate", &"harpoon_swivel", &"diving_winch"]},
+				{"index": 2, "name": "Foredeck Port", "pos": Vector3(-0.7, 0.35, 1.6), "allowed": [&"cargo_crate", &"deck_lantern", &"diving_winch"]},
+				{"index": 3, "name": "Midship Deck", "pos": Vector3(0.0, 0.35, -0.4), "allowed": [&"navigation_table", &"cargo_crate", &"diving_winch"]},
+				{"index": 4, "name": "Quarterdeck Cabin", "pos": Vector3(0.0, 0.45, -2.2), "allowed": [&"sea_cot", &"navigation_table"]}
+			]
+		KIND_BARGE:
+			return [
+				{"index": 0, "name": "Bow Cleat Mount", "pos": Vector3(0.0, 0.35, 2.0), "allowed": [&"deck_lantern"]},
+				{"index": 1, "name": "Port Cargo Bay", "pos": Vector3(-0.7, 0.25, -0.5), "allowed": [&"cargo_crate", &"diving_winch"]},
+				{"index": 2, "name": "Starboard Cargo Bay", "pos": Vector3(0.7, 0.25, -0.5), "allowed": [&"cargo_crate", &"diving_winch"]}
+			]
+		_:
+			return [
+				{"index": 0, "name": "Bow Stem", "pos": Vector3(0.0, 0.35, half_len - 0.3), "allowed": [&"deck_lantern", &"cargo_crate"]}
+			]
+
+
+func can_install_fixture(slot_idx: int, fixture_id: StringName) -> bool:
+	if deck_fixtures.has(slot_idx):
+		return false
+	var slots := get_deck_slots()
+	for s in slots:
+		if s["index"] == slot_idx:
+			var allowed: Array = s["allowed"]
+			return allowed.is_empty() or allowed.has(fixture_id)
+	return false
+
+
+func install_fixture(slot_idx: int, fixture_id: StringName, hold_data: Variant = null) -> bool:
+	if deck_fixtures.has(slot_idx):
+		return false
+	var slots := get_deck_slots()
+	var slot_def: Dictionary = {}
+	for s in slots:
+		if s["index"] == slot_idx:
+			slot_def = s
+			break
+	if slot_def.is_empty():
+		return false
+	var allowed: Array = slot_def["allowed"]
+	if not allowed.is_empty() and not allowed.has(fixture_id):
+		return false
+
+	var mount_pos: Vector3 = slot_def["pos"]
+	var fixture_node := Node3D.new()
+	fixture_node.name = "Fixture_%d_%s" % [slot_idx, fixture_id]
+	fixture_node.position = mount_pos
+
+	var inv: Inventory = null
+	match fixture_id:
+		&"deck_lantern":
+			var mesh_inst := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.22, 0.32, 0.22)
+			mesh_inst.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.9, 0.75, 0.3)
+			mat.emission_enabled = true
+			mat.emission = Color(1.0, 0.85, 0.4)
+			mat.emission_energy_multiplier = 2.0
+			mesh_inst.material_override = mat
+			fixture_node.add_child(mesh_inst)
+
+			var light := OmniLight3D.new()
+			light.light_color = Color(1.0, 0.88, 0.55)
+			light.light_energy = 1.6
+			light.omni_range = 14.0
+			light.position = Vector3(0, 0.1, 0)
+			fixture_node.add_child(light)
+
+		&"cargo_crate":
+			inv = Inventory.new(9)
+			var crate_hold = hold_data
+			if hold_data is Dictionary and hold_data.has("hold"):
+				crate_hold = hold_data["hold"]
+			if crate_hold != null and crate_hold is Dictionary:
+				inv.deserialize(crate_hold)
+			var crate_mesh := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.55, 0.42, 0.55)
+			crate_mesh.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.48, 0.34, 0.22)
+			mat.roughness = 0.9
+			crate_mesh.material_override = mat
+			fixture_node.add_child(crate_mesh)
+
+		&"harpoon_swivel":
+			var mount_base := MeshInstance3D.new()
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = 0.08
+			cyl.bottom_radius = 0.12
+			cyl.height = 0.35
+			mount_base.mesh = cyl
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.3, 0.3, 0.32)
+			mount_base.material_override = mat
+			fixture_node.add_child(mount_base)
+
+			var barrel := MeshInstance3D.new()
+			var b_cyl := CylinderMesh.new()
+			b_cyl.top_radius = 0.04
+			b_cyl.bottom_radius = 0.04
+			b_cyl.height = 0.7
+			barrel.mesh = b_cyl
+			barrel.rotation.x = deg_to_rad(90)
+			barrel.position = Vector3(0, 0.2, 0.25)
+			barrel.material_override = mat
+			fixture_node.add_child(barrel)
+
+		&"sea_cot":
+			var cot_mesh := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.65, 0.18, 1.35)
+			cot_mesh.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.6, 0.55, 0.45)
+			cot_mesh.material_override = mat
+			fixture_node.add_child(cot_mesh)
+
+		&"navigation_table":
+			var table_mesh := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.55, 0.4, 0.45)
+			table_mesh.mesh = box
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.35, 0.24, 0.15)
+			table_mesh.material_override = mat
+			fixture_node.add_child(table_mesh)
+
+		&"diving_winch":
+			var frame := MeshInstance3D.new()
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = 0.12
+			cyl.bottom_radius = 0.15
+			cyl.height = 0.45
+			frame.mesh = cyl
+			var frame_mat := StandardMaterial3D.new()
+			frame_mat.albedo_color = Color(0.25, 0.25, 0.28)
+			frame.material_override = frame_mat
+			fixture_node.add_child(frame)
+
+			var spool := MeshInstance3D.new()
+			var sp_cyl := CylinderMesh.new()
+			sp_cyl.top_radius = 0.18
+			sp_cyl.bottom_radius = 0.18
+			sp_cyl.height = 0.25
+			spool.mesh = sp_cyl
+			spool.rotation.z = deg_to_rad(90)
+			spool.position = Vector3(0, 0.28, 0)
+			var brass_mat := StandardMaterial3D.new()
+			brass_mat.albedo_color = Color(0.8, 0.65, 0.2)
+			spool.material_override = brass_mat
+			fixture_node.add_child(spool)
+
+			var bell := MeshInstance3D.new()
+			bell.name = "DivingBell"
+			var sph := SphereMesh.new()
+			sph.radius = 0.22
+			sph.height = 0.35
+			bell.mesh = sph
+			bell.material_override = brass_mat
+			bell.position = Vector3(0, -0.4, 0)
+			fixture_node.add_child(bell)
+
+	if visual != null:
+		visual.add_child(fixture_node)
+	else:
+		add_child(fixture_node)
+
+	var is_lowered := false
+	if hold_data is Dictionary:
+		is_lowered = hold_data.get("lowered", false)
+		if is_lowered:
+			var bell_node: Node3D = fixture_node.get_node_or_null("DivingBell")
+			if bell_node != null:
+				bell_node.position.y = -8.0
+
+	deck_fixtures[slot_idx] = {
+		"id": fixture_id,
+		"node": fixture_node,
+		"hold": inv,
+		"lowered": is_lowered
+	}
+	return true
+
+
+func remove_fixture(slot_idx: int) -> StringName:
+	if not deck_fixtures.has(slot_idx):
+		return &""
+	var f: Dictionary = deck_fixtures[slot_idx]
+	var fid: StringName = f["id"]
+	var node: Node3D = f.get("node")
+	if node != null and is_instance_valid(node):
+		node.queue_free()
+	deck_fixtures.erase(slot_idx)
+	return fid
+
+
+func interact_fixture(slot_idx: int, player: Node) -> void:
+	if not deck_fixtures.has(slot_idx) or player == null:
+		return
+	var f: Dictionary = deck_fixtures[slot_idx]
+	var fid: StringName = f["id"]
+	match fid:
+		&"deck_lantern":
+			var node: Node3D = f.get("node")
+			if node != null:
+				for ch in node.get_children():
+					if ch is OmniLight3D:
+						ch.visible = not ch.visible
+		&"cargo_crate":
+			var h: Inventory = f.get("hold")
+			if h != null and player.get("hud") != null:
+				player.hud.open_container(h, "Ship Cargo Crate")
+		&"sea_cot":
+			if player.get("vitality") != null:
+				player.vitality.current_hp = player.vitality.get_max_hp()
+				player.vitality.current_stamina = player.vitality.get_max_stamina()
+			if player.get("hud") != null and player.hud.has_method("show_toast"):
+				player.hud.show_toast("Rested in Sailor's Cot. Senses revitalized.")
+		&"navigation_table":
+			if player.get("hud") != null and player.hud.has_method("show_banner"):
+				var wind := wind_vec()
+				var angle_deg := int(round(rad_to_deg(wind.angle())))
+				player.hud.show_banner("Navigation Chart Desk", "Wind heading: %d° | Current vessel: %s" % [angle_deg, display_name()])
+		&"harpoon_swivel":
+			CombatAudio.play_sound("swing_heavy", position)
+			if player.get("hud") != null and player.hud.has_method("show_toast"):
+				player.hud.show_toast("Swivel Harpoon primed and armed.")
+		&"diving_winch":
+			var is_lowered: bool = not f.get("lowered", false)
+			f["lowered"] = is_lowered
+			var node: Node3D = f.get("node")
+			if node != null:
+				var bell_node: Node3D = node.get_node_or_null("DivingBell")
+				if bell_node != null:
+					bell_node.position.y = -8.0 if is_lowered else -0.4
+			CombatAudio.play_sound("parry", position)
+			if player.get("hud") != null and player.hud.has_method("show_toast"):
+				if is_lowered:
+					player.hud.show_toast("Diving Bell lowered 8m — underwater oxygen pocket active!")
+				else:
+					player.hud.show_toast("Diving Bell winched back up to surface.")
+
+
+func serialize_fixtures() -> Array:
+	var out: Array = []
+	for s_idx in deck_fixtures:
+		var f: Dictionary = deck_fixtures[s_idx]
+		var hold_data = f.hold.serialize() if f.get("hold") != null else null
+		out.append({
+			"slot": s_idx,
+			"id": String(f["id"]),
+			"hold": hold_data,
+			"lowered": f.get("lowered", false)
+		})
+	return out
+
+
+func deserialize_fixtures(arr: Variant) -> void:
+	if not (arr is Array):
+		return
+	for s_idx in deck_fixtures.keys():
+		remove_fixture(s_idx)
+	for rec in arr:
+		if rec is Dictionary and rec.has("slot") and rec.has("id"):
+			install_fixture(int(rec["slot"]), StringName(rec["id"]), rec)
 
 
 func _build_visual() -> void:
@@ -143,6 +497,10 @@ func _build_visual() -> void:
 		return
 	if kind == KIND_SLOOP:
 		_build_sloop(mat)
+		_build_wake()
+		return
+	if kind == KIND_SCHOONER:
+		_build_schooner(mat)
 		_build_wake()
 		return
 	if kind == KIND_BARGE:
@@ -307,6 +665,72 @@ func _build_sloop(mat: Material) -> void:
 	bg.box(0, 0, 0, 0, 0, 23, Palette.HANDLE)
 	boom.mesh = Mesher.mesh_from_grid(bg.data, 1, 1, 24, VS, mat, mat)
 	boom.position = Vector3(-0.5 * VS, -1 * VS, -22 * VS)
+	_sail.add_child(boom)
+
+
+## Ocean Schooner: deep-sea double-masted flagship, raised helm quarterdeck, captain's cabin,
+## crab pot davit winch, and powerful twin gaff sails.
+func _build_schooner(mat: Material) -> void:
+	var g := Prefabs.Grid.new(15, 7, 46)
+	for z in 46:
+		var t := float(z) / 45.0
+		var w := int(round(6.5 * sin(clampf(t * 1.12, 0.05, 1.0) * PI * 0.96)))
+		if z >= 43:
+			w = maxi(0, 45 - z)
+		w = maxi(w, 1)
+		g.box(7 - w + 1, 0, z, 7 + w - 1, 0, z, Palette.DARK_WOOD)
+		for y in range(1, 5):
+			var c := Palette.WHITEWASH if y < 4 else Palette.ROOF_BLUE
+			g.setv(7 - w, y, z, c)
+			g.setv(7 + w, y, z, c)
+		g.box(7 - w + 1, 1, z, 7 + w - 1, 1, z, Palette.PLANK)
+
+	# Aft quarterdeck & captain's cabin
+	g.box(3, 2, 6, 11, 4, 16, Palette.PLANK)
+	g.box(3, 5, 6, 11, 5, 16, Palette.DARK_WOOD)
+	# Ship's steering wheel at helm
+	g.box(7, 3, 4, 7, 5, 4, Palette.METAL)
+
+	# Forward companionway & crab pot davit on starboard gunwale
+	g.box(13, 2, 22, 14, 5, 24, Palette.METAL)
+	g.box(11, 5, 23, 14, 5, 23, Palette.HANDLE)
+
+	# Bowsprit
+	g.box(7, 4, 44, 7, 5, 45, Palette.DARK_WOOD)
+
+	var hull := MeshInstance3D.new()
+	hull.mesh = Mesher.mesh_from_grid(g.data, g.sx, g.sy, g.sz, VS, mat, mat)
+	hull.position = Vector3(-7.5 * VS, -DRAFT * 1.2, -23 * VS)
+	visual.add_child(hull)
+
+	# Twin masts: Mainmast (aft) & Foremast (forward)
+	for m_z: float in [-1.5 * VS, 14.0 * VS]:
+		var mg := Prefabs.Grid.new(1, 46, 1)
+		mg.box(0, 0, 0, 0, 45, 0, Palette.DARK_WOOD)
+		var mast := MeshInstance3D.new()
+		mast.mesh = Mesher.mesh_from_grid(mg.data, 1, 46, 1, VS, mat, mat)
+		mast.position = Vector3(-0.5 * VS, 1 * VS - DRAFT, m_z)
+		visual.add_child(mast)
+
+	# Gaff sail rig on mainmast
+	_sail = Node3D.new()
+	_sail.position = Vector3(0, 3 * VS - DRAFT, -1.0 * VS)
+	visual.add_child(_sail)
+	var sg := Prefabs.Grid.new(1, 38, 26)
+	for y in 38:
+		var span := int(round(25.0 * (1.0 - float(y) / 44.0)))
+		for z in range(0, span + 1):
+			sg.setv(0, y, 25 - z, Palette.WHITEWASH if (y / 5) % 2 == 0 else Palette.ROOF_RED)
+	var sail_mi := MeshInstance3D.new()
+	sail_mi.mesh = Mesher.mesh_from_grid(sg.data, 1, 38, 26, VS, mat, mat)
+	sail_mi.position = Vector3(-0.5 * VS, 0, -25 * VS)
+	sail_mi.name = "Canvas"
+	_sail.add_child(sail_mi)
+	var boom := MeshInstance3D.new()
+	var bg := Prefabs.Grid.new(1, 1, 28)
+	bg.box(0, 0, 0, 0, 0, 27, Palette.HANDLE)
+	boom.mesh = Mesher.mesh_from_grid(bg.data, 1, 1, 28, VS, mat, mat)
+	boom.position = Vector3(-0.5 * VS, -1 * VS, -26 * VS)
 	_sail.add_child(boom)
 
 
@@ -511,8 +935,10 @@ func _sail_drive(delta: float, f: float, t: float, hard: bool) -> void:
 	var fwd := forward2()
 	var wind := wind_vec()
 	var sloop := kind == KIND_SLOOP
-	var eff := sail_efficiency(fwd, wind, 150.0 if sloop else 140.0)
-	vel += fwd * row_power * eff * wind.length() * SAIL_ACCEL * (SLOOP_SAIL if sloop else 1.0) * delta
+	var schooner := kind == KIND_SCHOONER
+	var eff := sail_efficiency(fwd, wind, 155.0 if (sloop or schooner) else 140.0)
+	var mult: float = SCHOONER_SAIL if schooner else (SLOOP_SAIL if sloop else 1.0)
+	vel += fwd * row_power * eff * wind.length() * SAIL_ACCEL * mult * delta
 	if hard:
 		row_phase += delta * TAU * 1.2
 		vel += fwd * maxf(0.0, sin(row_phase)) * PADDLE_ACCEL * 2.0 * delta
@@ -568,6 +994,13 @@ func _integrate(delta: float, water: float) -> void:
 		vel *= exp(-4.0 * delta)
 		yaw_vel *= exp(-4.0 * delta)
 	vel += (drift - vel * 0.02) * delta
+
+	# Dynamic ocean hazards: whirlpool current & torque
+	if not WhirlpoolHazard.active_whirlpools.is_empty():
+		var vortex: Dictionary = WhirlpoolHazard.get_vortex_effect(position)
+		if not vortex.is_empty():
+			vel += (vortex.get("force", Vector2.ZERO) as Vector2) * delta
+			yaw_vel += float(vortex.get("torque", 0.0)) * delta
 
 	var old_blocked := blocked_count(position, yaw, water)
 	grounded = old_blocked > 0
@@ -651,9 +1084,17 @@ func apply_snapshot(pos: Vector3, p_yaw: float, p_vel: Vector2, phase: float, po
 	_has_net = true
 
 
+var _diving_winch_cd := 0.0
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	rotation = Vector3(0, yaw, 0)
+
+	_diving_winch_cd -= delta
+	if _diving_winch_cd <= 0.0:
+		_diving_winch_cd = 0.5
+		_tick_diving_winches()
 	# Bob, roll and speed-dependent pitch (bow lifts when moving).
 	var speed := vel.length()
 	var bob := sin(_t * 1.3 + id) * 0.035
@@ -671,6 +1112,13 @@ func _process(delta: float) -> void:
 		roll = 0.06
 	visual.position.y = bob
 	visual.rotation = Vector3(pitch, 0, roll)
+
+	# Dynamic water hull sound
+	if speed > 0.7 and not grounded and occupants.max() > 0:
+		_water_lap_cd -= delta
+		if _water_lap_cd <= 0.0:
+			_water_lap_cd = randf_range(1.2, 2.0)
+			CombatAudio.play_sound("water_lap", position, -4.0)
 	if has_sail():
 		if _sail != null:
 			if not is_authority_local():
@@ -690,3 +1138,35 @@ func _process(delta: float) -> void:
 		var ry := -sweep + rest
 		o.rotation = Vector3(0, ry if side > 0 else PI - ry, -0.38 + lift - (1.0 - row_power) * 0.1)
 	_wake.emitting = speed > 0.6 and not grounded
+
+
+func _tick_diving_winches() -> void:
+	for slot_idx in deck_fixtures:
+		var f: Dictionary = deck_fixtures[slot_idx]
+		if f.get("id") == &"diving_winch" and f.get("lowered", false):
+			var node: Node3D = f.get("node")
+			if node != null:
+				var bell: Node3D = node.get_node_or_null("DivingBell")
+				if bell != null:
+					var bell_world_pos: Vector3
+					if bell.is_inside_tree():
+						bell_world_pos = bell.global_position
+					else:
+						var vis_pos := visual.position if visual != null else Vector3.ZERO
+						bell_world_pos = position + vis_pos + node.position + bell.position
+					var em := EntityManager.current
+					var main_node: Node = em.main if em != null else null
+					var p: Player = null
+					if main_node != null:
+						if "player" in main_node and main_node.player is Player:
+							p = main_node.player
+						elif main_node.has_meta("player"):
+							p = main_node.get_meta("player")
+						elif main_node.get("player") is Player:
+							p = main_node.get("player")
+
+					if p != null and p.vitality != null:
+						var p_pos: Vector3 = p.global_position if p.is_inside_tree() else p.position
+						if p_pos.distance_to(bell_world_pos) <= 5.5:
+							if "current_breath" in p.vitality:
+								p.vitality.current_breath = p.vitality.get_max_breath()

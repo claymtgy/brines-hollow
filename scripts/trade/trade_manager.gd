@@ -271,7 +271,18 @@ func _update_prompt() -> void:
 	var p: Player = main.player
 	if p == null or merchant == null or not is_docked() or p.is_seated() or ui.visible:
 		return
-	if Vector2(p.position.x - _moor.x, p.position.z - _moor.z).length() > TRADE_RANGE:
+	# Do not hijack prompts if the player is actively looking at another entity (chest, bed, NPC)
+	if p.hovered_entity != null:
+		return
+	var to_moor := Vector3(_moor.x - p.position.x, 0.0, _moor.z - p.position.z)
+	var dist := to_moor.length()
+	if dist > 4.5:
+		return
+	# Ensure the player is facing generally toward the boat before showing the prompt
+	var forward: Vector3 = -p.rig.cam.global_transform.basis.z if (p.rig != null and p.rig.cam != null) else Vector3(-sin(p.facing), 0, -cos(p.facing))
+	forward.y = 0.0
+	forward = forward.normalized()
+	if dist > 2.0 and to_moor.normalized().dot(forward) < 0.35:
 		return
 	_near = true
 	main.hud.set_prompt("F  Trade with %s" % merchant.merchant_name)
@@ -280,7 +291,7 @@ func _update_prompt() -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if not _near or not e.is_action_pressed("interact"):
 		return
-	if main.player == null or not main.player.input_enabled:
+	if main.player == null or not main.player.input_enabled or main.player.hovered_entity != null:
 		return
 	get_viewport().set_input_as_handled()
 	session_key = ""

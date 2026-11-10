@@ -337,6 +337,28 @@ func _init() -> void:
 	check(crab.poise > 10.0, "Poise regenerates smoothly when out of combat")
 
 	# =========================================================================
+	# 10. Tangible Feedback: Audio Synthesis, Harpoon Sweet Spot & Flinch
+	# =========================================================================
+	print("\n-- 10. Tangible Combat Feedback & Weapon Asymmetry")
+	# Harpoon sweet spot range check
+	check(CombatMath.is_harpoon_sweet_spot(3.2, WeaponDef.WeaponType.HARPOON), "Harpoon tip spacing at 3.2m detects sweet spot")
+	check(not CombatMath.is_harpoon_sweet_spot(1.5, WeaponDef.WeaponType.HARPOON), "Harpoon point blank at 1.5m is not sweet spot")
+	check(not CombatMath.is_harpoon_sweet_spot(3.2, WeaponDef.WeaponType.CUTLASS), "Cutlass does not use harpoon sweet spot")
+
+	# Creature directional flinch and armored check
+	crab.apply_flinch(Vector3(1, 0, 0), 1.0)
+	check(crab._flinch_t > 0.0, "apply_flinch initiates physical flinch recoil timer")
+	check(crab._flinch_impulse.length() > 0.0, "apply_flinch calculates directional recoil vector")
+
+	var mudclaw := MudClaw.new()
+	check(mudclaw.is_armored(), "MudClaw identifies as armored shell target")
+
+	# Procedural Audio Synthesizer bake check (headless safe)
+	CombatAudio.init_audio()
+	check(CombatAudio._init_done, "CombatAudio procedural sound engine initializes cleanly")
+
+
+	# =========================================================================
 	# Summary
 	# =========================================================================
 	print("\n==================================================")

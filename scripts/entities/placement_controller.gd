@@ -205,17 +205,20 @@ func try_use() -> bool:
 	if not _place_ok:
 		_toast("Can't place here: %s" % _place_reason if _place_reason != "" else "Can't place here")
 		return true
-	if player.tool == 4:
-		if player.inventory.remove_item(t, 1) <= 0:
-			return true
-	else:
-		var cost := Placeables.build_cost(t)
-		if not BuildCosts.can_afford(player.inventory, cost):
-			_toast("Need " + BuildCosts.describe_missing(player.inventory, cost))
-			return true
-		BuildCosts.pay(player.inventory, cost)
+	var is_creative: bool = player != null and player.get("creative_mode") == true
+	if not is_creative:
+		if player.tool == 4:
+			if player.inventory.remove_item(t, 1) <= 0:
+				return true
+		else:
+			var cost := Placeables.build_cost(t)
+			if not BuildCosts.can_afford(player.inventory, cost):
+				_toast("Need " + BuildCosts.describe_missing(player.inventory, cost))
+				return true
+			BuildCosts.pay(player.inventory, cost)
 	if not player.entities.request_place(t, _place_coord, player.prefab_rot):
-		_refund(t)
+		if not is_creative:
+			_refund(t)
 		_toast("Can't place that there")
 	else:
 		player.quest_event(QuestDef.ObjectiveType.PLACE_ENTITY, t)

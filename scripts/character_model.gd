@@ -39,6 +39,8 @@ var flippers_node: Node3D
 
 var _phase := 0.0
 var _swing := 0.0
+var _swing_step := 0
+var _swing_charged := false
 var _mat: StandardMaterial3D
 var _current_tool_idx := 0
 var _cast_anim := 0.0
@@ -445,6 +447,38 @@ func set_diving_helmet_visible(is_visible: bool) -> void:
 
 func swing() -> void:
 	_swing = 1.0
+	_swing_step = 0
+	_swing_charged = false
+
+
+func swing_attack(step: int = 1, is_charged: bool = false, is_thrust: bool = false) -> void:
+	swing()
+	_swing_charged = is_charged
+	if is_thrust:
+		_swing_step = 4
+	elif is_charged or step == 3:
+		_swing_step = 3
+	else:
+		_swing_step = step if step >= 1 and step <= 2 else 1
+
+
+func animate_dodge(prog: float) -> void:
+	if prog < 0.0 or prog > 1.0:
+		if body != null:
+			body.rotation.x = 0.0
+			body.position.y = 0.0
+		return
+	if body != null:
+		body.position.y = -0.32 * sin(prog * PI)
+		body.rotation.x = -TAU * prog
+	if leg_l != null and leg_r != null:
+		var tuck := 1.25 * sin(prog * PI)
+		leg_l.rotation.x = tuck
+		leg_r.rotation.x = tuck
+	if arm_l != null and arm_r != null:
+		var arm_tuck := -1.35 * sin(prog * PI)
+		arm_l.rotation.x = arm_tuck
+		arm_r.rotation.x = arm_tuck
 
 
 func cast_line() -> void:
@@ -500,12 +534,52 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 		arm_spread = 0.5
 	elif moving < 0.05:
 		bob = sin(_phase * 0.35) * 0.012  # idle breathing
-	# action swing overrides the right arm
+	var arm_r_y := 0.0
+	var arm_r_z := arm_spread
+	var body_twist := 0.0
+	var arm_thrust_z := 0.0
+	var body_lean := 0.0
+
+	# action swing overrides the right arm & upper body
 	if _swing > 0.0:
-		_swing = maxf(0.0, _swing - delta * 4.0)
+		_swing = maxf(0.0, _swing - delta * (3.4 if _swing_step == 3 else 4.6))
 		var k := _swing
-		arm_r_x = -0.3 - 2.2 * sin(k * PI) * (0.6 + 0.4 * k)
-	var body_lean := 0.9 if swimming else 0.06 * moving
+		var p := 1.0 - _swing
+		if _swing_step == 0:
+			arm_r_x = -0.3 - 2.2 * sin(k * PI) * (0.6 + 0.4 * k)
+		elif _swing_step == 1:
+			# Combo 1: Horizontal right-to-left forehand slash
+			arm_r_x = -0.55 - 0.35 * sin(p * PI)
+			arm_r_y = lerpf(0.9, -1.2, sin(p * PI * 0.5))
+			arm_r_z = 0.28 * sin(p * PI)
+			body_twist = lerpf(0.2, -0.28, p)
+		elif _swing_step == 2:
+			# Combo 2: Upward diagonal backhand slash
+			arm_r_x = lerpf(0.35, -1.75, sin(p * PI * 0.6))
+			arm_r_y = lerpf(-0.85, 0.75, p)
+			arm_r_z = -0.38 * sin(p * PI)
+			body_twist = lerpf(-0.22, 0.22, p)
+		elif _swing_step == 3:
+			# Combo 3 / Charged / Maul: Heavy overhead cleave with full body commitment
+			if p < 0.32:
+				var wp := p / 0.32
+				arm_r_x = lerpf(-0.3, -2.45, wp)
+				arm_l_x = lerpf(-0.3, -2.1, wp)
+				body_lean = lerpf(0.0, -0.25, wp)
+			else:
+				var sp := (p - 0.32) / 0.68
+				arm_r_x = lerpf(-2.45, 0.5, sin(sp * PI * 0.5))
+				arm_l_x = lerpf(-2.1, 0.35, sin(sp * PI * 0.5))
+				body_lean = lerpf(-0.25, 0.38, sin(sp * PI * 0.5))
+		elif _swing_step == 4:
+			# Harpoon: Linear high-speed thrust
+			var thrust_p := sin(p * PI)
+			arm_r_x = -1.55
+			arm_r_y = 0.05
+			arm_r_z = 0.0
+			arm_thrust_z = 4.2 * thrust_p
+			body_lean = 0.22 * thrust_p
+	var body_lean_val: float = 0.9 if swimming else (body_lean + 0.06 * moving)
 	if _current_tool_idx == 3:
 		if _cast_anim > 0.0:
 			_cast_anim = maxf(0.0, _cast_anim - delta * 2.4)
@@ -513,16 +587,16 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 			if p < 0.35:
 				var wt := p / 0.35
 				arm_r_x = lerpf(0.85, -1.55, sin(wt * PI * 0.5))
-				body_lean = lerpf(-0.16, 0.22, wt)
+				body_lean_val = lerpf(-0.16, 0.22, wt)
 			else:
 				var ft := (p - 0.35) / 0.65
 				arm_r_x = lerpf(-1.55, -0.78, smoothstep(0.0, 1.0, ft))
-				body_lean = lerpf(0.22, 0.04, ft)
+				body_lean_val = lerpf(0.22, 0.04, ft)
 			arm_l_x = -0.45
 		elif _fishing_state == 1: # CASTING (winding up)
 			arm_r_x = lerpf(-0.35, 0.95, _fishing_power)
 			arm_l_x = lerpf(-0.15, -0.55, _fishing_power)
-			body_lean = lerpf(0.0, -0.16, _fishing_power)
+			body_lean_val = lerpf(0.0, -0.16, _fishing_power)
 		elif _fishing_state == 2 or _fishing_state == 3 or _fishing_state == 4: # WAITING / NIBBLING / HOOK_WINDOW
 			var twitch := sin(_phase * 6.0) * 0.12 if _fishing_state >= 3 else sin(_phase * 0.8) * 0.03
 			arm_r_x = -0.78 + twitch
@@ -530,17 +604,22 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 		elif _fishing_state == 5: # REELING
 			arm_r_x = -0.95 + sin(_phase * 2.4) * 0.32
 			arm_l_x = -0.82 + cos(_phase * 5.0) * 0.24
-			body_lean = -0.08 + sin(_phase * 2.4) * 0.06
+			body_lean_val = -0.08 + sin(_phase * 2.4) * 0.06
 	var f := 1.0 - exp(-delta * 14.0)
 	leg_l.rotation.x = lerpf(leg_l.rotation.x, target_leg, f)
 	leg_r.rotation.x = lerpf(leg_r.rotation.x, -target_leg, f)
 	arm_l.rotation.x = lerpf(arm_l.rotation.x, arm_l_x, f)
 	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_x, f * (2.0 if _swing > 0.0 else 1.0))
+	arm_r.rotation.y = lerpf(arm_r.rotation.y, arm_r_y, f * (2.0 if _swing > 0.0 else 1.0))
 	arm_l.rotation.z = lerpf(arm_l.rotation.z, -arm_spread, f)
-	arm_r.rotation.z = lerpf(arm_r.rotation.z, arm_spread, f)
+	arm_r.rotation.z = lerpf(arm_r.rotation.z, arm_r_z, f * (2.0 if _swing > 0.0 else 1.0))
 	body.position.y = bob
 	head.rotation.x = lerpf(head.rotation.x, 0.15 if swimming else 0.0, f)
-	body.rotation.x = lerpf(body.rotation.x, body_lean, f)
+	body.rotation.x = lerpf(body.rotation.x, body_lean_val, f)
+	body.rotation.y = lerpf(body.rotation.y, body_twist, f * (2.0 if _swing > 0.0 else 1.0))
+	if _swing_step == 4 or arm_thrust_z > 0.0:
+		var base_pos := (Vector3(3.4, 15.6, 2.6) if _first_person_view else Vector3(4.0, 10.5, 0.0)) * U
+		arm_r.position = base_pos + Vector3(0, 0, arm_thrust_z * U)
 
 
 ## Seated pose for boats: thighs forward, arms reaching for the oars.

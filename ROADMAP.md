@@ -383,9 +383,9 @@ Combat in Brine's Hollow is reimagined from basic weapon swings into a fluid, ta
   - Opt-in high-stakes trial revealed only during lowest spring tides.
   - Battle escalating waves of elite monsters and boss variants against a rising tide timer before the arena floods.
   - Server time-attack leaderboards, Steam leaderboards, and exclusive boss weapon skins/trophies.
-- **Opt-in Storm Incursions:**
+- ✅ **Opt-in Storm Incursions:**
   - Ringing the village bell tower during violent squalls invites assault by elite Sea-Reaver raiding parties on outer defense towers; high risk, awards top-tier smelting ores and legendary weapon fragments.
-- **Friendly Village Competitions:**
+- ✅ **Friendly Village Competitions:**
   - *Town Sparring Ring:* Zero-death-penalty sand circle in the village for casual and competitive player dueling.
   - *Buoy Regatta Courses:* Placeable floating checkpoint buoys allowing players to create timed obstacle boat races across reefs and currents.
 
@@ -418,7 +418,7 @@ Goal: Build boats, sail beyond the home atoll, and confront or outsmart the guar
 | Biome | Environmental Flavor & Mechanics | Biome Boss | Encounter Mechanics & Non-Combat Answers |
 |---|---|---|---|
 | **The Hollow Flats** (Biome 1) | Limestone cliffs, sunlit flats, gentle tide swings, driftwood | **The Barnacled Hulk** *(Colossal Hermit)* | Uses galleon hull as armor; crack with dropped cliff boulders or trap in receding tidal mud. |
-| **The Murk-Reef** (Biome 2) | 30m kelp canopy, underwater caves, bio-luminescence, deep trenches | **The Abyssal Siren** *(Caelocanth Leviathan)* | Stalks in murky water with blinding sonic shrieks; stun by igniting underwater phosphor braziers or trap in net lines. |
+| **The Murk-Reef** (Biome 2) | 30m kelp canopy, underwater caves, bio-luminescence, deep trenches | ✅ **The Abyssal Siren** *(Coelacanth Leviathan)* | Stalks in murky water with blinding sonic shrieks; stun by igniting underwater phosphor braziers or trap in net lines. |
 | **The Basalt Skerries** (Biome 3) | Black volcanic sands, thermal steam geysers, sulfur vents, boiling seas | **The Caldera Shell** *(Ignis-Chelon)* | Superheats surrounding water; breach cold sea sluices during high tide to thermal-shock and crack its molten shell. |
 | **The Frost-Shoals** (Biome 4) | Shifting pack ice, sub-zero hypothermia water, glacial arches, blinding fog | **Borean Gore-Fin** *(The Glacial Patriarch)* | Armored twin-tusked whale-beast; bait into charging fragile ice shelves to lodge its tusks; light whale-oil trenches to isolate. |
 | **The Maelstrom Spire** (Climax) | Perpetual vortex at the center of the world, ancient submerged ruins | **The Tide Sovereign** *(World Hydro-Engine)* | Climax puzzle-boss encounter: align the 4 biome regulators to calm the world deluge. |
@@ -449,3 +449,26 @@ A reference players can browse outside the game, kept in `docs/wiki/` as linked 
 2. **Player wiki** ✅ Set up (`docs/wiki/` hand-written pages and the generated tables).
 3. **Polish from the last merges** ✅ Complete (bed respawn point saved in the profile, gamepad dodge/sneak including back paddles, merchant stock persistence, eels avoiding lantern posts and lit stations). Livestock now sync live to co-op clients.
 4. **Overhauled High-Impact Combat System** ✅ Complete (3-hit combos, charged attacks, aerial plunge slams, precision parry & Riposte, RMB guard stance, guard-break stumble, 8-directional i-frame dodge rolls, poise meters, hit-stop, and camera shake).
+5. **Combat overhaul (second pass)** ✅ Complete (procedural audio synthesizer for swings, flesh/shell impacts, parries, guard thuds, poise breaks and attack tells; dynamic 3D slash trail arcs; directional particle hit sparks and plunge shockwaves; distinct 3-hit combo choreographies and harpoon thrusts; grounded dodge roll tuck; creature directional flinch recoil and dazed posture wobble; harpoon sweet-spot tip spacing; soft aim magnetism).
+6. **Tone down the lighthouse light** ✅ Complete (lamp energy reduced to 0.55, range to 9m, and sweeping beam shaft opacity softened to gentle atmospheric mist).
+7. **Biome 2: The Murk-Reef & The Abyssal Siren** ✅ Complete (Murk-Reef trench procedural placement, underwater Phosphor Braziers that chemical-flare to stun the Siren, Abyssal Siren coelacanth leviathan boss with sonic cavitation blasts, and Heart of the Siren trophy drops).
+8. **Opt-in Storm Incursions** ✅ Complete (ringing Harbour Bell during violent storms triggers 3 waves of Elite Sea-Reavers, placeable Spike Barricades with thorns/slow, and ancient weapon fragment + reaver crest rewards).
+9. **Village Competitions** ✅ Complete (Town Sparring Ring with zero-death-penalty non-lethal dueling flourish, and placeable Regatta Checkpoint Buoys with split times and course records).
+10. **UI Polish & Typographic Refinements** ✅ Complete (cleared messy parenthetical clutter across HUD, chests, coops, quest log, and item tooltips, standardizing on clean mid-dots and styled status badges).
+11. **Biome 3 Boss Encounter: The Caldera Shell (Ignis-Chelon) & Basalt Skerries** ✅ Complete (colossal volcanic chelonian with superheated boiling steam geysers, molten armor that takes reduced damage until thermal-shocked by cold brine/tides, and Geothermal Core + Volcanic Basalt Plate drops).
+12. **Tier 3 Flagship Vessel: The Ocean Schooner** ✅ Complete (deep-sea double-masted schooner with 6 player seats, raised helm quarterdeck, 36-slot cargo hold, crab pot davit, and powerful twin gaff sails).
+13. **Tidal Power & Mechanical Engineering: Tide Mills & Automated Sluices** ✅ Complete (placeable rotating Tide Mill Water Wheel providing mechanical power to automated Grain Mills and Sawmills, plus toggleable Tidal Sluice Gates).
+14. **High-Stakes Trials: The Undertow Gauntlet & The 4 Ancient Regulators** ✅ Complete (spring low tide abyssal gauntlet with escalating waves, ancient obelisk tide regulators with 4-relic attunement, and Storyline Act III integration).
+15. **Biome 4: The Frost-Shoals & Borean Gore-Fin (The Glacial Patriarch)** ✅ Complete (sub-zero pack ice shallows, tusk-lodging charge attack, 75% blubber deflection, Borean Parka hypothermia immunity, and Glacial Ice Lance).
+16. **The Climax: The Maelstrom Spire & The Tide Sovereign (World Hydro-Engine)** ✅ Complete (central oceanic vortex, 120 HP hydro-barrier, cavitation shockwaves, Sovereign Trident, and Deluge Core).
+17. **Advanced Architecture & Homestead Deepening** ✅ Complete (Architect's Drafting Desk for blueprint scrolls, Taxidermy Fish Mounts, Living Glass Aquariums, Heraldic Banners, Aging Cask for cured cheeses & vintage ales, Brackish Rye hybridization, and working Otter forage-diving).
+18. **Modular Ship Deck Outfitting** ✅ Complete (deck mount slot system on Sloops, Schooners, and Barges; placeable deck lanterns, 9-slot watertight cargo crates, swivel harpoons, sailor sea cots with Rested buff, and chart navigation desks; synced with boat pitch/roll physics and saved with fleet).
+19. **Dynamic Maritime Soundscape & Player Wiki Export** ✅ Complete (procedural synthesis of wind-in-sails shanty whistle and harbor accordion drone with zero-allocation runtime volume blending; refreshed all `docs/wiki/generated/` tables).
+20. **Coastal Aquaculture & Mangrove Beehives** ✅ Complete (intertidal Oyster Racks cultivating brine oysters, hearty clams, and abyssal pearls; mangrove beehives producing honey and comb wax; flora proximity acceleration).
+21. **Tidal Festivals & Communal Banquets** ✅ Complete (Communal Banquet Table holding up to 6 dishes; town feasts granting Banquet Rested buff and village morale; Spring Tide Equinox and Night of the Floating Lanterns).
+22. **Salvage Diving Tender Winch on Vessels** ✅ Complete (deck-mounted winch crane lowering suspended brass diving bell 8m beneath hull; underwater diver breath replenishment bubble).
+23. **Campaign Epilogue & World State Transformation** ✅ Complete (Tide Regulator attunement restoring Grand Equilibrium, The Deluge Calmed peaceful weather transformation, post-game Creative Mode, and Endless Undertow Gauntlet).
+24. **Steam Deck & Gamepad Native UX (Radial Tool Wheel & Haptic Triggers)** ✅ Complete (8-way directional Tool Wheel overlay with analog stick direction mapping and acoustic tick selection; DualSense and gamepad haptic triggers for weapon charges, diving winch crank, and fishing line tension).
+25. **Visiting Merchant Galleon & Export Manifests** ✅ Complete (majestic three-masted trade galleon with billowing sails and stern castle; stocks exotic spices, indigo dye, and silk bolts; offers high-yield export contracts for artisan cheeses, ales, borean trophies, and abyssal pearls).
+26. **Steam Workshop & Portable Blueprint Catalog** ✅ Complete (standalone `.bhbp` blueprint file schema with author, dimensions, and automatic voxel material bills; local blueprint catalog browser; integrated with DraftingDeskEntity).
+27. **Dedicated Server Admin Dashboard & Command Suite** ✅ Complete (telemetry API for server uptime, TPS, player count, tide, and weather; deterministic weather front forecasting; slash command dispatcher for `/help`, `/status`, `/time`, `/weather`, `/festival`, `/deluge`, `/save`, `/give`).

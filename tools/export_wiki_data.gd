@@ -221,6 +221,11 @@ const CREATURE_INFO := {
 	&"reaver": ["Sea-Reaver", "Reaver outposts on the far islands", "Yes: cutlass combo (never on Cozy)"],
 	&"reaver_harpooner": ["Reaver harpooner", "Reaver outposts, one on each watchtower", "Yes: throws harpoons from range (never on Cozy)"],
 	&"barnacled_hulk": ["The Barnacled Hulk", "Buried on a far island's tidal flats (boss, once per world)", "Yes: boss (never on Cozy)"],
+	&"abyssal_siren": ["The Abyssal Siren", "Submerged trench in The Murk-Reef (Biome 2 Boss)", "Yes: sonic cavitation shriek (never on Cozy)"],
+	&"abyssal_angler": ["Abyssal Angler", "Deep sunken trenches and kelp ruins", "Yes: luring bioluminescent stalker"],
+	&"caldera_shell": ["The Caldera Shell", "Basalt Skerries magma vents (Biome 3 Boss)", "Yes: boiling steam geysers & molten armor"],
+	&"borean_gore_fin": ["Borean Gore-Fin", "Frost-Shoals pack ice (Biome 4 Boss)", "Yes: ramming charge with twin glacial tusks"],
+	&"tide_sovereign": ["The Tide Sovereign", "The Maelstrom Spire central vortex (Climax Boss)", "Yes: hydro-engine barrier and deluge shockwaves"],
 }
 
 
@@ -260,4 +265,9 @@ static func _make_creature(kind: StringName) -> Creature:
 		&"reaver": return SeaReaver.new()
 		&"reaver_harpooner": return SeaReaver.new(true)
 		&"barnacled_hulk": return BarnacledHulk.new()
+		&"abyssal_siren": return AbyssalSiren.new()
+		&"abyssal_angler": return AbyssalAngler.new()
+		&"caldera_shell": return CalderaShell.new()
+		&"borean_gore_fin": return BoreanGoreFin.new()
+		&"tide_sovereign": return TideSovereign.new()
 	return null

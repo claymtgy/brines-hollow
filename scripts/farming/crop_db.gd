@@ -55,6 +55,16 @@ static func init_db() -> void:
 	potato.extra_seed_chance = 0.50
 	register_crop(potato)
 
+	# 5. Brackish Rye: Resilient hybrid of Shore Wheat and Samphire; thrives across wide salinity ranges
+	var rye := CropDef.new(
+		&"brackish_rye", "Brackish Rye", &"seed_brackish_rye", &"brackish_rye",
+		CropDef.SoilType.ANY, 110.0, 0.15, 0.65
+	)
+	rye.min_yield = 3
+	rye.max_yield = 5
+	rye.extra_seed_chance = 0.40
+	register_crop(rye)
+
 
 static func register_crop(def: CropDef) -> void:
 	_registry[def.id] = def

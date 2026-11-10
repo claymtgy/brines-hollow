@@ -50,8 +50,8 @@ func get_interaction_prompt(player: Player) -> String:
 		return "F  Collect %d shellfish from the crab pot" % n
 	if not pot.is_baited():
 		var bait := _bait_in(player.inventory)
-		return "F  Bait crab pot with %s" % ChestEntity._item_name(bait) if bait != &"" else "Crab pot needs bait (kelp fronds or small fish)"
-	return "Crab pot baited (%d) - %s" % [pot.bait_count, "soaking..." if submerged else "waiting for the tide"]
+		return "F  Bait crab pot with %s" % ChestEntity._item_name(bait) if bait != &"" else "Crab pot needs bait · Kelp Fronds or Small Fish"
+	return "Crab Pot Baited · %d · %s" % [pot.bait_count, "Soaking..." if submerged else "Waiting for the Tide"]
 
 
 static func _bait_in(inv: Inventory) -> StringName:

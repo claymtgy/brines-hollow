@@ -21,8 +21,11 @@ const CAP := {&"crab": 12, &"gull": 12, &"eel": 4, &"gloomcrawler": 4}
 ## Snapshot kind indices: append only (clients map index -> kind).
 const KINDS := [&"crab", &"gull", &"eel", &"hare", &"seal", &"puffin", &"otter", &"heron", &"whale",
 	&"fox", &"stoat", &"rat", &"eagle", &"mudclaw", &"mudbrute", &"gloomcrawler",
-	&"reaver", &"reaver_harpooner", &"barnacled_hulk"]
+	&"reaver", &"reaver_harpooner", &"barnacled_hulk", &"abyssal_siren", &"abyssal_angler", &"caldera_shell",
+	&"borean_gore_fin", &"tide_sovereign"]
 const DESPAWN_DIST := 70.0
+
+static var current: CreatureNet = null
 
 var main: Node
 var difficulty := CombatMath.Difficulty.TIDEWATCH
@@ -48,13 +51,23 @@ var fx: WildlifeFX
 var camps: MudClawCamps              # Mud-Claw camps on the outer islands
 var outposts: ReaverOutposts         # Sea-Reaver outposts on the far islands
 var hulk: HulkLair                   # the Barnacled Hulk's strand (Hollow Flats boss)
+var siren: SirenLair                 # the Abyssal Siren's trench (Murk-Reef boss)
+var caldera: CalderaLair             # the Caldera Shell (Basalt Skerries boss)
+var borean: BoreanLair               # Borean Gore-Fin (Frost-Shoals boss)
+var maelstrom: MaelstromSpire        # The Tide Sovereign (Climax boss)
 
 # Dev-check counters
 var stats_hits := 0
 var stats_hurt := 0.0
 
 
+func _exit_tree() -> void:
+	if current == self:
+		current = null
+
+
 func _ready() -> void:
+	current = self
 	_rng.randomize()
 	wildlife = WildlifeDirector.new(self)
 	fx = WildlifeFX.new()
@@ -69,6 +82,18 @@ func _ready() -> void:
 	hulk = HulkLair.new()
 	hulk.net = self
 	add_child(hulk)
+	siren = SirenLair.new()
+	siren.net = self
+	add_child(siren)
+	caldera = CalderaLair.new()
+	caldera.net = self
+	add_child(caldera)
+	borean = BoreanLair.new()
+	borean.net = self
+	add_child(borean)
+	maelstrom = MaelstromSpire.new()
+	maelstrom.net = self
+	add_child(maelstrom)
 	if main.get("session") != null:
 		main.session.register_state(&"wildlife", wildlife.serialize, wildlife.deserialize)
 	for a in OS.get_cmdline_user_args():
@@ -308,6 +333,18 @@ func _simulate(dt: float) -> void:
 			if c.state == Creature.State.DEAD and not c.has_meta("granted"):
 				c.set_meta("granted", true)
 				_grant(c.last_attacker, c.drops())
+				if c is BarnacledHulk and hulk != null and hulk.has_method("on_hulk_slain"):
+					hulk.on_hulk_slain(c.last_attacker)
+				elif c is AbyssalSiren and siren != null:
+					siren.on_siren_slain(c.last_attacker)
+				elif c is CalderaShell and caldera != null:
+					caldera.on_caldera_slain(c.last_attacker)
+				elif c is BoreanGoreFin and borean != null:
+					borean.on_borean_slain(c.last_attacker)
+				elif c is TideSovereign and maelstrom != null:
+					maelstrom.on_sovereign_slain(c.last_attacker)
+				if main != null and main.get("player") != null:
+					main.player.quest_event(QuestDef.ObjectiveType.DEFEAT_ENEMY, c.kind)
 	_gull_thieves(dt, ctx)
 
 
@@ -343,6 +380,11 @@ func spawn(kind: StringName, pos: Vector3, cid := -1) -> Creature:
 		&"reaver": c = SeaReaver.new()
 		&"reaver_harpooner": c = SeaReaver.new(true)
 		&"barnacled_hulk": c = BarnacledHulk.new()
+		&"abyssal_siren": c = AbyssalSiren.new()
+		&"abyssal_angler": c = AbyssalAngler.new()
+		&"caldera_shell": c = CalderaShell.new()
+		&"borean_gore_fin": c = BoreanGoreFin.new()
+		&"tide_sovereign": c = TideSovereign.new()
 		_: return null
 	if cid < 0:
 		cid = _next_id
@@ -439,6 +481,15 @@ func _spawn_tick() -> void:
 	camps.spawn_tick(players)
 	outposts.spawn_tick(players)
 	hulk.spawn_tick(players)
+	siren.spawn_tick(players)
+	caldera.spawn_tick(players)
+	borean.spawn_tick(players)
+	maelstrom.spawn_tick(players)
+	for pl in players:
+		if siren != null: siren.check_discovery(pl.pos)
+		if caldera != null: caldera.check_discovery(pl.pos)
+		if borean != null: borean.check_discovery(pl.pos)
+		if maelstrom != null: maelstrom.check_discovery(pl.pos)
 
 
 ## The underside of a cavern ceiling near `pp` (but not right overhead), with a clear 2 m+
@@ -552,6 +603,21 @@ func local_swing(origin: Vector3, fwd: Vector3, stats: Dictionary, in_water: boo
 		c.flash()
 		var dmg := CombatMath.outgoing_damage(stats, c.is_staggered(), in_water)
 		var pwr: float = float(stats.get("stagger_power", 1.0)) * float(stats.get("stagger_mult", 1.0))
+
+		# Harpoon sweet spot tip bonus
+		var dist := origin.distance_to(c.position)
+		var is_sweet_spot := CombatMath.is_harpoon_sweet_spot(dist, int(stats.get("weapon_type", 0)))
+		if is_sweet_spot:
+			dmg *= CombatMath.HARPOON_SWEET_SPOT_MULT
+			pwr *= 1.4
+			if main != null and main.hud != null:
+				main.hud.show_toast("Clean Pierce · Sweet Spot!")
+
+		CombatAudio.play_sound("hit_shell" if c.is_armored() else "hit_flesh", c.position)
+		var p_parent: Node3D = c.get_parent() as Node3D
+		if p_parent != null:
+			CombatFX.spawn_hit_sparks(p_parent, c.position + Vector3.UP * 0.3, (c.position - origin).normalized(), c.is_armored(), stats.get("is_finisher", false) or is_sweet_spot)
+
 		if is_authority():
 			_apply_hit(c, dmg, origin, pwr, local_id())
 		else:
@@ -572,6 +638,12 @@ func local_aoe_strike(center: Vector3, radius: float, stats: Dictionary, in_wate
 		c.flash()
 		var dmg := CombatMath.outgoing_damage(stats, c.is_staggered(), in_water)
 		var pwr: float = float(stats.get("stagger_power", 1.0)) * float(stats.get("stagger_mult", 1.0))
+
+		CombatAudio.play_sound("hit_shell" if c.is_armored() else "hit_flesh", c.position)
+		var p_parent: Node3D = c.get_parent() as Node3D
+		if p_parent != null:
+			CombatFX.spawn_hit_sparks(p_parent, c.position + Vector3.UP * 0.3, (c.position - center).normalized(), c.is_armored(), true)
+
 		if is_authority():
 			_apply_hit(c, dmg, center, pwr, local_id())
 		else:
@@ -617,22 +689,30 @@ func _local_hurt(amount: float, from: Vector3, cid: int) -> void:
 	if _combat == null:
 		return
 	var res := _combat.receive_hit(amount, from, cid)
+	var p_pos := _combat.player.position if _combat.player != null else Vector3.ZERO
 	match res:
 		"dodged":
+			CombatAudio.play_sound("dodge", p_pos)
 			if main.hud != null:
 				main.hud.show_toast("Dodged!")
 		"parried":
+			CombatAudio.play_sound("parry", p_pos)
+			if _combat.player != null and _combat.player.get_parent() != null:
+				CombatFX.spawn_parry_spark(_combat.player.get_parent() as Node3D, p_pos + Vector3.UP * 1.0)
 			if main.hud != null:
 				main.hud.show_toast("Parried! Riposte ready - strike now!")
 		"blocked":
+			CombatAudio.play_sound("block", p_pos)
 			if main.hud != null:
 				main.hud.show_toast("Blocked!")
 		"guard_broken":
+			CombatAudio.play_sound("poise_break", p_pos)
 			if main.hud != null:
 				main.hud.show_toast("Guard Broken!")
 			_overlay_color = Color(0.7, 0.4, 0.1)
 			_overlay_a = 0.5
 		_:
+			CombatAudio.play_sound("hit_flesh", p_pos)
 			stats_hurt += amount
 			_overlay_color = Color(0.6, 0.05, 0.05)
 			_overlay_a = 0.45
@@ -822,7 +902,8 @@ func _show_hints() -> void:
 	if main.player == null:
 		return
 	for c: Creature in creatures.values():
-		if not _hinted.has(c.kind) and c.position.distance_to(main.player.position) < 12.0 and c.hint() != "":
+		if not _hinted.has(c.kind) and c.position.distance_to(main.player.position) < 12.0 and c.hint() != "" \
+				and c.hint_ready(main.player):
 			_hinted[c.kind] = true
 			main.hud.show_toast(c.hint())
 			return

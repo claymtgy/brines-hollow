@@ -25,4 +25,9 @@ Toughness is the base HP (x1.5 on Undertow). Every threat has a non-combat answe
 | Sea-Reaver | Reaver outposts on the far islands | Yes: cutlass combo (never on Cozy) | 22 HP | Sea-Reavers watch by sight: sneak (Ctrl) and keep out of view, more so at night. Topple their War Horn Totem (F) once the guards are down and the outpost is yours. |
 | Reaver harpooner | Reaver outposts, one on each watchtower | Yes: throws harpoons from range (never on Cozy) | 16 HP | Reaver harpooners throw from range: when the arm draws back ("!"), dodge (C). Close in and they're weak. |
 | The Barnacled Hulk | Buried on a far island's tidal flats (boss, once per world) | Yes: boss (never on Cozy) | 650 HP | The Barnacled Hulk's shell turns your blows. Lure it under a cliff boulder and push it (F) to crack the shell, or catch it out on the flats as the tide drops: mired in the mud, it can't fight back. |
+| The Abyssal Siren | Submerged trench in The Murk-Reef (Biome 2 Boss) | Yes: sonic cavitation shriek (never on Cozy) | 180 HP |  |
+| Abyssal Angler | Deep sunken trenches and kelp ruins | Yes: luring bioluminescent stalker | 55 HP |  |
+| The Caldera Shell | Basalt Skerries magma vents (Biome 3 Boss) | Yes: boiling steam geysers & molten armor | 240 HP |  |
+| Borean Gore-Fin | Frost-Shoals pack ice (Biome 4 Boss) | Yes: ramming charge with twin glacial tusks | 450 HP |  |
+| The Tide Sovereign | The Maelstrom Spire central vortex (Climax Boss) | Yes: hydro-engine barrier and deluge shockwaves | 650 HP |  |
 

@@ -95,6 +95,10 @@ func cling(at: Vector3) -> void:
 	on_ceiling = true
 
 
+func _on_windup_started() -> void:
+	CombatAudio.play_sound("tell_screech", position)
+
+
 func on_hit(dmg: float, from: Vector3, power: float, attacker: int) -> bool:
 	var ok := super.on_hit(dmg, from, power, attacker)
 	if ok and on_ceiling and state != State.DEAD:

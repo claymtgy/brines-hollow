@@ -1,69 +1,109 @@
 class_name Tutorial
 extends Node
-## The starter quest line. Wren, a travelling fisher, walks up to new players when they
-## wash ashore and teaches the basics through a chain of short missions. Each mission
-## ends by returning to Wren, who pays out and teaches new recipes.
+## The opening. A new castaway washes up beside a storm-battered hut with three tools and a
+## journal: dig, make a campfire, patch the hut (the "Washed Ashore" page, no guide). Smoke
+## from that first fire brings Wren, a travelling fisher, rowing in to the pier. Wren teaches
+## the coast's less obvious crafts through short lessons, each one handing over the tool it
+## uses, then rows away and hands over Act I of the story.
 ##
-## Per player and local (each co-op player gets their own guide). Progress is ordinary
-## QuestManager state, so it saves with the player profile. Players can skip it.
+## Per player and local (each co-op player gets their own journal and guide). Progress is
+## ordinary QuestManager state, so it saves with the player profile. Players can skip Wren.
 
 const NPC_ID := &"wren"
 const NPC_NAME := "Wren the Wayfarer"
 const SKIP_ID := &"tut_skipped"
 const TALK_RANGE := 3.0
 
-## The mission chain. objectives: [description, ObjectiveType, target, count]
+## The castaway's own first page: no guide, just a few nudges (hints show the right keys).
+const JOURNAL_ID := &"tut_0_ashore"
+const JOURNAL := {
+	"title": "Washed Ashore",
+	"giver": "Your journal",
+	"steps": [
+		["Dig up 6 handfuls of sand, earth or stone", QuestDef.ObjectiveType.GATHER_ITEM, &"", 6,
+			"Pickaxe [1]: hold {use} on the ground"],
+		["Hand-craft a campfire", QuestDef.ObjectiveType.CRAFT_ITEM, &"campfire", 1,
+			"Open your pack ({inventory_toggle}). Short of stone? Try the chest by the hut"],
+		["Set the campfire down near the hut", QuestDef.ObjectiveType.PLACE_ENTITY, &"campfire", 1,
+			"Pick it on your hotbar and press {use}"],
+		["Patch the hut: place 12 blocks in the gaps", QuestDef.ObjectiveType.PLACE_VOXELS, &"", 12,
+			"Hammer [2]: {use} to place, {build_menu_toggle} to choose blocks"],
+	],
+}
+## Wren comes anyway after this long, so nobody waits forever for a guide.
+const ARRIVE_AFTER_SEC := 300.0
+## Lessons the old tutorial had that this one replaced (their progress is folded into the new chain).
+const RETIRED := [&"tut_1_feet", &"tut_2_mark", &"tut_3_tools"]
+
+## Wren's lessons. objectives: [description, ObjectiveType, target, count]; gifts are handed
+## over when the lesson starts, rewards when it's turned in. {action} becomes that action's key.
 const MISSIONS := [
 	{
-		"id": &"tut_1_feet", "title": "Find Your Feet",
-		"intro": "Easy now, you've had a rough night at sea. I'm Wren. I walk these shores between villages. Let's get you on your feet: grab your pickaxe [1] and dig up a few handfuls of sand or stone.",
-		"objectives": [["Dig up 6 handfuls of sand, dirt or stone", QuestDef.ObjectiveType.GATHER_ITEM, &"", 6]],
-		"done": "Good arms on you. Everything you dig comes back as material, about one handful for every four blocks.",
-		"rewards": {"items": [["driftwood", 8]], "recipes": []},
-	},
-	{
-		"id": &"tut_2_mark", "title": "Make Your Mark",
-		"intro": "Now put some of it back where you want it. Take the hammer [2], press B to choose blocks, and lay a few. Building costs what digging gives.",
-		"objectives": [["Place 5 blocks with the hammer", QuestDef.ObjectiveType.PLACE_VOXELS, &"", 5]],
-		"done": "There. The coast is yours to shape. Walls, huts and furniture are all in the hammer's build menu (B).",
-		"rewards": {"items": [["wood_plank", 12]], "recipes": [&"place_storage_crate"]},
-	},
-	{
-		"id": &"tut_3_tools", "title": "Tools of the Trade",
-		"intro": "Let's make something. Open your pack (Tab or I) to hand-craft, or use a workbench if you find one. Planks from driftwood is a fine start.",
-		"objectives": [["Craft anything (inventory or a workbench)", QuestDef.ObjectiveType.CRAFT_ITEM, &"", 1]],
-		"done": "Recipes are worth more than gold out here. You'll learn new ones from ingredients you find, from folk who join your village, and from scrolls the merchants carry. Here, the crab pot is an old friend of mine.",
-		"rewards": {"items": [["crab_pot", 1], ["kelp_frond", 4]], "recipes": [&"place_crab_pot"]},
-	},
-	{
 		"id": &"tut_4_tide", "title": "Let the Tide Work",
-		"intro": "Take that crab pot down to the wet sand between the tide lines and set it from your hotbar or the hammer's build menu (B). Bait it with kelp. When the tide comes in, it fishes for you.",
+		"intro": "Here, an old friend of mine: a crab pot. Set it on the wet sand between the tide lines and bait it with kelp. When the tide comes in, it fishes for you.",
 		"objectives": [["Set a crab pot between the tide lines", QuestDef.ObjectiveType.PLACE_ENTITY, &"crab_pot", 1]],
+		"hint": "Pick the pot on your hotbar, aim at wet sand, {use}",
+		"gifts": [["crab_pot", 1], ["kelp_frond", 4]],
 		"done": "The sea does half the work if you let it. Salt pans are the same: flood at high tide, dry in the sun.",
-		"rewards": {"items": [["salt_pan", 1]], "recipes": [&"place_salt_pan"]},
+		"rewards": {"items": [["salt_pan", 1]], "recipes": [&"place_crab_pot", &"place_salt_pan"]},
 	},
 	{
 		"id": &"tut_5_line", "title": "A Line in the Water",
-		"intro": "Time to eat. Take your rod [3], hold the button to cast into deep water, then strike when it bites.",
+		"intro": "Time to eat. Take your rod [3], hold {use} to cast into deep water, then strike when it bites.",
 		"objectives": [["Catch a fish", QuestDef.ObjectiveType.CATCH_FISH, &"", 1]],
+		"hint": "Rod [3]: hold {use}, release to cast, {use} again on a bite",
 		"done": "Fine catch! Fish keep longer in a sea barrel, and better still smoked.",
 		"rewards": {"items": [["silver_mackerel", 2]], "recipes": [&"cook_roasted_mackerel", &"place_sea_barrel"]},
 	},
 	{
 		"id": &"tut_6_belly", "title": "A Warm Belly",
-		"intro": "Cook that fish at a campfire and eat it with the right button. A full belly means more health and stamina for a good while.",
+		"intro": "Cook that fish at your campfire ({interact}) and eat it with {alt_use}. A full belly means more health and stamina for a good while.",
 		"objectives": [["Eat a meal", QuestDef.ObjectiveType.EAT_FOOD, &"", 1]],
+		"hint": "Cook at your campfire ({interact}), then {alt_use} to eat",
 		"done": "Much better. You can hold up to three meals at once, and the best ones stack nicely.",
 		"rewards": {"items": [], "recipes": [&"place_smokehouse", &"place_hearth_pot"]},
 	},
 	{
+		"id": &"tut_8_timber", "title": "Timber",
+		"intro": "Driftwood won't build you much, and a pick only chips at a trunk. Take this hatchet: {use} on a pine and the whole tree comes down. Plant the saplings it drops and you'll never run short.",
+		"objectives": [["Fell a pine and gather its logs", QuestDef.ObjectiveType.GATHER_ITEM, &"pine_wood", 2]],
+		"hint": "Hatchet: {use} on a pine trunk, then walk over the logs",
+		"gifts": [["driftwood_axe", 1]],
+		"done": "Good timber. Pine makes planks by hand, and a workbench makes nearly everything else. Build yourself one when you can.",
+		"rewards": {"items": [["wood_plank", 8]], "recipes": []},
+	},
+	{
+		"id": &"tut_9_sow", "title": "Till & Sow",
+		"intro": "Fish won't fill you forever. Take this hoe and some seed: till a patch with {use}, then sow it with {alt_use}. Rain waters it, but keep it back from the salt spray.",
+		"objectives": [["Sow 3 seeds in tilled earth", QuestDef.ObjectiveType.PLANT_CROP, &"", 3]],
+		"hint": "Hoe: {use} to till grass or dirt, {alt_use} to sow",
+		"gifts": [["driftwood_hoe", 1], ["seed_shore_wheat", 5], ["seed_samphire", 3]],
+		"done": "Come back in a few days and you'll have wheat. Wheat makes hardtack, and parchment for charts.",
+		"rewards": {"items": [["seed_shore_wheat", 3]], "recipes": []},
+	},
+	{
+		"id": &"tut_10_blade", "title": "Steady Your Blade",
+		"intro": "The shore crabs pinch, and worse things come up out of the deep at night. Here's an old cutlass. {use} to strike, {alt_use} to block (time it to parry), {dodge} to roll clear. Go and see off a crab.",
+		"objectives": [["Defeat a creature", QuestDef.ObjectiveType.DEFEAT_ENEMY, &"", 1]],
+		"hint": "Cutlass: {use} strike, {alt_use} block, {dodge} roll",
+		"gifts": [["rusty_cutlass", 1]],
+		"done": "You'll keep. Sleep in a bed when the light goes; nights out here are long.",
+		"rewards": {"items": [["shore_crab", 1]], "recipes": []},
+	},
+	{
 		"id": &"tut_7_sea", "title": "Beyond the Shallows",
-		"intro": "Last lesson. There's a rowboat at the pier. Climb in with F and row out a little. Other islands are waiting.",
+		"intro": "Last lesson. There's a rowboat at the pier. Climb in with {interact} and row out a little. Other islands are waiting, and the chart I gave you fills in as you go.",
 		"objectives": [["Take a rowboat out", QuestDef.ObjectiveType.BOARD_BOAT, &"", 1]],
-		"done": "You'll do just fine. Folk wash up on these beaches all the time; give them a roof and a bed and they'll stay. I'll be on my way. Look for me on the pier when the merchants come in.",
+		"hint": "Walk up to the rowboat and press {interact}",
+		"done": "You'll do just fine. Folk wash up on these beaches all the time; give them a roof and a bed and they'll stay. Brenda and Corin in the villages have asked after help, so I've written their requests in your journal. I'll be on my way. Look for me on the pier when the merchants come in.",
 		"rewards": {"items": [["brass_guilder", 30]], "recipes": [&"craft_parchment_chart"]},
 	},
 ]
+
+## Handed over at the first meeting (and on skipping): a map from the first conversation.
+const GREETING_GIFTS := [["parchment_shore_chart", 1]]
+## Act I of the story, given when Wren leaves.
+const STORY_QUESTS := [&"story_first_hearth", &"story_tide_tackle"]
 
 var main: Node
 var dialogue: DialogueBox
@@ -76,12 +116,14 @@ var _bound := false
 var _greeted := false
 var _was_seated := false
 var _leaving := false
+var _arriving := false
 var _speed := 0.0
 var _check := ""
 var _bind_delay := 1.0
 var _stuck_t := 0.0
-## Wren keeps to the home pier: _pier is where he stands, _face_land which way he looks
-## when nobody's near. When the last lesson is done he rows off in his own boat.
+var _since_bind := 0.0
+## Wren keeps to the home pier: _pier is where Wren stands, _face_land which way Wren looks
+## when nobody's near. Wren rows in to the pier's end, and rows away from it at the end.
 var _pier := Vector3.ZERO
 var _pier_end := Vector3.ZERO
 var _face_land := 0.0
@@ -90,6 +132,7 @@ var _depart_t := 0.0
 var _hinted := false
 var _tracker_tween: Tween
 var _hud_tracker_pinned := false
+var _tracker_hidden := false   # the player hid it from the quest log
 
 
 func setup(p_main: Node) -> void:
@@ -113,6 +156,19 @@ func setup(p_main: Node) -> void:
 				_check = "run"
 
 
+## The HUD places the tracker (under the clock plaque); the default is the old fixed spot.
+func set_tracker_position(p: Vector2) -> void:
+	if _tracker_root != null:
+		_tracker_root.position = p
+
+
+func tracker_size() -> Vector2:
+	if _tracker_root == null or not _tracker_root.visible or _tracker_root.get_child_count() == 0:
+		return Vector2.ZERO
+	var c := _tracker_root.get_child(_tracker_root.get_child_count() - 1) as Control
+	return c.get_combined_minimum_size() if c != null else Vector2.ZERO
+
+
 # ---------------------------------------------------------------- state
 
 func _q() -> QuestManager:
@@ -131,6 +187,7 @@ func is_finished() -> bool:
 	return q.is_quest_completed(SKIP_ID) or q.is_quest_completed(MISSIONS[-1].id)
 
 
+## Has the player met Wren (any lesson begun, or skipped)?
 func is_started() -> bool:
 	var q := _q()
 	for m in MISSIONS:
@@ -139,12 +196,27 @@ func is_started() -> bool:
 	return q.is_quest_completed(SKIP_ID)
 
 
+func journal_done() -> bool:
+	return _q().is_quest_completed(JOURNAL_ID)
+
+
 ## Index of the active mission, or -1.
 func current() -> int:
 	for i in MISSIONS.size():
 		if _q().is_quest_active(MISSIONS[i].id):
 			return i
 	return -1
+
+
+## Replaces {action} tokens with that action's key or button on the current device.
+func _fmt(text: String) -> String:
+	var c: Variant = main.get("controller")
+	for a in ["use", "alt_use", "interact", "dodge", "inventory_toggle", "build_menu_toggle", "quest_log_toggle"]:
+		var key := "{%s}" % a
+		if text.contains(key):
+			var g: String = String(c.get_glyph(StringName(a))) if c != null else String(a)
+			text = text.replace(key, g)
+	return text
 
 
 func _quest_for(i: int) -> QuestDef:
@@ -164,7 +236,20 @@ func _start(i: int) -> void:
 	var qd := _quest_for(i)
 	_q().register_available_quest(qd)
 	_q().accept_quest(qd.id)
+	_give(MISSIONS[i].get("gifts", []))
 	_refresh_tracker()
+	show_tracker()
+
+
+## Hands items to the player; whatever doesn't fit lands at their feet.
+func _give(items: Array) -> void:
+	var p: Player = main.player
+	if p == null or p.inventory == null:
+		return
+	for it: Array in items:
+		var left: int = p.inventory.add_item(StringName(it[0]), int(it[1]))
+		if left > 0 and main.has_method("spawn_item_drop"):
+			main.spawn_item_drop(p.position + Vector3(0, 0.6, 0), StringName(it[0]), left)
 
 
 ## True when only "Return to Wren" is left.
@@ -176,6 +261,23 @@ func _ready_to_turn_in(i: int) -> bool:
 		if not s.is_completed and s.type != QuestDef.ObjectiveType.TALK_TO:
 			return false
 	return true
+
+
+func _start_journal() -> void:
+	var qd := QuestDef.new(JOURNAL_ID, JOURNAL.title, JOURNAL.giver)
+	for st: Array in JOURNAL.steps:
+		qd.add_step(st[0], st[1], st[2], st[3])
+	qd.rewards = {"brass_guilder": 0, "tide_scrip": 0, "items": []}
+	_q().register_available_quest(qd)
+	_q().accept_quest(JOURNAL_ID)
+
+
+## Act I: the villagers' requests, written into the journal as Wren leaves.
+func start_story() -> void:
+	for id: StringName in STORY_QUESTS:
+		if not _q().is_quest_active(id) and not _q().is_quest_completed(id):
+			_q().accept_quest(id)
+	_refresh_tracker()
 
 
 # ---------------------------------------------------------------- per frame
@@ -190,6 +292,7 @@ func _process(delta: float) -> void:
 		if _bind_delay <= 0.0:
 			_bind()
 		return
+	_since_bind += delta
 	# Boarding a boat is detected here (no hook needed in the boat code).
 	var seated := p.is_seated()
 	if seated and not _was_seated:
@@ -197,8 +300,13 @@ func _process(delta: float) -> void:
 		_refresh_tracker()
 	_was_seated = seated
 	if wren == null:
+		if not is_finished() and not is_started() and (journal_done() or _since_bind >= ARRIVE_AFTER_SEC):
+			_spawn_wren(p, true)
 		return
-	_update_wren(delta, p)
+	if _arriving:
+		_update_arrival(delta)
+	else:
+		_update_wren(delta, p)
 	if Engine.get_process_frames() % 15 == 0:
 		_refresh_tracker()
 
@@ -207,28 +315,52 @@ func _bind() -> void:
 	_bound = true
 	main.quests.quest_progressed.connect(func(_q2: Variant, _s: Variant) -> void:
 		_refresh_tracker()
-		fade_tracker_after_delay(7.0)
+		show_tracker()
 	)
 	main.quests.quest_accepted.connect(func(_q2: Variant) -> void:
 		_refresh_tracker()
-		fade_tracker_after_delay(7.0)
+		show_tracker()
 	)
 	main.quests.quest_completed.connect(_on_quest_completed)
-	if not is_finished():
-		_spawn_wren(main.player)
+	_migrate_retired()
+	if not is_finished() and not is_started() and not journal_done() and not _q().is_quest_active(JOURNAL_ID):
+		_start_journal()
+	if not is_finished() and (is_started() or journal_done()):
+		_spawn_wren(main.player, false)   # returning player: Wren is already on the pier
 	_refresh_tracker()
-	fade_tracker_after_delay(10.0)
+	show_tracker()
 	if _check != "":
 		_run_check()
 
 
-func _spawn_wren(p: Player) -> void:
+## Saves from the old seven-lesson tutorial: drop the retired lessons and pick the chain up
+## at the first new lesson not yet done.
+func _migrate_retired() -> void:
+	var had := false
+	for id: StringName in RETIRED:
+		if _q().active_quests.has(id):
+			_q().active_quests.erase(id)
+			had = true
+		elif _q().is_quest_completed(id):
+			had = true
+	if had and not journal_done():
+		_q().completed_quests.append(JOURNAL_ID)   # they're well past washing ashore
+	if had and not is_finished() and current() < 0:
+		for i in MISSIONS.size():
+			if not _q().is_quest_completed(MISSIONS[i].id):
+				_start(i)
+				break
+
+
+func _spawn_wren(p: Player, arrive: bool) -> void:
 	wren = Node3D.new()
 	wren.name = "Wren"
 	main.add_child(wren)
 	_model = CharacterModel.new()
 	wren.add_child(_model)
-	_model.setup(Palette.ROOF_BLUE, Palette.DARK_WOOD)
+	var wren_customizer := CharacterCustomizer.new()
+	wren_customizer.apply_preset("dirty_old_sailor")
+	_model.setup(Palette.COAT_A, Palette.HAT_A, wren_customizer)
 	_model.set_tool(3)
 	var tag := Label3D.new()
 	tag.text = "Wren"
@@ -240,20 +372,20 @@ func _spawn_wren(p: Player) -> void:
 	tag.modulate = Color(1, 0.96, 0.88)
 	wren.add_child(tag)
 	_marker = Label3D.new()
-	_marker.position = Vector3(0, 2.55, 0)
+	_marker.position = Vector3(0, 2.6, 0)
 	_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_marker.font_size = 96
 	_marker.outline_size = 16
-	_marker.pixel_size = 0.004
+	_marker.pixel_size = 0.009   # about 0.9 m tall: readable from the far end of the beach
 	_marker.modulate = UiTheme.BRASS
 	_marker.no_depth_test = true
 	wren.add_child(_marker)
 	_find_pier(p)
+	if arrive:
+		_begin_arrival()
+		return
 	wren.position = _pier
 	_model.rotation.y = _face_land
-	if not is_started() and main.hud != null:
-		_hinted = true
-		main.hud.show_toast("Someone is waving from the pier.")
 
 
 ## Where Wren stands: a few steps out along the starter dock, looking back at the island.
@@ -283,7 +415,66 @@ func _ground(p: Vector3) -> Vector3:
 	return Vector3(p.x, p.y + 4.0 - float(hit.dist), p.z)
 
 
+func _out_to_sea() -> Vector3:
+	return Vector3(-sin(_face_land), 0, -cos(_face_land))
+
+
+## Where Wren's boat ties up: beside the end of the pier.
+func _mooring() -> Vector3:
+	var out := _out_to_sea()
+	var bp := _pier_end + Vector3(out.z, 0, -out.x) * 1.6
+	bp.y = main.sky.water_level_m()
+	return bp
+
+
+## The smoke has been seen: Wren rows in from open water to the end of the pier.
+func _begin_arrival() -> void:
+	_arriving = true
+	_depart_t = 0.0
+	var out := _out_to_sea()
+	_boat = Boat.new()
+	_boat.name = "WrensBoat"
+	main.add_child(_boat)
+	_boat.setup(-77, main.world, main.sky, _mooring() + out * 55.0, atan2(-out.x, -out.z))
+	if main.hud != null:
+		var why := "Someone has seen your smoke: a small boat is rowing in to the pier." if journal_done() \
+			else "A small boat is rowing in to the pier."
+		main.hud.show_toast(why, 7.0, true)
+
+
+func _update_arrival(delta: float) -> void:
+	_depart_t += delta
+	var goal := _mooring()
+	var to := goal - _boat.position
+	to.y = 0
+	if to.length() > 1.2 and _depart_t < 45.0:
+		var spd := minf(2.4, 0.6 + _depart_t * 0.4) if to.length() > 8.0 else maxf(0.5, to.length() * 0.3)
+		var dir := to.normalized()
+		_boat.position += dir * spd * delta
+		_boat.position.y = _boat.water_y()
+		_boat.yaw = atan2(dir.x, dir.z)
+		_boat.vel = Vector2(dir.x, dir.z) * spd
+		_boat.row_power = 1.0
+		_boat.row_phase += delta * 4.0
+		var st := _boat.seat_transform(0)
+		wren.position = st.origin
+		_model.position = Vector3.ZERO
+		_model.rotation = st.basis.get_euler()
+		_model.animate_seated(delta, _boat.row_phase, 1.0)
+		_marker.text = "!"
+		return
+	# Tied up: step onto the pier; _update_wren walks Wren to the usual spot.
+	_boat.position = Vector3(goal.x, _boat.water_y(), goal.z)
+	_boat.vel = Vector2.ZERO
+	_boat.row_power = 0.0
+	_model.rotation = Vector3(0, _model.rotation.y, 0)
+	wren.position = _pier_end
+	_arriving = false
+
+
 func _update_wren(delta: float, p: Player) -> void:
+	if _boat != null and not _leaving:
+		_boat.position.y = _boat.water_y()   # tied up at the pier's end
 	var i := current()
 	# Marker: "!" new mission to give, "?" ready to hand in, nothing while working.
 	var is_paused: bool = (i >= 0 and main.get("quests") != null and main.quests.paused_reward_quests.has(MISSIONS[i].id))
@@ -292,16 +483,16 @@ func _update_wren(delta: float, p: Player) -> void:
 	else:
 		_marker.text = ""
 	if _marker != null and _marker.text != "":
-		_marker.position.y = 2.55 + sin(Time.get_ticks_msec() / 1000.0 * 3.0) * 0.06
+		_marker.position.y = 2.6 + sin(Time.get_ticks_msec() / 1000.0 * 3.0) * 0.06
 	if not _leaving and is_finished() and not dialogue.is_open():
 		_leaving = true   # every lesson done (or skipped): time to go, however the last chat closed
 	if _leaving:
 		_update_departure(delta)
 		return
-	# He waits on the pier: turns to greet whoever comes near, otherwise watches the island.
+	# Wren waits on the pier: turns to greet whoever comes near, otherwise watches the island.
 	var d := wren.position.distance_to(p.position)
 	if wren.position.distance_to(_pier) > 0.4:
-		_walk(delta, _pier, 2.2)   # back to his spot (after a talk, or if nudged)
+		_walk(delta, _pier, 2.2)   # back to the usual spot (after a talk, or if nudged)
 	else:
 		_speed = lerpf(_speed, 0.0, 1.0 - exp(-delta * 8.0))
 		var look := _face_land
@@ -310,30 +501,31 @@ func _update_wren(delta: float, p: Player) -> void:
 			look = atan2(to.x, to.z)
 		_model.rotation.y = lerp_angle(_model.rotation.y, look, 1.0 - exp(-delta * 4.0))
 	_model.animate(delta, _speed, true, false)
-	# First meeting starts on its own once you walk up to him.
+	# First meeting starts on its own once you walk up.
 	if not _greeted and not is_started() and d < 2.8 and not dialogue.is_open():
 		_greeted = true
 		_intro()
-	if d < TALK_RANGE and not dialogue.is_open() and is_started():
-		main.hud.set_prompt("F  Talk to Wren")
+	if d < TALK_RANGE and not dialogue.is_open():
+		main.hud.set_prompt("%s  Talk to Wren" % _fmt("{interact}"))
 
 
-## All lessons done: walk to the end of the pier, step into his boat and row out to sea.
+## All lessons done: walk to the end of the pier, step into the boat and row out to sea.
 func _update_departure(delta: float) -> void:
 	_depart_t += delta
+	var rowing := _boat != null and _boat.row_power > 0.0
+	if not rowing and wren.position.distance_to(_pier_end) > 0.6 and _depart_t < 12.0:
+		_walk(delta, _pier_end, 2.0)
+		_model.animate(delta, _speed, true, false)
+		return
+	var out := _out_to_sea()
 	if _boat == null:
-		if wren.position.distance_to(_pier_end) > 0.6 and _depart_t < 12.0:
-			_walk(delta, _pier_end, 2.0)
-			_model.animate(delta, _speed, true, false)
-			return
 		_boat = Boat.new()
 		_boat.name = "WrensBoat"
 		main.add_child(_boat)
-		var out := Vector3(-sin(_face_land), 0, -cos(_face_land))   # out to sea
-		var side := Vector3(out.z, 0, -out.x)
-		var bp := _pier_end + side * 1.6
-		bp.y = main.sky.water_level_m()
-		_boat.setup(-77, main.world, main.sky, bp, atan2(out.x, out.z))
+		_boat.setup(-77, main.world, main.sky, _mooring(), atan2(out.x, out.z))
+	if not rowing:
+		_boat.yaw = atan2(out.x, out.z)
+		_boat.row_power = 1.0
 		_depart_t = 0.0
 		if main.hud != null:
 			main.hud.show_toast("Wren casts off. Fair winds, Wren!")
@@ -342,7 +534,6 @@ func _update_departure(delta: float) -> void:
 	_boat.position += fw * spd * delta
 	_boat.position.y = _boat.water_y()
 	_boat.vel = Vector2(fw.x, fw.z) * spd
-	_boat.row_power = 1.0
 	_boat.row_phase += delta * 4.0
 	var st := _boat.seat_transform(0)
 	wren.position = st.origin
@@ -383,13 +574,13 @@ func _walk(delta: float, goal: Vector3, speed: float) -> void:
 	_stuck_t = 0.0 if moved > 0.0 else _stuck_t + delta
 	_model.rotation.y = lerp_angle(_model.rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-delta * 8.0))
 	if _stuck_t > 4.0:
-		# Truly blocked (something built on the pier?): step straight to where he's going.
+		# Truly blocked (something built on the pier?): step straight to the goal.
 		_stuck_t = 0.0
 		wren.position = goal
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if wren == null or dialogue.is_open() or not e.is_action_pressed("interact"):
+	if wren == null or _arriving or dialogue.is_open() or not e.is_action_pressed("interact"):
 		return
 	var p: Player = main.player
 	if p == null or not p.input_enabled or wren.position.distance_to(p.position) > TALK_RANGE:
@@ -401,8 +592,12 @@ func _unhandled_input(e: InputEvent) -> void:
 # ---------------------------------------------------------------- dialogue
 
 func _intro() -> void:
-	dialogue.say(NPC_NAME, "Ho there! You washed up with the tide, didn't you? Most folk do, on this coast. I'm Wren. I can show you how to get by here, if you like.", [
-		["Show me around", func() -> void: _offer(0)],
+	var opener := "Ho there! I saw your smoke from the water and thought: another one the tide brought in." if journal_done() \
+		else "Ho there! You washed up with the tide, didn't you? Most folk do, on this coast."
+	dialogue.say(NPC_NAME, opener + " I'm Wren. I walk these shores between villages. Take this chart, it fills in as you explore. And I can show you how to get by here, if you like.", [
+		["Show me around", func() -> void:
+			_give(GREETING_GIFTS)
+			_offer(0)],
 		["I know my way", _skip],
 	])
 
@@ -432,16 +627,20 @@ func talk() -> void:
 	for s in qd.steps:
 		if not s.is_completed and s.type != QuestDef.ObjectiveType.TALK_TO:
 			left.append("%s (%d/%d)" % [s.description, s.current_count, s.target_count])
-	dialogue.say(NPC_NAME, "%s\n\nStill to do: %s" % [MISSIONS[i].intro, ", ".join(left)])
+	dialogue.say(NPC_NAME, "%s\n\nStill to do: %s" % [_fmt(MISSIONS[i].intro), ", ".join(left)])
 
 
 func _offer(i: int) -> void:
-	_start(i)
+	if not _q().is_quest_active(MISSIONS[i].id):
+		_start(i)
 	var m: Dictionary = MISSIONS[i]
-	dialogue.say("%s  ·  %s" % [NPC_NAME, m.title], m.intro, [["Got it", dialogue.close]])
+	dialogue.say("%s  ·  %s" % [NPC_NAME, m.title], _fmt(m.intro), [["Got it", dialogue.close]])
 
 
 func _on_quest_completed(qd: QuestDef) -> void:
+	if qd.id == JOURNAL_ID:
+		_refresh_tracker()
+		return   # _process brings Wren in
 	var i := _mission_index(qd.id)
 	if i < 0:
 		return
@@ -460,27 +659,48 @@ func _on_quest_completed(qd: QuestDef) -> void:
 		if not _q().is_quest_active(MISSIONS[i + 1].id):
 			_start(i + 1)   # accepted either way; "Later" just closes the window
 	else:
+		start_story()
 		dialogue.say(NPC_NAME, m.done + reward, [["Farewell, Wren", func() -> void:
 			dialogue.close()
 			_leaving = true]])
 
 
-## Skip: mark everything done and teach the recipes the missions would have taught.
+## Skip: everything the lessons would have taught and handed over, then Wren leaves.
 func _skip() -> void:
 	dialogue.close()
+	_give(GREETING_GIFTS)
 	for m in MISSIONS:
 		main.player.recipes.learn_all(m.rewards.get("recipes", []), "quest")
+		if not _q().is_quest_completed(m.id) and not _q().is_quest_active(m.id):
+			_give(m.get("gifts", []))
 	var skip := QuestDef.new(SKIP_ID, "Tutorial skipped", NPC_NAME)
 	_q().completed_quests.append(skip.id)
 	for m in MISSIONS:
 		if _q().is_quest_active(m.id):
 			_q().active_quests.erase(m.id)
-	main.hud.show_toast("Tutorial skipped. Wren's recipes are in your book.")
+	start_story()
+	main.hud.show_toast("Tutorial skipped. Wren's tools are in your pack and the recipes in your book.")
 	_leaving = true
 	_refresh_tracker()
 
 
 # ---------------------------------------------------------------- tracker
+
+## Is a journal page or one of Wren's lessons on the go? (the tracker stays up for those)
+func _guided_active() -> bool:
+	return _q().is_quest_active(JOURNAL_ID) or current() >= 0
+
+
+func _hint_for(qd: QuestDef, step_idx: int) -> String:
+	if qd.id == JOURNAL_ID and step_idx < JOURNAL.steps.size():
+		return _fmt(JOURNAL.steps[step_idx][4])
+	var i := _mission_index(qd.id)
+	if i >= 0:
+		if qd.steps[step_idx].type == QuestDef.ObjectiveType.TALK_TO:
+			return "Wren is waiting on the pier"
+		return _fmt(MISSIONS[i].get("hint", ""))
+	return ""
+
 
 func _refresh_tracker() -> void:
 	if _tracker_root == null or main.quests == null:
@@ -489,6 +709,8 @@ func _refresh_tracker() -> void:
 		c.queue_free()
 	var shown := 0
 	var order: Array = []
+	if _q().active_quests.has(JOURNAL_ID):
+		order.append(_q().active_quests[JOURNAL_ID])
 	for m in MISSIONS:
 		if _q().active_quests.has(m.id):
 			order.append(_q().active_quests[m.id])
@@ -521,7 +743,8 @@ func _refresh_tracker() -> void:
 			l.add_theme_color_override("font_color", Color(1.0, 0.72, 0.45))
 			v.add_child(l)
 			continue
-		for s in qd.steps:
+		for si in qd.steps.size():
+			var s: QuestDef.QuestStep = qd.steps[si]
 			if s.is_completed:
 				continue
 			var l := Label.new()
@@ -529,40 +752,48 @@ func _refresh_tracker() -> void:
 			l.add_theme_font_size_override("font_size", 15)
 			l.text = "•  " + s.description + ("  (%d/%d)" % [s.current_count, s.target_count] if s.target_count > 1 else "")
 			v.add_child(l)
+			var hint := _hint_for(qd, si)
+			if hint != "":
+				var h := Label.new()
+				h.theme_type_variation = &"Small"
+				h.add_theme_font_size_override("font_size", 14)
+				h.add_theme_color_override("font_color", Color(0.86, 0.80, 0.66))
+				h.text = "    " + hint
+				v.add_child(h)
 			break   # show the next step only
 
 
-func fade_tracker_after_delay(delay: float = 10.0) -> void:
-	if _tracker_root == null or _hud_tracker_pinned:
+## Shows the tracker after a change. While a journal page or one of Wren's lessons is on the
+## go it stays up; other quests linger for `delay` seconds and then fade. If the player hid it
+## from the quest log it stays hidden until they show it again.
+func show_tracker(delay: float = 20.0) -> void:
+	if _tracker_root == null or _tracker_hidden:
 		return
 	if _tracker_tween != null and _tracker_tween.is_valid():
 		_tracker_tween.kill()
 	_tracker_root.visible = true
 	_tracker_root.modulate.a = 1.0
+	if _hud_tracker_pinned or _guided_active():
+		return
 	_tracker_tween = create_tween()
 	_tracker_tween.tween_interval(delay)
 	_tracker_tween.tween_property(_tracker_root, "modulate:a", 0.0, 1.5)
 	_tracker_tween.tween_callback(func() -> void:
-		if not _hud_tracker_pinned:
+		if not _hud_tracker_pinned and not _guided_active():
 			_tracker_root.visible = false
 	)
 
 
-func show_tracker(pinned: bool = false) -> void:
-	if _tracker_tween != null and _tracker_tween.is_valid():
-		_tracker_tween.kill()
-	_hud_tracker_pinned = pinned
-	if _tracker_root != null:
-		_tracker_root.visible = true
-		_tracker_root.modulate.a = 1.0
-	if not pinned:
-		fade_tracker_after_delay(8.0)
+## Old name, kept for existing callers.
+func fade_tracker_after_delay(delay: float = 20.0) -> void:
+	show_tracker(delay)
 
 
 func hide_tracker() -> void:
 	if _tracker_tween != null and _tracker_tween.is_valid():
 		_tracker_tween.kill()
 	_hud_tracker_pinned = false
+	_tracker_hidden = true
 	if _tracker_root != null:
 		_tracker_root.visible = false
 		_tracker_root.modulate.a = 0.0
@@ -572,7 +803,9 @@ func toggle_tracker() -> void:
 	if _tracker_root != null and _tracker_root.visible and _tracker_root.modulate.a > 0.05:
 		hide_tracker()
 	else:
-		show_tracker(true)
+		_tracker_hidden = false
+		_hud_tracker_pinned = true
+		show_tracker()
 
 
 func is_tracker_pinned() -> bool:
@@ -585,6 +818,11 @@ func is_tracker_pinned() -> bool:
 func _run_check() -> void:
 	await get_tree().create_timer(1.0).timeout
 	var p: Player = main.player
+	if wren == null and _check != "verify":
+		if _q().is_quest_active(JOURNAL_ID):
+			_q().active_quests.erase(JOURNAL_ID)
+			_q().completed_quests.append(JOURNAL_ID)
+		_spawn_wren(p, false)
 	if _check.begins_with("shots:"):
 		var dir := _check.trim_prefix("shots:")
 		DirAccess.make_dir_recursive_absolute(dir)
@@ -606,22 +844,23 @@ func _run_check() -> void:
 		get_tree().quit()
 		return
 	if _check == "verify":
-		print("[tutorial] reloaded: finished=%s wren=%s knows crab pot=%s smokehouse=%s brass=%d" % [
+		print("[tutorial] reloaded: finished=%s wren=%s knows crab pot=%s smokehouse=%s brass=%d story=%s" % [
 			is_finished(), wren != null, p.recipes.knows(&"place_crab_pot"), p.recipes.knows(&"place_smokehouse"),
-			p.inventory.get_item_count(&"brass_guilder")])
+			p.inventory.get_item_count(&"brass_guilder"), _q().is_quest_active(&"story_first_hearth")])
 		get_tree().quit()
 		return
 	print("[tutorial] wren spawned=%s started=%s at_pier=%s" % [wren != null, is_started(), wren != null and wren.position.distance_to(_pier) < 0.5])
+	_give(GREETING_GIFTS)   # as the "Show me around" button does
 	_offer(0)
 	dialogue.close()
 	var feed := [
-		func() -> void: main.quests.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, &"sand", 6, p.inventory),
-		func() -> void:
-			for k in 5: p.quest_event(QuestDef.ObjectiveType.PLACE_VOXELS, &""),
-		func() -> void: p.quest_event(QuestDef.ObjectiveType.CRAFT_ITEM, &"wood_plank"),
 		func() -> void: p.quest_event(QuestDef.ObjectiveType.PLACE_ENTITY, &"crab_pot"),
 		func() -> void: p.quest_event(QuestDef.ObjectiveType.CATCH_FISH, &"silver_mackerel"),
 		func() -> void: p.quest_event(QuestDef.ObjectiveType.EAT_FOOD, &"roasted_mackerel"),
+		func() -> void: main.quests.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, &"pine_wood", 2, p.inventory),
+		func() -> void:
+			for k in 3: p.quest_event(QuestDef.ObjectiveType.PLANT_CROP, &"shore_wheat"),
+		func() -> void: p.quest_event(QuestDef.ObjectiveType.DEFEAT_ENEMY, &"shore_crab"),
 		func() -> void: p.quest_event(QuestDef.ObjectiveType.BOARD_BOAT, &""),
 	]
 	for i in MISSIONS.size():
@@ -632,9 +871,12 @@ func _run_check() -> void:
 		dialogue.close()
 		print("[tutorial] %-22s objectives done=%s turned in=%s next=%d" % [
 			MISSIONS[i].title, ready, _q().is_quest_completed(MISSIONS[i].id), current()])
-	print("[tutorial] finished=%s knows crab pot=%s mackerel=%s smokehouse=%s brass=%d" % [
+	print("[tutorial] finished=%s knows crab pot=%s mackerel=%s smokehouse=%s brass=%d axe=%d hoe=%d cutlass=%d chart=%d story=%s" % [
 		is_finished(), p.recipes.knows(&"place_crab_pot"), p.recipes.knows(&"cook_roasted_mackerel"),
-		p.recipes.knows(&"place_smokehouse"), p.inventory.get_item_count(&"brass_guilder")])
+		p.recipes.knows(&"place_smokehouse"), p.inventory.get_item_count(&"brass_guilder"),
+		p.inventory.get_item_count(&"driftwood_axe"), p.inventory.get_item_count(&"driftwood_hoe"),
+		p.inventory.get_item_count(&"rusty_cutlass"), p.inventory.get_item_count(&"parchment_shore_chart"),
+		_q().is_quest_active(&"story_first_hearth")])
 	if _check == "save":
 		main.session.save_all()
 	if _check == "depart":

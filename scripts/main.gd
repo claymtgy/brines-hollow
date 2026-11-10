@@ -36,6 +36,7 @@ var village_mgr: VillageManager
 var trade: TradeManager
 var livestock_mgr: Node
 var npc_villages: NpcVillages
+var ambient_fish: AmbientFishManager = null
 var atlas := IslandAtlas.new()   # island names + which ones this player has found
 var _atlas_gen: Object = null
 var _atlas_t := 0.0
@@ -53,6 +54,7 @@ var _menu_launch := false   # true when the player starts from the main menu (no
 var _quitting := false
 var _args := {}
 var _assigned_spawn_idx: int = -1
+var _menu_cam_orbit := 0.0
 
 
 func _ready() -> void:
@@ -139,7 +141,11 @@ func _ready() -> void:
 		settings.view_distance = int(_args.radius)
 	settings.apply(self)
 	get_viewport().size_changed.connect(func() -> void:
-		get_viewport().scaling_3d_scale = settings.effective_render_scale(get_viewport()))
+		get_viewport().scaling_3d_scale = settings.effective_render_scale(get_viewport())
+		if DisplayServer.get_name() != "headless":
+			var f := settings.effective_ui_scale(get_viewport())
+			if not is_equal_approx(get_tree().root.content_scale_factor, f):
+				get_tree().root.content_scale_factor = f)
 	settings_menu = SettingsMenu.new()
 	settings_menu.name = "SettingsMenu"
 	add_child(settings_menu)
@@ -172,6 +178,10 @@ func _ready() -> void:
 	npc_villages = NpcVillages.new()
 	npc_villages.main = self
 	add_child(npc_villages)
+	# --- Storm Incursion defense manager
+	var storm_incursion := StormIncursionManager.new()
+	storm_incursion.name = "StormIncursion"
+	add_child(storm_incursion)
 
 	# --- Domestic livestock (pens, feed, yields, herding)
 	const LivestockManagerClass := preload("res://scripts/livestock/livestock_manager.gd")
@@ -328,8 +338,8 @@ func _begin_world() -> void:
 	quests = QuestManager.new()
 	village = SettlementManager.new(Vector3i(world.gen.spawn), "Brine's Hollow")
 
-	quests.accept_quest(&"story_first_hearth")
-	quests.accept_quest(&"story_tide_tackle")
+	# Act I (the story quests) is handed over by Wren once the lessons are done or skipped;
+	# see Tutorial.start_story().
 
 	player = Player.new()
 	player.world = world
@@ -353,17 +363,31 @@ func _begin_world() -> void:
 	elif _assigned_spawn_idx >= 0 and world.gen != null:
 		chosen_spawn = world.gen.get_spawn_by_index(_assigned_spawn_idx)
 	elif world.gen != null:
-		chosen_spawn = world.gen.get_random_spawn()
+		# Every castaway washes up on the homestead beach, beside the ruined hut, so a new
+		# player starts with a landmark and co-op crews start together.
+		chosen_spawn = world.gen.get_spawn_by_index(0)
 	else:
 		chosen_spawn = {"pos": Vector3.ZERO, "yaw": 0.0, "name": "Coast"}
+	var spawn_at := Vector3(chosen_spawn.pos)
+	if is_net and world.gen != null and not world.gen.starter.is_empty():
+		# Spread a crew along the beach a few steps apart instead of on top of each other.
+		var side: Vector2i = world.gen.starter.side
+		var slot := float(posmod(multiplayer.get_unique_id(), 5)) - 2.0
+		spawn_at += Vector3(side.x, 0, side.y) * slot * 8.0
 
-	player.position = _find_clear_spawn(Vector3i(chosen_spawn.pos)) * VS
+	player.position = _find_clear_spawn(Vector3i(spawn_at)) * VS
 	player.command_requested.connect(_on_command_requested)
 	rig.target = player
 	rig.yaw = chosen_spawn.yaw
+
+	if ambient_fish == null:
+		ambient_fish = AmbientFishManager.new()
+		ambient_fish.name = "AmbientFish"
+		add_child(ambient_fish)
+		ambient_fish.setup(world, sky, player)
 	hud.set_loading(false)
 	hud.show_hud(true)
-	hud.show_toast("Washed ashore: %s" % chosen_spawn.get("name", "Starter Island"))
+	hud.show_toast("You wash ashore beside a storm-battered hut." if chosen_spawn.get("id", 0) == 0 else "Washed ashore: %s" % chosen_spawn.get("name", "Starter Island"))
 	if _args.has("boatcheck"):
 		boats.run_check(_args.boatcheck)
 	elif _args.has("skiffcheck"):
@@ -441,8 +465,27 @@ func _tick_lighthouse() -> void:
 		print("[lighthouse] not built in this world (the site was already built on)")
 
 
+var _near_lighthouse := false
+
+func _tick_lighthouse_interaction() -> void:
+	_near_lighthouse = false
+	if _beam == null or player == null or not is_instance_valid(_beam):
+		return
+	var lp: Variant = world.gen.starter.get("lighthouse") if (world != null and world.gen != null) else null
+	if not (lp is Vector3i):
+		return
+	var lantern_m := (Vector3(lp as Vector3i) + Vector3(0.5, 0.5, 0.5)) * VS
+	var d_xz := Vector2(player.position.x - lantern_m.x, player.position.z - lantern_m.z).length()
+	var d_y := absf(player.position.y - lantern_m.y)
+	if d_xz <= 5.5 and d_y <= 16.0:
+		_near_lighthouse = true
+		if hud != null and player.hovered_entity == null:
+			hud.set_prompt("F  Refill Lighthouse Oil (Fuel: %.1fh remaining)" % _beam.fuel_hours_left())
+
+
 func _tick_atlas(delta: float) -> void:
 	_tick_lighthouse()
+	_tick_lighthouse_interaction()
 	if world == null or world.gen == null:
 		return
 	if _atlas_gen != world.gen:
@@ -473,7 +516,18 @@ func _tick_atlas(delta: float) -> void:
 # ---------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
+	_tick_pad_view()
 	if player == null:
+		# 3D Animated Cinematic Menu Backdrop: slow orbit over waves and island
+		if rig != null and rig.cam != null:
+			_menu_cam_orbit += delta * 0.04
+			var spawn_m: Vector3 = world.gen.spawn * VS if (world != null and world.gen != null) else Vector3(500, 9, 500)
+			var center := Vector3(spawn_m.x, 9.0, spawn_m.z)
+			var cam_pos := center + Vector3(cos(_menu_cam_orbit) * 22.0, 4.0 + sin(_menu_cam_orbit * 0.7) * 1.5, sin(_menu_cam_orbit) * 22.0)
+			rig.cam.global_position = cam_pos
+			rig.cam.look_at(center - Vector3(0, 1.0, 0))
+			if world != null:
+				world.focus_points = [center]
 		return
 	player.water_level = sky.water_level_m()
 	if farm != null:
@@ -509,24 +563,71 @@ func _peers_text() -> String:
 	return "%s  -  %d player%s" % ["Hosting co-op" if multiplayer.is_server() else "Co-op", n, "" if n == 1 else "s"]
 
 
+## Pad View / Select (or the DualSense touchpad): tap = inventory, hold = quest log.
+const PAD_HOLD_MS := 450
+var _pad_view_down_ms := -1
+var _pad_view_held := false
+
+
+func _toggle_quest_log() -> void:
+	if build_menu_ui != null and build_menu_ui.is_expanded():
+		build_menu_ui.close_catalogue()
+	if inventory_ui != null and inventory_ui.is_open():
+		inventory_ui.close()
+	if quest_log_ui != null:
+		quest_log_ui.toggle()
+
+
+func _toggle_inventory() -> void:
+	if build_menu_ui != null and build_menu_ui.is_expanded():
+		build_menu_ui.close_catalogue()
+	if quest_log_ui != null and quest_log_ui.is_open():
+		quest_log_ui.close()
+	inventory_ui.toggle()
+
+
+func _tick_pad_view() -> void:
+	if _pad_view_down_ms >= 0 and not _pad_view_held and Time.get_ticks_msec() - _pad_view_down_ms >= PAD_HOLD_MS:
+		_pad_view_held = true
+		if player != null and not settings_menu.is_open():
+			_toggle_quest_log()
+
+
 func _unhandled_input(e: InputEvent) -> void:
 	if controller != null:
 		controller.track_input_event(e)
+	if _near_lighthouse and e.is_action_pressed("interact") and player != null and player.hovered_entity == null:
+		var inv: Inventory = player.inventory
+		if inv != null and inv.has_item(&"fish_oil", 1):
+			inv.remove_item(&"fish_oil", 1)
+			_beam.add_fuel(720.0)
+			hud.show_toast("Refilled lighthouse with fish oil! Lantern burns bright (+24h).")
+			CombatAudio.play_sound("pickup", _beam.global_position)
+		elif inv != null:
+			hud.show_toast("Requires Refined Fish Oil to refuel the lighthouse lantern!")
+		get_viewport().set_input_as_handled()
+		return
+	if e is InputEventJoypadButton and (e.button_index == JOY_BUTTON_BACK or e.button_index == JOY_BUTTON_TOUCHPAD):
+		if e.pressed:
+			_pad_view_down_ms = Time.get_ticks_msec()
+			_pad_view_held = false
+		else:
+			if _pad_view_down_ms >= 0 and not _pad_view_held and player != null and not settings_menu.is_open():
+				if quest_log_ui != null and quest_log_ui.is_open():
+					quest_log_ui.close()   # a tap closes whatever page is open
+				elif build_menu_ui != null and build_menu_ui.is_expanded():
+					build_menu_ui.close_catalogue()
+				else:
+					_toggle_inventory()
+			_pad_view_down_ms = -1
+		get_viewport().set_input_as_handled()
+		return
 	if e.is_action_pressed("quest_log_toggle") and player != null and not settings_menu.is_open():
-		if build_menu_ui != null and build_menu_ui.is_expanded():
-			build_menu_ui.close_catalogue()
-		if inventory_ui != null and inventory_ui.is_open():
-			inventory_ui.close()
-		if quest_log_ui != null:
-			quest_log_ui.toggle()
+		_toggle_quest_log()
 		get_viewport().set_input_as_handled()
 		return
 	if e.is_action_pressed("inventory_toggle") and player != null and not settings_menu.is_open():
-		if build_menu_ui != null and build_menu_ui.is_expanded():
-			build_menu_ui.close_catalogue()
-		if quest_log_ui != null and quest_log_ui.is_open():
-			quest_log_ui.close()
-		inventory_ui.toggle()
+		_toggle_inventory()
 		get_viewport().set_input_as_handled()
 		return
 	if e.is_action_pressed("menu_toggle"):
@@ -539,14 +640,38 @@ func _unhandled_input(e: InputEvent) -> void:
 		if build_menu_ui != null and build_menu_ui.is_expanded():
 			build_menu_ui.close_catalogue()
 			return
+		if trade != null and trade.ui != null and trade.ui.is_open():
+			trade.ui.close()
+			return
+		if npc_villages != null and npc_villages.dialogue != null and npc_villages.dialogue.is_open():
+			npc_villages.dialogue.close()
+			return
+		if tutorial != null and tutorial.dialogue != null and tutorial.dialogue.is_open():
+			tutorial.dialogue.close()
+			return
 		settings_menu.toggle()
 	elif e is InputEventMouseButton and e.pressed and player != null and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED \
-			and not settings_menu.is_open() \
-			and (quest_log_ui == null or not quest_log_ui.is_open()) \
-			and (inventory_ui == null or not inventory_ui.is_open()) \
-			and (build_menu_ui == null or not build_menu_ui.is_expanded()):
+			and not is_any_menu_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
+
+
+func is_any_menu_open() -> bool:
+	if settings_menu != null and settings_menu.is_open():
+		return true
+	if quest_log_ui != null and quest_log_ui.is_open():
+		return true
+	if inventory_ui != null and inventory_ui.is_open():
+		return true
+	if build_menu_ui != null and build_menu_ui.is_expanded():
+		return true
+	if trade != null and trade.ui != null and trade.ui.is_open():
+		return true
+	if npc_villages != null and npc_villages.dialogue != null and npc_villages.dialogue.is_open():
+		return true
+	if tutorial != null and tutorial.dialogue != null and tutorial.dialogue.is_open():
+		return true
+	return false
 
 
 func _on_dug(pos: Vector3, mat: int, count: int) -> void:
@@ -633,6 +758,11 @@ func spawn_item_drop(drop_pos: Vector3, item_id: StringName, drop_count: int) ->
 
 func _on_tree_felled(base_pos: Vector3, height_m: float, canopy_radius_m: float, is_pine: bool, trunk_voxels: int) -> void:
 	var is_mine := _cmd_is_mine
+	# Better hatchets split more of the trunk into usable logs (read now: the tree lands later).
+	var axe_tier := 1
+	var held: ItemDef = player.get_active_item_def() if is_mine and player != null else null
+	if held != null and held.has_tag("axe"):
+		axe_tier = int(held.tool_data.get("tier", 1))
 	var fall_dir := Vector3(1.0, 0.0, 0.0)
 	if player != null:
 		var away := Vector3(base_pos.x - player.global_position.x, 0.0, base_pos.z - player.global_position.z)
@@ -645,41 +775,52 @@ func _on_tree_felled(base_pos: Vector3, height_m: float, canopy_radius_m: float,
 	pivot.global_position = base_pos
 	pivot.rotation.y = atan2(-fall_dir.x, -fall_dir.z)
 
-	var trunk_w := 3.0 * VS
-	var trunk_h := maxf(1.8, height_m * 0.72)
-	var trunk_mi := MeshInstance3D.new()
-	var trunk_bm := BoxMesh.new()
-	trunk_bm.size = Vector3(trunk_w, trunk_h, trunk_w)
-	var trunk_mat := StandardMaterial3D.new()
-	trunk_mat.albedo_color = Palette.COLORS[Palette.TRUNK]
-	trunk_mat.roughness = 0.9
-	trunk_bm.material = trunk_mat
-	trunk_mi.mesh = trunk_bm
-	trunk_mi.position = Vector3(0.0, trunk_h * 0.5, 0.0)
-	pivot.add_child(trunk_mi)
-
 	var leaf_mat := StandardMaterial3D.new()
 	leaf_mat.albedo_color = Palette.COLORS[Palette.LEAVES_DARK if is_pine else Palette.LEAVES]
 	leaf_mat.roughness = 0.88
-	if is_pine:
-		for tier in 3:
-			var tier_r := canopy_radius_m * (1.0 - float(tier) * 0.24)
-			var tier_h := height_m * 0.24
-			var tier_mi := MeshInstance3D.new()
-			var tier_bm := BoxMesh.new()
-			tier_bm.size = Vector3(tier_r * 1.65, tier_h, tier_r * 1.65)
-			tier_bm.material = leaf_mat
-			tier_mi.mesh = tier_bm
-			tier_mi.position = Vector3(0.0, trunk_h * 0.45 + float(tier) * (tier_h * 0.82), 0.0)
-			pivot.add_child(tier_mi)
+
+	var has_custom_grid := (world != null and world.last_felled_grid != null)
+	if has_custom_grid:
+		var g: Prefabs.Grid = world.last_felled_grid
+		world.last_felled_grid = null
+		var tree_mesh: ArrayMesh = Mesher.mesh_from_grid(g.data, g.sx, g.sy, g.sz, VS, world.terrain_mat, world.glow_mat)
+		var t_mi := MeshInstance3D.new()
+		t_mi.mesh = tree_mesh
+		t_mi.position = world.last_felled_grid_offset * VS
+		pivot.add_child(t_mi)
 	else:
-		var crown_mi := MeshInstance3D.new()
-		var crown_bm := BoxMesh.new()
-		crown_bm.size = Vector3(canopy_radius_m * 1.85, canopy_radius_m * 1.35, canopy_radius_m * 1.85)
-		crown_bm.material = leaf_mat
-		crown_mi.mesh = crown_bm
-		crown_mi.position = Vector3(0.0, trunk_h + canopy_radius_m * 0.35, 0.0)
-		pivot.add_child(crown_mi)
+		var trunk_w := 3.0 * VS
+		var trunk_h := maxf(1.8, height_m * 0.72)
+		var trunk_mi := MeshInstance3D.new()
+		var trunk_bm := BoxMesh.new()
+		trunk_bm.size = Vector3(trunk_w, trunk_h, trunk_w)
+		var trunk_mat := StandardMaterial3D.new()
+		trunk_mat.albedo_color = Palette.COLORS[Palette.TRUNK]
+		trunk_mat.roughness = 0.9
+		trunk_bm.material = trunk_mat
+		trunk_mi.mesh = trunk_bm
+		trunk_mi.position = Vector3(0.0, trunk_h * 0.5, 0.0)
+		pivot.add_child(trunk_mi)
+
+		if is_pine:
+			for tier in 3:
+				var tier_r := canopy_radius_m * (1.0 - float(tier) * 0.24)
+				var tier_h := height_m * 0.24
+				var tier_mi := MeshInstance3D.new()
+				var tier_bm := BoxMesh.new()
+				tier_bm.size = Vector3(tier_r * 1.65, tier_h, tier_r * 1.65)
+				tier_bm.material = leaf_mat
+				tier_mi.mesh = tier_bm
+				tier_mi.position = Vector3(0.0, trunk_h * 0.45 + float(tier) * (tier_h * 0.82), 0.0)
+				pivot.add_child(tier_mi)
+		else:
+			var crown_mi := MeshInstance3D.new()
+			var crown_bm := BoxMesh.new()
+			crown_bm.size = Vector3(canopy_radius_m * 1.85, canopy_radius_m * 1.35, canopy_radius_m * 1.85)
+			crown_bm.material = leaf_mat
+			crown_mi.mesh = crown_bm
+			crown_mi.position = Vector3(0.0, trunk_h + canopy_radius_m * 0.35, 0.0)
+			pivot.add_child(crown_mi)
 
 	var tw := create_tween()
 	tw.tween_property(pivot, "rotation:x", -1.48, 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -711,7 +852,7 @@ func _on_tree_felled(base_pos: Vector3, height_m: float, canopy_radius_m: float,
 
 		# Drop logs spaced along the fallen trunk
 		if is_mine and player != null:
-			var log_total := clampi(trunk_voxels / 14, 2, 6)
+			var log_total := clampi(trunk_voxels / 14, 2, 6) + (axe_tier - 1)
 			for i in log_total:
 				var d := 0.8 + float(i) * ((height_m * 0.75) / float(maxi(1, log_total)))
 				var log_pos := base_pos + fall_dir * d + Vector3(0.0, 0.45, 0.0)
@@ -739,6 +880,7 @@ func _valid(cmd: Dictionary) -> bool:
 		return false
 	match cmd.t:
 		"dig": return cmd.get("r", 0) is int and cmd.r >= 0 and cmd.r <= 5
+		"flatten": return cmd.get("r", 0) is int and cmd.r >= 0 and cmd.r <= 8
 		"place": return cmd.get("r", 0) is int and cmd.r >= 0 and cmd.r <= 5 and Palette.BUILDABLE.has(cmd.get("m", -1))
 		"prefab": return cmd.get("id", -1) is int and cmd.id >= 0 and cmd.id < Prefabs.count() and cmd.get("r", 0) is int
 		"grow_tree": return true
@@ -806,12 +948,11 @@ func _on_peer_connected(id: int) -> void:
 	add_child(rp)
 	remotes[id] = rp
 	if multiplayer.is_server():
-		# Distribute joining peers to separate coastal sectors around the starter island
-		var spawn_idx := posmod(id * 3 + 1, world.gen.starter_spawns.size()) if world.gen != null and not world.gen.starter_spawns.is_empty() else 0
+		# New crew wash up together on the homestead beach (spread out in _begin_world).
+		var spawn_idx := 0
 		welcome.rpc_id(id, seed_value, [], sky.time_of_day, spawn_idx, VoxelWorld.layout)
-		var sp_name: String = world.gen.get_spawn_by_index(spawn_idx).get("name", "distant shore") if world.gen != null else "shore"
 		if hud != null and player != null:
-			hud.show_toast("A friend washed ashore at %s (player %d)" % [sp_name, id])
+			hud.show_toast("A friend has washed ashore by the old hut.")
 
 
 func _on_peer_disconnected(id: int) -> void:

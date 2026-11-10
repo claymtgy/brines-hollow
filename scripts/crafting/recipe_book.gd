@@ -69,7 +69,24 @@ const MERCHANT_SCROLLS := [&"cook_bouillabaisse", &"brew_chicory_coffee", &"cook
 
 const SCROLL_PREFIX := "recipe_scroll_"
 
+## Starter materials: what a castaway can find on the home beach with the starting tools.
+## A recipe that needs nothing else is known from the start. Any other recipe that isn't in a
+## table above is learned the first time its rarest ingredient (see KEY_RANK) is in your hands,
+## so the book grows as you explore instead of opening on a wall of iron and brass.
+const BASIC_MATERIALS := [&"driftwood", &"wood_plank", &"stone", &"sand", &"dirt", &"leaves", &"kelp_frond"]
+
+## Rarity order for picking a recipe's key ingredient (later = rarer). Unlisted items count as rarest.
+const KEY_RANK := [&"pine_wood", &"pine_sapling", &"silver_mackerel", &"samphire", &"sea_egg", &"copper_ore",
+	&"sea_iron_ore", &"cobblestone", &"dark_wood", &"sea_glass", &"sea_salt", &"brackish_rye", &"marsh_honey",
+	&"beeswax", &"salt_milk", &"sea_wool", &"sea_brass_ingot", &"iron_ingot", &"borean_fur", &"glacial_tusk",
+	&"caldera_basalt_plate", &"ancient_weapon_fragment"]
+
+## Profile format version (1 = plain Array, where every untabled recipe was known by default).
+const SAVE_VERSION := 2
+
 static var _locked: Dictionary = {}
+static var _auto: Dictionary = {}       # key item -> [recipe ids] (computed)
+static var _auto_ids: Dictionary = {}   # recipe id -> key item
 
 var known := {}            # recipe id -> true (locked recipes the player has learned)
 
@@ -89,7 +106,55 @@ static func locked_ids() -> Dictionary:
 		for list in SECRET.values():
 			for r in list:
 				_locked[r] = true
+		_build_auto()
 	return _locked
+
+
+## Locks every remaining recipe that needs more than starter materials, keyed on its rarest input.
+static func _build_auto() -> void:
+	_auto.clear()
+	_auto_ids.clear()
+	Placeables.register_builtin()
+	RecipeDB.init_db()
+	for r: RecipeDef in RecipeDB.get_all_recipes():
+		if _locked.has(r.id):
+			continue
+		var key := _key_ingredient(r)
+		if key == &"":
+			continue
+		_locked[r.id] = true
+		_auto_ids[r.id] = key
+		if not _auto.has(key):
+			_auto[key] = []
+		(_auto[key] as Array).append(r.id)
+
+
+static func _key_ingredient(r: RecipeDef) -> StringName:
+	var key := &""
+	var best := -1
+	for inp: Dictionary in r.inputs:
+		var id := StringName(inp.get("item_id", &""))
+		if id == &"" or BASIC_MATERIALS.has(id):
+			continue
+		var rank := KEY_RANK.find(id)
+		if rank < 0:
+			rank = KEY_RANK.size()
+		if rank > best:
+			best = rank
+			key = id
+	return key
+
+
+## The item whose first pickup teaches this recipe automatically, or &"" if none.
+static func auto_key(recipe_id: StringName) -> StringName:
+	locked_ids()
+	return _auto_ids.get(recipe_id, &"")
+
+
+## Recipes learned automatically by first holding `item_id` (beyond the DISCOVERY table).
+static func auto_unlocks(item_id: StringName) -> Array:
+	locked_ids()
+	return _auto.get(item_id, [])
 
 
 static func scroll_item(recipe_id: StringName) -> StringName:
@@ -135,6 +200,9 @@ func on_item_acquired(item_id: StringName, inv: Inventory = null) -> Array:
 	var out: Array = []
 	if DISCOVERY.has(item_id):
 		out.append_array(learn_all(DISCOVERY[item_id], "discovery"))
+	var auto := auto_unlocks(item_id)
+	if not auto.is_empty():
+		out.append_array(learn_all(auto, "discovery"))
 	if SECRET.has(item_id):
 		out.append_array(learn_all(SECRET[item_id], "secret"))
 	return out
@@ -175,6 +243,10 @@ static func source_of(recipe_id: StringName) -> String:
 		if DISCOVERY[k].has(recipe_id):
 			var it: ItemDef = ItemDB.get_item(k)
 			return "Discover: get your hands on %s" % (it.name if it != null else String(k))
+	locked_ids()
+	if _auto_ids.has(recipe_id):
+		var it: ItemDef = ItemDB.get_item(_auto_ids[recipe_id])
+		return "Discover: get your hands on %s" % (it.name if it != null else String(_auto_ids[recipe_id]))
 	for prof: int in PROFESSION:
 		if PROFESSION[prof].has(recipe_id):
 			return "Taught by a drifter"
@@ -222,15 +294,34 @@ static func register_scroll_items() -> void:
 		ItemDB.register_item(def)
 
 
-func serialize() -> Array:
+func serialize() -> Dictionary:
 	var out := []
 	for r in known:
 		out.append(String(r))
-	return out
+	return {"v": SAVE_VERSION, "known": out}
 
 
 func deserialize(data: Variant) -> void:
 	known.clear()
-	if data is Array:
-		for r in data:
-			known[StringName(r)] = true
+	var list: Array = []
+	if data is Dictionary:
+		list = data.get("known", [])
+	elif data is Array:
+		list = data
+		# Version 1 profile: these recipes were known by default back then; keep them known.
+		locked_ids()
+		for rid: StringName in _auto_ids:
+			known[rid] = true
+	for r in list:
+		known[StringName(r)] = true
+
+
+## Learns any automatic unlocks for items already in `inv` (e.g. a loaded or gifted pack).
+func scan_inventory(inv: Inventory) -> Array:
+	var out: Array = []
+	if inv == null:
+		return out
+	for slot: ItemSlot in inv.slots:
+		if slot != null and not slot.is_empty():
+			out.append_array(learn_all(auto_unlocks(slot.item_id), "discovery"))
+	return out

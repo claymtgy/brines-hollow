@@ -392,6 +392,7 @@ func apply_profile(d: Dictionary) -> void:
 			p.customizer.deserialize(d.cust)
 	if d.has("recipes"):
 		p.recipes.deserialize(d.recipes)
+		p.recipes.scan_inventory(p.inventory)
 	if d.has("quests") and main.quests != null:
 		main.quests.deserialize(d.quests)
 	if d.has("isles") and main.get("atlas") != null:

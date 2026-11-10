@@ -26,7 +26,7 @@ func _build_visuals() -> void:
 
 func get_interaction_prompt(player: Player) -> String:
 	var night: bool = player.sky != null and not player.sky.is_day()
-	return "F  Sleep until morning in Fisher's Bunk (restore vitality, set wake-up point)" if night else "F  Sleep / Rest in Fisher's Bunk (sleep to morning, restore vitality)"
+	return "F  Sleep until Dawn · Fisher's Bunk · Restores Vitality" if night else "F  Rest in Fisher's Bunk · Restores Vitality"
 
 
 func client_interact(player: Player) -> void:

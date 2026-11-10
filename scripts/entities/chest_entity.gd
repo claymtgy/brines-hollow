@@ -195,7 +195,7 @@ func get_interaction_prompt(player: Player) -> String:
 	if active != null and not active.is_empty() and container.can_accept_item(active.item_id):
 		dep = "    Shift+F  Store %s" % _item_name(active.item_id)
 	var verb := "Open" if player.inventory_ui != null else "Take from"
-	return "F  %s %s (%d stored)%s" % [verb, entity_name, _stored_count(), dep]
+	return "F  %s %s · %d Stored%s" % [verb, entity_name, _stored_count(), dep]
 
 
 static func _item_name(id: StringName) -> String:

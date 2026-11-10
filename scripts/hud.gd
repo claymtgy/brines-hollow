@@ -71,6 +71,10 @@ var stomach_label: Label
 var rested_label: Label
 
 var _toast_t := 0.0
+var _toast_queue: Array = []   # [[text, seconds], ...] waiting their turn
+var _toast_shown := ""
+var top_left: Control          # the clock plaque column (the quest tracker hangs under it)
+var crew_row: HBoxContainer
 var banner: VBoxContainer
 var banner_title: Label
 var banner_sub: Label
@@ -222,7 +226,11 @@ func _build_menu() -> void:
 	save_select.item_selected.connect(_on_save_selected)
 	world_card.add_child(save_select)
 	delete_world_btn = Button.new()
-	delete_world_btn.text = "Delete World"
+	delete_world_btn.text = "Delete world"
+	delete_world_btn.flat = true   # a small, quiet link: not as loud as Play
+	delete_world_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	delete_world_btn.add_theme_font_size_override("font_size", 14)
+	delete_world_btn.add_theme_color_override("font_color", Color(0.55, 0.36, 0.30))
 	delete_world_btn.tooltip_text = "Moves the selected world's save to the recycle bin."
 	delete_world_btn.pressed.connect(_on_delete_world_pressed)
 	world_card.add_child(delete_world_btn)
@@ -249,7 +257,7 @@ func _build_menu() -> void:
 	)
 	seed_row.add_child(rand_seed_btn)
 
-	save_info_label = _label("", &"InkLabel", 13)
+	save_info_label = _label("", &"InkLabel", 14)
 	save_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	world_card.add_child(save_info_label)
 
@@ -330,6 +338,10 @@ func _build_menu() -> void:
 	skin_preset_select = OptionButton.new()
 	for p_item: Array in [
 		["Default Mariner", "default"],
+		["Coastal Forager (F)", "coastal_forager"],
+		["Tide Diver (F)", "tide_diver"],
+		["Lighthouse Daughter (F)", "lighthouse_keeper_daughter"],
+		["Reef Navigator (F)", "reef_navigator"],
 		["North Sea Veteran", "north_sea_veteran"],
 		["Young Deckhand", "young_deckhand"],
 		["Brine Hermit", "brine_hermit"],
@@ -385,7 +397,7 @@ func _build_menu() -> void:
 
 func _add_skin_cycle_row(parent: Control, key: StringName, title_txt: String, on_step: Callable) -> void:
 	var r := _row(parent, 4)
-	var lbl := _label(title_txt + ":", &"InkLabel", 13)
+	var lbl := _label(title_txt + ":", &"InkLabel", 14)
 	lbl.custom_minimum_size = Vector2(46, 0)
 	r.add_child(lbl)
 	var prev_b := Button.new()
@@ -393,7 +405,7 @@ func _add_skin_cycle_row(parent: Control, key: StringName, title_txt: String, on
 	prev_b.custom_minimum_size = Vector2(28, 26)
 	prev_b.pressed.connect(func() -> void: on_step.call(-1))
 	r.add_child(prev_b)
-	var val_lbl := _label("", &"InkLabel", 13)
+	var val_lbl := _label("", &"InkLabel", 14)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	val_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.add_child(val_lbl)
@@ -461,7 +473,7 @@ func _on_save_selected(idx: int) -> void:
 		seed_edit.text = str(int(w.get("seed", 1106)))
 		seed_edit.editable = false
 		var saved_at := String(w.get("saved_at", ""))
-		save_info_label.text = ("Existing save  ·  Last played: %s" % saved_at) if saved_at != "" else "Existing saved world"
+		save_info_label.text = ("Last played %s" % _friendly_date(saved_at)) if saved_at != "" else "Existing saved world"
 	else:
 		var next_num := _saved_worlds.size() + 1
 		world_name_edit.text = "island_%d" % next_num if next_num > 1 else "hollow"
@@ -472,6 +484,27 @@ func _on_save_selected(idx: int) -> void:
 
 
 ## Two-step delete: the first press arms the button, the second deletes.
+## "2026-11-09T16:36:12" -> "today, 16:36" / "yesterday, 09:05" / "3 Nov, 16:36".
+static func _friendly_date(iso: String) -> String:
+	var t := Time.get_unix_time_from_datetime_string(iso)
+	if t <= 0:
+		return iso
+	var d := Time.get_datetime_dict_from_unix_time(t)
+	var hm := "%02d:%02d" % [int(d.hour), int(d.minute)]
+	var now := Time.get_datetime_dict_from_system()
+	var day := Time.get_unix_time_from_datetime_dict({"year": d.year, "month": d.month, "day": d.day})
+	var today := Time.get_unix_time_from_datetime_dict({"year": now.year, "month": now.month, "day": now.day})
+	if day == today:
+		return "today, " + hm
+	if today - day == 86400:
+		return "yesterday, " + hm
+	const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	var out := "%d %s" % [int(d.day), MONTHS[clampi(int(d.month) - 1, 0, 11)]]
+	if int(d.year) != int(now.year):
+		out += " %d" % int(d.year)
+	return out + ", " + hm
+
+
 func _on_delete_world_pressed() -> void:
 	var idx := save_select.selected if save_select != null else -1
 	if idx < 0 or idx >= _saved_worlds.size():
@@ -490,7 +523,7 @@ func _on_delete_world_pressed() -> void:
 func _disarm_delete() -> void:
 	_delete_armed = false
 	if delete_world_btn != null:
-		delete_world_btn.text = "Delete World"
+		delete_world_btn.text = "Delete world"
 
 
 func apply_menu_selections_to_main(main_node: Node) -> void:
@@ -559,6 +592,7 @@ func _build_hud() -> void:
 	tl.position = Vector2(14, 12)
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(tl)
+	top_left = tl
 	var clock := _panel(tl)
 	var r1 := _row(clock)
 	phase_icon = UiTheme.icon(ItemIcons.hud_icon("sun"), 36)
@@ -589,6 +623,7 @@ func _build_hud() -> void:
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(tr)
 	var crew := _row(tr, 6)
+	crew_row = crew
 	crew.alignment = BoxContainer.ALIGNMENT_END
 	crew.add_child(UiTheme.icon(ItemIcons.hud_icon("crew"), 26))
 	peers_label = _label("Solo", &"Small", 16)
@@ -748,12 +783,16 @@ func _build_hud() -> void:
 		slot_keys.append(key)
 
 	# --- help sheet (F1), rebuilt when the input device changes
+	# Right edge, mid-height: clear of the clock, quest tracker, banner and hotbar.
 	help = PanelContainer.new()
 	help.theme_type_variation = &"Parchment"
+	help.anchor_left = 1.0
+	help.anchor_right = 1.0
 	help.anchor_top = 0.5
 	help.anchor_bottom = 0.5
-	help.offset_left = 14
-	help.offset_top = -150
+	help.offset_right = -14
+	help.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	help.grow_vertical = Control.GROW_DIRECTION_BOTH
 	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(help)
 
@@ -769,28 +808,25 @@ func _rebuild_help() -> void:
 		c.queue_free()
 	var v := VBoxContainer.new()
 	help.add_child(v)
-	var head := _label("Controls   (F1 hides)", &"InkLabel", 20)
+	var head := _label("Controls   (F1)" if not _pad() else "Controls", &"InkLabel", 18)
 	head.add_theme_font_override("font", UiTheme.font(800))
 	v.add_child(head)
 	var g := GridContainer.new()
-	g.columns = 4 if get_viewport().get_visible_rect().size.x >= 1200 else 2
+	g.columns = 2
 	g.add_theme_constant_override("h_separation", 10)
-	g.add_theme_constant_override("v_separation", 6)
+	g.add_theme_constant_override("v_separation", 5)
 	v.add_child(g)
+	# The essentials only; each tool's own keys show on the tool line above the hotbar.
 	var rows: Array
 	if _pad():
 		rows = [["L Stick", "move"], ["R Stick", "look"], [_glyph(&"jump", "Space"), "jump / swim up"],
-			[_glyph(&"use", "LMB"), "use tool / swing"], [_glyph(&"alt_use", "RMB"), "build menu / eat / parry"],
-			[_glyph(&"interact", "F"), "interact (hold: pick up)"], ["LB / RB", "hotbar slot"],
-			[_glyph(&"inventory_toggle", "I"), "inventory"], ["D-Pad", "cycle item / brush"],
-			[_glyph(&"rotate", "R"), "rotate"], ["J", "quest log"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
+			[_glyph(&"use", "LMB"), "use tool"], [_glyph(&"interact", "F"), "interact (hold: pick up)"],
+			["LB / RB", "hotbar slot"], [_glyph(&"inventory_toggle", "I"), "pack & crafting"],
+			[_glyph(&"quest_log_toggle", "J"), "journal & quests"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
 	else:
 		rows = [["WASD", "move"], ["Mouse", "look"], ["Space", "jump / swim up"], ["Shift", "sprint"],
-			["LMB", "use tool / swing"], ["RMB", "build menu / eat / parry"], ["F", "interact (hold: pick up)"],
-			["1-8", "hotbar slots"], ["I / Tab", "inventory"], ["J", "quest log"], ["B", "build menu (hammer)"],
-			["Q / E", "cycle item"], ["Z / X", "brush size"], ["R / G", "rotate / snap"],
-			["C", "dodge"], ["Ctrl", "sneak"], ["V", "swap shoulder"], ["T", "fast-forward time"],
-			["F3", "stats"], ["Esc", "menu"]]
+			["LMB", "use tool"], ["F", "interact (hold: pick up)"], ["1-8", "hotbar slots"],
+			["I / Tab", "pack & crafting"], ["J", "journal & quests"], ["Esc", "menu"]]
 	for r: Array in rows:
 		g.add_child(UiTheme.keycap(r[0]))
 		g.add_child(_label(r[1], &"InkLabel", 14))
@@ -838,9 +874,45 @@ func show_banner(title: String, subtitle := "") -> void:
 	_banner_t = 4.5
 
 
-func show_toast(text: String) -> void:
+## Short messages, top centre. They queue instead of overwriting each other, so a story
+## line isn't lost under the next pickup; `priority` jumps the queue (and cuts short
+## whatever ordinary message is showing). Repeats of what's showing or waiting are dropped.
+func show_toast(text: String, seconds := 3.2, priority := false) -> void:
+	if text == "":
+		return
+	if _toast_t > 0.0 and text == _toast_shown:
+		_toast_t = maxf(_toast_t, seconds)
+		return
+	for q: Array in _toast_queue:
+		if q[0] == text:
+			return
+	if _toast_t <= 0.0:
+		_show_toast_now(text, seconds)
+	elif priority:
+		_toast_queue.push_front([text, seconds])
+		_toast_t = minf(_toast_t, 0.35)
+	else:
+		_toast_queue.append([text, seconds])
+		if _toast_queue.size() > 4:
+			_toast_queue.pop_front()
+
+
+func _show_toast_now(text: String, seconds: float) -> void:
+	_toast_shown = text
 	toast_label.text = text
-	_toast_t = 3.2
+	_toast_t = seconds
+
+
+func _tick_toasts(dt: float) -> void:
+	# With a backlog, each message still gets at least ~1.6 s.
+	if _toast_queue.size() >= 2 and _toast_t > 1.6:
+		_toast_t = 1.6
+	_toast_t -= dt
+	if _toast_t <= 0.0 and not _toast_queue.is_empty():
+		var nxt: Array = _toast_queue.pop_front()
+		_show_toast_now(nxt[0], nxt[1])
+	toast.modulate.a = clampf(_toast_t * 2.5, 0.0, 1.0)
+	toast.visible = _toast_t > 0.0
 
 
 func show_menu(on: bool, status := "") -> void:
@@ -897,16 +969,23 @@ func _set_icon(r: TextureRect, key: String) -> void:
 
 
 func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelWorld, cam_under: bool) -> void:
-	_toast_t -= get_process_delta_time()
-	toast.modulate.a = clampf(_toast_t * 1.5, 0.0, 1.0)
-	toast.visible = _toast_t > 0.0
+	_tick_toasts(get_process_delta_time())
 	if banner != null:
 		_banner_t -= get_process_delta_time()
 		banner.visible = _banner_t > 0.0
 		banner.modulate.a = clampf(minf(_banner_t * 1.2, (4.5 - _banner_t) * 3.0), 0.0, 1.0)
-	bottom_bar.visible = not player.is_seated()
+	var main_node := get_parent()
+	var tut: Variant = main_node.get("tutorial") if main_node != null else null
+	var talking: bool = tut != null and tut.dialogue != null and tut.dialogue.is_open()
+	bottom_bar.visible = not player.is_seated() and not talking
+	if talking and help.visible:
+		help.visible = false   # the conversation needs the screen; F1 brings the sheet back
 	underwater.visible = cam_under
 	_rebuild_help()
+	if tut != null and top_left != null:
+		tut.set_tracker_position(Vector2(14, top_left.position.y + top_left.size.y + 8))
+	if crew_row != null:
+		crew_row.visible = peers_text != "Solo"
 
 	# --- chronometer
 	var t := sky.time_of_day
@@ -949,7 +1028,7 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 		breath_bar.value = vit.current_breath
 		var meals: Array = vit.get_active_meals()
 		if meals.is_empty():
-			stomach_label.text = "Hungry"
+			stomach_label.text = "No meal yet"
 		else:
 			var parts := []
 			for m in meals:
@@ -1049,6 +1128,9 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	info_label.text = text
 	info_icon.texture = icon
 	info_icon.visible = (icon != null)
+	# One tool line: with the hammer, the build banner says it all.
+	var bm: Variant = main_node.get("build_menu_ui") if main_node != null else null
+	(info_label.get_parent().get_parent() as Control).visible = text != "" and not (bm != null and bm.is_banner_visible())
 
 	if fps_label.visible:
 		var p := player.position / VoxelWorld.VS

@@ -22,8 +22,8 @@ func _init_storyline_catalogue() -> void:
 	# Storyline Act I: Reclaiming the Shallows
 	var q1 := QuestDef.new(&"story_first_hearth", "The First Hearth", "Elder Brenda")
 	q1.storyline_act = 1
-	q1.add_step("Collect 10 Driftwood from coastal flats", QuestDef.ObjectiveType.GATHER_ITEM, &"driftwood", 10)
-	q1.add_step("Construct and validate an enclosed shelter", QuestDef.ObjectiveType.BUILD_ROOM, &"shelter", 1)
+	q1.add_step("Collect 10 Driftwood (dig old stumps and logs)", QuestDef.ObjectiveType.GATHER_ITEM, &"driftwood", 10)
+	q1.add_step("Make a home: walls, a roof, a door, a light and a bed", QuestDef.ObjectiveType.BUILD_ROOM, &"shelter", 1)
 	q1.rewards["brass_guilder"] = 25
 	q1.rewards["items"] = [{"id": "seed_shore_wheat", "count": 5}]
 	register_available_quest(q1)
@@ -37,7 +37,103 @@ func _init_storyline_catalogue() -> void:
 	q2.rewards["items"] = [{"id": "blueprint_tide_mill", "count": 1}]
 	register_available_quest(q2)
 
+	# Storyline Act II: Depths of the Murk-Reef & The Incursions
+	var q3 := QuestDef.new(&"story_phosphor_flare", "Lanterns of the Trench", "Elder Brenda")
+	q3.storyline_act = 2
+	q3.add_step("Craft a Phosphor Brazier at the workbench", QuestDef.ObjectiveType.CRAFT_ITEM, &"phosphor_brazier", 1)
+	q3.add_step("Place a Phosphor Brazier in the sound or shallows", QuestDef.ObjectiveType.PLACE_ENTITY, &"phosphor_brazier", 1)
+	q3.rewards["brass_guilder"] = 50
+	q3.rewards["tide_scrip"] = 10
+	q3.rewards["items"] = [{"id": "sea_brass_ingot", "count": 2}]
+	register_available_quest(q3)
+
+	var q4 := QuestDef.new(&"story_siren_hunt", "The Siren's Requiem", "Old Man Corin")
+	q4.storyline_act = 2
+	q4.add_step("Stun and defeat the Abyssal Siren in the Murk-Reef", QuestDef.ObjectiveType.DEFEAT_ENEMY, &"abyssal_siren", 1)
+	q4.add_step("Recover the Heart of the Siren", QuestDef.ObjectiveType.GATHER_ITEM, &"siren_heart", 1)
+	q4.rewards["brass_guilder"] = 120
+	q4.rewards["tide_scrip"] = 25
+	q4.rewards["items"] = [{"id": "ancient_weapon_fragment", "count": 2}]
+	register_available_quest(q4)
+
+	var q5 := QuestDef.new(&"story_storm_fortress", "The Shoreline Bastion", "Town Guard")
+	q5.storyline_act = 2
+	q5.add_step("Erect 2 Spike Barricades along the shoreline", QuestDef.ObjectiveType.PLACE_ENTITY, &"defense_barricade", 2)
+	q5.add_step("Ring the Harbour Bell and repel a Storm Incursion", QuestDef.ObjectiveType.SURVIVE_INCURSION, &"storm_incursion", 1)
+	q5.rewards["brass_guilder"] = 80
+	q5.rewards["tide_scrip"] = 15
+	q5.rewards["items"] = [{"id": "reaver_crest", "count": 2}]
+	register_available_quest(q5)
+
+	# Storyline Act III: The Basalt Skerries & The Grand Equilibrium
+	var q6 := QuestDef.new(&"story_caldera_hunt", "Fire of the Benthic Deep", "Old Man Corin")
+	q6.storyline_act = 3
+	q6.add_step("Defeat the Caldera Shell in the Basalt Skerries", QuestDef.ObjectiveType.DEFEAT_ENEMY, &"caldera_shell", 1)
+	q6.add_step("Forge Volcanic Basalt Armor at the Blacksmith's Anvil", QuestDef.ObjectiveType.CRAFT_ITEM, &"volcanic_basalt_armor", 1)
+	q6.rewards["brass_guilder"] = 150
+	q6.rewards["tide_scrip"] = 30
+	q6.rewards["items"] = [{"id": "ancient_weapon_fragment", "count": 3}]
+	register_available_quest(q6)
+
+	var q7 := QuestDef.new(&"story_undertow_trial", "Trial of the Spring Tide", "Elder Brenda")
+	q7.storyline_act = 3
+	q7.add_step("Channel the Undertow Altar during spring low tide", QuestDef.ObjectiveType.SURVIVE_INCURSION, &"undertow_altar", 1)
+	q7.add_step("Claim the Ancient Regulator Keystone", QuestDef.ObjectiveType.GATHER_ITEM, &"regulator_keystone", 1)
+	q7.rewards["brass_guilder"] = 120
+	q7.rewards["tide_scrip"] = 25
+	q7.rewards["items"] = [{"id": "undertow_crest", "count": 1}]
+	register_available_quest(q7)
+
+	var q8 := QuestDef.new(&"story_grand_regulator", "The Grand Equilibrium", "Cartographer Vane")
+	q8.storyline_act = 3
+	q8.add_step("Erect an Ancient Tide Regulator on the high ground", QuestDef.ObjectiveType.PLACE_ENTITY, &"tide_regulator", 1)
+	q8.rewards["brass_guilder"] = 250
+	q8.rewards["tide_scrip"] = 50
+	q8.rewards["items"] = [{"id": "gilded_ship_wheel", "count": 1}]
+	register_available_quest(q8)
+
+	# Storyline Act IV: The Frozen Reach & The Maelstrom
+	var q9 := QuestDef.new(&"story_borean_hunt", "The Glacial Patriarch", "Old Salt Rorik")
+	q9.storyline_act = 4
+	q9.add_step("Defeat Borean Gore-Fin in the Frost-Shoals", QuestDef.ObjectiveType.DEFEAT_ENEMY, &"borean_gore_fin", 1)
+	q9.add_step("Tailor a Borean Insulated Parka", QuestDef.ObjectiveType.CRAFT_ITEM, &"borean_parka", 1)
+	q9.rewards["brass_guilder"] = 200
+	q9.rewards["tide_scrip"] = 40
+	q9.rewards["items"] = [{"id": "glacial_tusk", "count": 2}]
+	register_available_quest(q9)
+
+	var q10 := QuestDef.new(&"story_tide_sovereign", "Heart of the Deluge", "Elder Brenda")
+	q10.storyline_act = 4
+	q10.add_step("Vanquish The Tide Sovereign at the Maelstrom Spire", QuestDef.ObjectiveType.DEFEAT_ENEMY, &"tide_sovereign", 1)
+	q10.add_step("Claim the Deluge Core", QuestDef.ObjectiveType.GATHER_ITEM, &"deluge_core", 1)
+	q10.rewards["brass_guilder"] = 500
+	q10.rewards["tide_scrip"] = 100
+	q10.rewards["items"] = [{"id": "deluge_core", "count": 1}]
+	register_available_quest(q10)
+
+	var q11 := QuestDef.new(&"story_grand_architecture", "Master of the Skerries", "Cartographer Vane")
+	q11.storyline_act = 4
+	q11.add_step("Construct an Architect's Drafting Desk", QuestDef.ObjectiveType.PLACE_ENTITY, &"drafting_desk", 1)
+	q11.add_step("Draft an Architectural Blueprint Scroll", QuestDef.ObjectiveType.CRAFT_ITEM, &"blueprint_scroll", 1)
+	q11.rewards["brass_guilder"] = 180
+	q11.rewards["tide_scrip"] = 35
+	register_available_quest(q11)
+
 	# Notice Board & Villager Chores
+	var chore_regatta := QuestDef.new(&"chore_regatta_trial", "The Saltwater Regatta", "Dockmaster Oisin")
+	chore_regatta.add_step("Place a Regatta Checkpoint Buoy in open water", QuestDef.ObjectiveType.PLACE_ENTITY, &"regatta_buoy", 1)
+	chore_regatta.add_step("Sail through the course buoys to complete a trial", QuestDef.ObjectiveType.COMPLETE_REGATTA, &"regatta_buoy", 1)
+	chore_regatta.rewards["brass_guilder"] = 45
+	chore_regatta.rewards["tide_scrip"] = 8
+	register_available_quest(chore_regatta)
+
+	var chore_spar := QuestDef.new(&"chore_sparring_bout", "Sharpening the Salt", "Old Salt Rorik")
+	chore_spar.add_step("Place a Town Sparring Ring on the beach", QuestDef.ObjectiveType.PLACE_ENTITY, &"sparring_ring", 1)
+	chore_spar.add_step("Win a friendly sparring bout in the ring", QuestDef.ObjectiveType.WIN_SPARRING, &"sparring_ring", 1)
+	chore_spar.rewards["brass_guilder"] = 35
+	chore_spar.rewards["tide_scrip"] = 5
+	register_available_quest(chore_spar)
+
 	var chore1 := QuestDef.new(&"chore_winter_kale", "Greens for the Kettle", "Town Cook Barnaby")
 	chore1.add_step("Harvest 4 Tide Kale", QuestDef.ObjectiveType.HARVEST_CROP, &"tide_kale", 4)
 	chore1.rewards["brass_guilder"] = 15
@@ -79,6 +175,21 @@ func is_quest_active(quest_id: StringName) -> bool:
 
 func is_quest_completed(quest_id: StringName) -> bool:
 	return quest_id in completed_quests
+
+
+func get_quests_by_act(act: int) -> Array[QuestDef]:
+	var result: Array[QuestDef] = []
+	for q in available_quests.values():
+		if q.storyline_act == act:
+			result.append(q)
+	for q in active_quests.values():
+		if q.storyline_act == act and not result.has(q):
+			result.append(q)
+	for q_id in completed_quests:
+		var q = get_quest_def(q_id)
+		if q != null and q.storyline_act == act and not result.has(q):
+			result.append(q)
+	return result
 
 
 func get_quest_def(quest_id: StringName) -> QuestDef:

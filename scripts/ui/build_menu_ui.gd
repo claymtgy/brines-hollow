@@ -170,6 +170,7 @@ func _build() -> void:
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(920, 540)
+	UiTheme.keep_on_screen(panel)
 	center.add_child(panel)
 
 	var mv := VBoxContainer.new()
@@ -284,6 +285,28 @@ func update_for_player(p: Player) -> void:
 	_update_compact_banner()
 
 
+## Is the compact hammer banner on screen? (the HUD then hides its own tool line)
+func is_banner_visible() -> bool:
+	return _root != null and _root.visible and _compact_banner != null and _compact_banner.visible
+
+
+## Key hints in the banner, for whatever device the player is using right now.
+func _keys(parts: Array) -> String:
+	var c: ControllerManager = main.controller if main != null and main.get("controller") != null else null
+	var pad := c != null and c.current_type != ControllerManager.Type.KEYBOARD_MOUSE
+	var out := []
+	for p: Array in parts:
+		var k: String
+		match p[0]:
+			"menu": k = c.get_glyph(&"build_menu_toggle") if pad else "RMB/B"
+			"cycle": k = "D-Pad L/R" if pad else "Q/E"
+			"size": k = "D-Pad U/D" if pad else "Z/X"
+			"rotate": k = c.get_glyph(&"rotate") if pad else "R"
+			_: k = String(p[0])
+		out.append("[%s] %s" % [k, p[1]])
+	return "  ".join(out)
+
+
 func _update_compact_banner() -> void:
 	if player == null:
 		return
@@ -297,8 +320,9 @@ func _update_compact_banner() -> void:
 			var cost := BuildCosts.prefab_cost(player.prefab_id, player.prefab_rot)
 			var ok := BuildCosts.can_afford(inv, cost)
 			var cost_str := BuildCosts.describe(cost)
-			_compact_cost_label.text = "%s  ·  [RMB/B] Build Menu  [Q/E] Piece  [R] Rotate" % [
-				("Cost: %s (Ready)" % cost_str) if ok else ("Need: %s" % BuildCosts.describe_missing(inv, cost))
+			_compact_cost_label.text = "%s  ·  %s" % [
+				("Cost: %s (Ready)" % cost_str) if ok else ("Need: %s" % BuildCosts.describe_missing(inv, cost)),
+				_keys([["menu", "Build Menu"], ["cycle", "Piece"], ["rotate", "Rotate"]])
 			]
 			_compact_cost_label.modulate = Color(0.68, 1.0, 0.72) if ok else Color(1.0, 0.62, 0.55)
 
@@ -313,7 +337,8 @@ func _update_compact_banner() -> void:
 			var def := ItemDB.get_item(item_id)
 			var have := inv.get_item_count(item_id)
 			var item_name := def.name if def != null else String(item_id)
-			_compact_cost_label.text = "Uses %s (Have: %d)  ·  [RMB/B] Build Menu  [Q/E] Block  [Z/X] Size" % [item_name, have]
+			_compact_cost_label.text = "Uses %s (Have: %d)  ·  %s" % [item_name, have,
+				_keys([["menu", "Build Menu"], ["cycle", "Block"], ["size", "Size"]])]
 			_compact_cost_label.modulate = Color(0.68, 1.0, 0.72) if have > 0 else Color(1.0, 0.62, 0.55)
 
 		Tab.FURNITURE:
@@ -325,8 +350,9 @@ func _update_compact_banner() -> void:
 			_compact_item_label.text = def.name if def != null else String(f_type)
 			var cost := Placeables.build_cost(f_type)
 			var ok := BuildCosts.can_afford(inv, cost)
-			_compact_cost_label.text = "%s  ·  [RMB/B] Build Menu  [Q/E] Item  [R] Rotate" % [
-				("Cost: %s (Ready)" % BuildCosts.describe(cost)) if ok else ("Need: %s" % BuildCosts.describe_missing(inv, cost))
+			_compact_cost_label.text = "%s  ·  %s" % [
+				("Cost: %s (Ready)" % BuildCosts.describe(cost)) if ok else ("Need: %s" % BuildCosts.describe_missing(inv, cost)),
+				_keys([["menu", "Build Menu"], ["cycle", "Item"], ["rotate", "Rotate"]])
 			]
 			_compact_cost_label.modulate = Color(0.68, 1.0, 0.72) if ok else Color(1.0, 0.62, 0.55)
 
@@ -451,7 +477,7 @@ func _make_catalogue_card(
 	var c := Label.new()
 	c.text = cost_text
 	c.theme_type_variation = &"Small"
-	c.add_theme_font_size_override("font_size", 12)
+	c.add_theme_font_size_override("font_size", 14)
 	c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(c)
@@ -459,7 +485,7 @@ func _make_catalogue_card(
 	var st := Label.new()
 	st.text = status_text
 	st.theme_type_variation = &"Small"
-	st.add_theme_font_size_override("font_size", 12)
+	st.add_theme_font_size_override("font_size", 14)
 	st.add_theme_color_override("font_color", Color(0.65, 0.98, 0.70) if can_afford else Color(1.0, 0.58, 0.52))
 	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(st)

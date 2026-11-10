@@ -55,6 +55,9 @@ func _init_default_wares() -> void:
 		&"backpack_driftwood": 80,
 		&"diving_rebreather": 150,
 		&"blueprint_dry_dock": 100,
+		&"exotic_spice": 45,
+		&"dye_indigo": 35,
+		&"silk_bolt": 60,
 		# Recipe scrolls (read on pickup -> learned; see RecipeBook)
 		&"recipe_scroll_cook_glazed_crab": 30,
 		&"recipe_scroll_place_barber_mirror": 24,
@@ -76,6 +79,9 @@ func _init_default_wares() -> void:
 			stock.add_item(&"backpack_driftwood", 1)
 			stock.add_item(&"diving_rebreather", 1)
 			stock.add_item(&"blueprint_dry_dock", 1)
+			stock.add_item(&"exotic_spice", 10)
+			stock.add_item(&"dye_indigo", 10)
+			stock.add_item(&"silk_bolt", 5)
 			stock.add_item(&"recipe_scroll_cook_bouillabaisse", 1)
 			stock.add_item(&"recipe_scroll_brew_chicory_coffee", 1)
 			# Add shipping manifests
@@ -86,6 +92,18 @@ func _init_default_wares() -> void:
 			active_contracts.append(TradeContract.new(
 				&"manifest_coastal_timber", "Export: 30 Wood Planks",
 				{&"wood_plank": 30}, 90, 5
+			))
+			active_contracts.append(TradeContract.new(
+				&"manifest_artisan_dairy", "Export: 4 Salt-Cured Goat Cheese & 4 Honey",
+				{&"goat_cheese": 4, &"marsh_honey": 4}, 280, 20
+			))
+			active_contracts.append(TradeContract.new(
+				&"manifest_borean_trophy", "Export: 2 Glacial Tusks & 2 Borean Fur",
+				{&"glacial_tusk": 2, &"borean_fur": 2}, 500, 40
+			))
+			active_contracts.append(TradeContract.new(
+				&"manifest_pearl_consignment", "Export: 2 Black Abyssal Pearls",
+				{&"abyssal_pearl": 2}, 650, 50
 			))
 
 

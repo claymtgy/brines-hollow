@@ -41,6 +41,7 @@ var _ceil_cols := {}            # Vector2i -> [[y_lo, y_hi], ...] spans known to
 var _world_ver := 0
 var _prompt_npc: DrifterNPC = null
 var _quests_bound := false
+var _auto_work_t := 15.0
 
 
 func _ready() -> void:
@@ -277,6 +278,7 @@ func _measure_town() -> void:
 				lights += 1
 	v.food_kinds = foods.size()
 	v.safety = clampf(0.35 + 0.06 * lights + (0.25 if bell else 0.0), 0.0, 1.0)
+	_update_job_assignments()
 
 
 func _authority_tick(delta: float) -> void:
@@ -328,6 +330,46 @@ func _authority_tick(delta: float) -> void:
 			_send_t = 1.0 / STATE_HZ
 			npc_states.rpc(_pack_states())
 
+	_auto_work_t -= delta
+	if _auto_work_t <= 0.0:
+		_auto_work_t = 15.0
+		_villager_automation()
+
+
+func _villager_automation() -> void:
+	if main == null or main.entities == null:
+		return
+	var has_workers := false
+	for npc in npcs:
+		if npc.recruited and npc.activity == 2:
+			has_workers = true
+			break
+	if not has_workers:
+		return
+
+	var primary_chest: ChestEntity = null
+	for ent: WorldEntity in main.entities.entities.values():
+		if ent is ChestEntity and (ent as ChestEntity).container != null:
+			primary_chest = ent as ChestEntity
+			break
+	if primary_chest == null:
+		return
+
+	for npc in npcs:
+		if not npc.recruited or npc.activity != 2:
+			continue
+		match npc.def.profession:
+			DrifterDef.Profession.FISHER:
+				primary_chest.container.deposit(&"shore_crab", 1)
+			DrifterDef.Profession.FARMER:
+				primary_chest.container.deposit(&"sea_salt", 1)
+			DrifterDef.Profession.CARPENTER:
+				primary_chest.container.deposit(&"driftwood", 1)
+			DrifterDef.Profession.SMOKER_CHEF:
+				primary_chest.container.deposit(&"smoked_fish_ration", 1)
+			DrifterDef.Profession.RANCHER:
+				primary_chest.container.deposit(&"salt_milk", 1)
+
 
 func _activity(npc: DrifterNPC) -> int:
 	if not npc.path.is_empty():
@@ -366,20 +408,25 @@ func _choose_target(npc: DrifterNPC) -> void:
 		cell = Vector3i((npc.wreck_pos / VS).floor())
 		key = "wreck"
 	else:
-		var r: int = npc.def.current_routine
-		match r:
-			DrifterDef.Routine.SLEEP:
-				cell = _home_bed(npc)
-				if cell == Vector3i(-1, -1, -1):
-					cell = main.village.hearth_pos + Vector3i(npc.idx * 2 - 5, 0, 3)
-			DrifterDef.Routine.WORK:
-				cell = _work_spot(npc)
-			DrifterDef.Routine.EAT:
-				cell = _entity_cell([&"tide_hearth", &"hearth_pot", &"campfire"], main.village.hearth_pos) + Vector3i(npc.idx % 3 - 1, 0, 2)
-			_:
-				var a := npc.idx * TAU / maxi(1, npcs.size())
-				cell = Vector3i(main.world.gen.spawn) + Vector3i(int(cos(a) * 6), 0, int(sin(a) * 6))
-		key = "%d@%s" % [r, cell]
+		var incursion_active := StormIncursionManager.current != null and StormIncursionManager.current.active
+		if incursion_active:
+			cell = _entity_cell([&"defense_barricade", &"village_bell"], main.village.hearth_pos) + Vector3i(npc.idx % 3 - 1, 0, 1)
+			key = "defend@%s" % cell
+		else:
+			var r: int = npc.def.current_routine
+			match r:
+				DrifterDef.Routine.SLEEP:
+					cell = _home_bed(npc)
+					if cell == Vector3i(-1, -1, -1):
+						cell = main.village.hearth_pos + Vector3i(npc.idx * 2 - 5, 0, 3)
+				DrifterDef.Routine.WORK:
+					cell = _work_spot(npc)
+				DrifterDef.Routine.EAT:
+					cell = _entity_cell([&"tide_hearth", &"hearth_pot", &"campfire"], main.village.hearth_pos) + Vector3i(npc.idx % 3 - 1, 0, 2)
+				_:
+					var a := npc.idx * TAU / maxi(1, npcs.size())
+					cell = Vector3i(main.world.gen.spawn) + Vector3i(int(cos(a) * 6), 0, int(sin(a) * 6))
+			key = "%d@%s" % [r, cell]
 	if key == npc.target_key:
 		return
 	npc.target_key = key
@@ -431,15 +478,30 @@ func _work_spot(npc: DrifterNPC) -> Vector3i:
 	var dy: int = int(st.dock_y) + 1
 	match npc.def.profession:
 		DrifterDef.Profession.FISHER:
+			var s := _entity_cell([&"fisher_station"], Vector3i(-1, -1, -1))
+			if s != Vector3i(-1, -1, -1):
+				return s + Vector3i(1, 0, 0)
 			var e := dock + fwd * 28 + side * (npc.idx % 2 * 4 - 2)
 			return Vector3i(e.x, dy, e.y)
 		DrifterDef.Profession.CARPENTER:
+			var s := _entity_cell([&"sawhorse", &"workbench"], Vector3i(-1, -1, -1))
+			if s != Vector3i(-1, -1, -1):
+				return s + Vector3i(1, 0, 0)
 			return _entity_cell([&"workbench"], hut) + Vector3i(1, 0, 1)
 		DrifterDef.Profession.FARMER:
+			var s := _entity_cell([&"farming_station"], Vector3i(-1, -1, -1))
+			if s != Vector3i(-1, -1, -1):
+				return s + Vector3i(1, 0, 0)
 			if main.farm != null and not main.farm.plots.is_empty():
 				return main.farm.plots.keys()[0] + Vector3i(0, 1, 2)
 			var f := Vector2i(hut.x, hut.z) - side * 18 + fwd * 8
 			return Vector3i(f.x, hut.y, f.y)
+		DrifterDef.Profession.RANCHER:
+			var s := _entity_cell([&"ranch_station", &"feed_trough", &"poultry_coop"], Vector3i(-1, -1, -1))
+			if s != Vector3i(-1, -1, -1):
+				return s + Vector3i(1, 0, 0)
+			var r_pos := Vector2i(hut.x, hut.z) + side * 12 + fwd * 6
+			return Vector3i(r_pos.x, hut.y, r_pos.y)
 		DrifterDef.Profession.SMOKER_CHEF:
 			return _entity_cell([&"campfire", &"hearth_pot"], hut) + Vector3i(1, 0, 0)
 		DrifterDef.Profession.LAMPLIGHTER:
@@ -448,6 +510,36 @@ func _work_spot(npc: DrifterNPC) -> Vector3i:
 		_:
 			var t := dock + fwd * 4
 			return Vector3i(t.x, dy, t.y)
+
+
+## Scans placed job blocks in the village and assigns open stations to recruited villagers.
+func _update_job_assignments() -> void:
+	if main == null or main.entities == null:
+		return
+	var station_professions := {
+		&"farming_station": DrifterDef.Profession.FARMER,
+		&"ranch_station": DrifterDef.Profession.RANCHER,
+		&"fisher_station": DrifterDef.Profession.FISHER,
+		&"sawhorse": DrifterDef.Profession.CARPENTER,
+	}
+	var placed_stations: Array[Dictionary] = []
+	for ent: WorldEntity in main.entities.entities.values():
+		if station_professions.has(ent.entity_id):
+			placed_stations.append({"type": ent.entity_id, "coord": ent.grid_coord, "prof": station_professions[ent.entity_id]})
+
+	for s in placed_stations:
+		var prof: int = s["prof"]
+		var has_worker := false
+		for npc in npcs:
+			if npc.recruited and npc.def.profession == prof:
+				has_worker = true
+				break
+		if not has_worker:
+			for npc in npcs:
+				if npc.recruited and npc.def.profession != prof:
+					npc.def.profession = prof
+					npc.refresh_label()
+					break
 
 
 func _entity_cell(ids: Array, fallback: Vector3i) -> Vector3i:
@@ -518,6 +610,12 @@ func _beds_signature() -> String:
 	return ",".join(parts)
 
 
+## A livable home now stands (built or patched up): counts for "make a home" objectives.
+func _home_built() -> void:
+	if main.get("player") != null and main.player != null:
+		main.player.quest_event(QuestDef.ObjectiveType.BUILD_ROOM, &"shelter")
+
+
 func _scan_homes() -> void:
 	if main.entities == null:
 		return
@@ -545,6 +643,7 @@ func _scan_homes() -> void:
 			if res.is_valid:
 				main.village.register_home(res, bed)
 				_announce("New home registered: quality %d" % res.quality_score)
+				_home_built()
 				changed = true
 		else:
 			var was: bool = main.village.rooms[rid].get("valid", true)
@@ -552,6 +651,8 @@ func _scan_homes() -> void:
 			if was != res.is_valid:
 				changed = true
 				_announce("Home restored: quality %d" % res.quality_score if res.is_valid else "A home is no longer livable: " + res.error_message)
+				if res.is_valid:
+					_home_built()
 	print("[village] home scan: %d beds, %d valid homes (%d ms)" % [beds.size(), main.village.valid_room_count(), Time.get_ticks_msec() - t0])
 	if changed:
 		_sync_village()

@@ -16,6 +16,8 @@ var _key_buttons := {}
 var _building := false
 
 const REBINDABLE := [
+	["use", "Attack / Primary action"], ["alt_use", "Block / Parry / Secondary"],
+	["dodge", "Dodge roll / Evade"], ["sneak", "Sneak / Crouch"],
 	["move_forward", "Move forward"], ["move_back", "Move back"], ["move_left", "Move left"],
 	["move_right", "Move right"], ["jump", "Jump / swim up"], ["sprint", "Sprint / pull hard"],
 	["interact", "Interact / board"], ["inventory_toggle", "Inventory"], ["build_menu_toggle", "Build menu (hammer)"],
@@ -175,6 +177,7 @@ func _build() -> void:
 
 	# --- settings panel
 	_settings_panel = PanelContainer.new()
+	UiTheme.keep_on_screen(_settings_panel)
 	_settings_panel.custom_minimum_size = Vector2(760, 560)
 	center.add_child(_settings_panel)
 	var sv := VBoxContainer.new()
@@ -243,7 +246,11 @@ func _slider(parent: Control, label: String, field: String, lo: float, hi: float
 	var v := Label.new()
 	v.custom_minimum_size = Vector2(70, 0)
 	var show := func(x: float) -> String:
-		return "Auto" if field == "render_scale" and x <= 0.0 else fmt % x
+		if field == "render_scale" and x <= 0.0:
+			return "Auto"
+		if field == "max_fps" and x <= 0.0:
+			return "Uncapped"
+		return fmt % x
 	v.text = show.call(s.value)
 	s.value_changed.connect(func(x: float) -> void:
 		v.text = show.call(x)
@@ -305,7 +312,7 @@ func _build_graphics(v: VBoxContainer) -> void:
 			settings.apply(main)
 			settings.save()
 			_rebuild_settings(1))
-	_slider(v, "Render scale (0 = auto)", "render_scale", 0.0, 1.0, 0.05, "%.2fx", true)
+	_slider(v, "Render scale", "render_scale", 0.0, 1.0, 0.05, "%.2fx", true)
 	_option(v, "Upscaler", "upscaler", GameSettings.UPSCALER_NAMES, true)
 	_option(v, "Anti-aliasing", "aa", GameSettings.AA_NAMES, true)
 	_option(v, "Shadows", "shadows", GameSettings.SHADOW_NAMES, true)
@@ -315,7 +322,7 @@ func _build_graphics(v: VBoxContainer) -> void:
 	_header(v, "Display")
 	_option(v, "Window", "window_mode", GameSettings.WINDOW_NAMES)
 	_check(v, "V-Sync", "vsync")
-	_slider(v, "Frame cap (0 = none)", "max_fps", 0, 144, 1, "%d")
+	_slider(v, "Frame cap", "max_fps", 0, 240, 30, "%d")
 
 
 func _build_audio(v: VBoxContainer) -> void:
@@ -327,7 +334,7 @@ func _build_audio(v: VBoxContainer) -> void:
 
 func _build_interface(v: VBoxContainer) -> void:
 	_header(v, "Interface")
-	_slider(v, "UI scale", "ui_scale", 0.75, 2.0, 0.05, "%.2fx")
+	_slider(v, "UI size (1.0 = fit to screen)", "ui_scale", 0.75, 1.5, 0.05, "%.2fx")
 	if main.get("creatures") != null:   # Agent C: world difficulty (host-editable)
 		main.creatures.build_settings_row(v)
 
@@ -362,6 +369,12 @@ func _refresh_keys() -> void:
 		for ev in InputMap.action_get_events(action):
 			if ev is InputEventKey:
 				names.append(OS.get_keycode_string(ev.physical_keycode))
+			elif ev is InputEventMouseButton:
+				match ev.button_index:
+					MOUSE_BUTTON_LEFT: names.append("LMB")
+					MOUSE_BUTTON_RIGHT: names.append("RMB")
+					MOUSE_BUTTON_MIDDLE: names.append("MMB")
+					_: names.append("Mouse %d" % ev.button_index)
 		(_key_buttons[action] as Button).text = " / ".join(names) if not names.is_empty() else "(none)"
 
 

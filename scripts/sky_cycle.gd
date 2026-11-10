@@ -11,6 +11,7 @@ var weather: Weather
 var time_scale := 1.0
 var glow_mode := 1            # 0 off, 1 night only, 2 always (set by GameSettings)
 var water_level_vox := VoxelWorld.SEA_MID
+var festival_active := false
 
 var sun: DirectionalLight3D
 var env: Environment
@@ -142,9 +143,18 @@ func fit_to_world() -> void:
 	water.position = Vector3(VoxelWorld.WX * 0.5, 0, VoxelWorld.WZ * 0.5) * VoxelWorld.VS
 
 
+func is_equinox_tide() -> bool:
+	return (day % 7 == 0) or festival_active
+
+
+func is_floating_lantern_festival() -> bool:
+	return is_equinox_tide() and (time_of_day < 0.22 or time_of_day > 0.78)
+
+
 ## Tide: two cycles per day. Returns water level in voxels.
 func tide_level(t: float) -> float:
-	return VoxelWorld.SEA_MID + VoxelWorld.TIDE_AMP * sin(t * TAU * 2.0 + 0.6)
+	var amp: float = VoxelWorld.TIDE_AMP * (1.6 if is_equinox_tide() else 1.0)
+	return VoxelWorld.SEA_MID + amp * sin(t * TAU * 2.0 + 0.6)
 
 
 ## +1 rising, -1 falling.

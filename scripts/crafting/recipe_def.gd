@@ -54,6 +54,8 @@ func _init(
 func can_craft_with(inv: Inventory) -> bool:
 	if inv == null:
 		return false
+	if inv.get("creative_mode") == true:
+		return true
 	for ingredient in inputs:
 		var req_id: StringName = ingredient.get("item_id", &"")
 		var req_count: int = int(ingredient.get("count", 1))
@@ -66,6 +68,8 @@ func can_craft_with(inv: Inventory) -> bool:
 func consume_ingredients(inv: Inventory) -> bool:
 	if not can_craft_with(inv):
 		return false
+	if inv.get("creative_mode") == true:
+		return true
 	for ingredient in inputs:
 		var req_id: StringName = ingredient.get("item_id", &"")
 		var req_count: int = int(ingredient.get("count", 1))

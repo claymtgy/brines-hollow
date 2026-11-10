@@ -42,7 +42,7 @@ var max_fps := 0
 var window_mode := WindowMode.WINDOWED
 
 # interface
-var ui_scale := 1.0
+var ui_scale := 1.0                  # multiplier on the automatic size (see effective_ui_scale)
 
 # audio (linear 0..1)
 var master_volume := 0.8
@@ -83,7 +83,7 @@ func apply_preset(p: int) -> void:
 		for k in PRESETS[p]:
 			set(k, PRESETS[p][k])
 	if p == Preset.DECK:
-		ui_scale = 1.25
+		ui_scale = 1.0   # the 1280x800 screen is the smallest canvas the UI is laid out for
 
 
 ## First run: Steam Deck gets the Deck preset, everything else Medium.
@@ -97,6 +97,8 @@ static func load_or_default() -> GameSettings:
 		s.set(f, cfg.get_value("settings", f, s.get(f)))
 	for a: String in cfg.get_section_keys("keys") if cfg.has_section("keys") else []:
 		s.key_overrides[a] = int(cfg.get_value("keys", a))
+	if int(cfg.get_value("settings", "ui_version", 1)) < UI_VERSION:
+		s.ui_scale = 1.0   # older files stored an absolute scale; it's now relative to the auto size
 	return s
 
 
@@ -106,7 +108,26 @@ func save() -> void:
 		cfg.set_value("settings", f, get(f))
 	for a: String in key_overrides:
 		cfg.set_value("keys", a, key_overrides[a])
+	cfg.set_value("settings", "ui_version", UI_VERSION)
 	cfg.save(PATH)
+
+
+## UI size: the HUD and menus are laid out for a 1600x900 canvas. The UI grows with bigger
+## windows (1440p, 4K) so it stays the same share of the screen, times the player's
+## ui_scale, but never so far that the canvas gets smaller than 1280x720, where every panel
+## still fits (a Steam Deck's 1280x800 screen runs at exactly 1.0).
+const UI_REF := Vector2(1600, 900)
+const UI_MIN_CANVAS := Vector2(1280, 720)
+const UI_VERSION := 2
+
+
+func effective_ui_scale(vp: Viewport) -> float:
+	var win := Vector2(vp.get_window().size) if vp.get_window() != null else vp.get_visible_rect().size
+	if win.x <= 0.0 or win.y <= 0.0:
+		return 1.0
+	var auto := maxf(1.0, minf(win.x / UI_REF.x, win.y / UI_REF.y))
+	var fit := minf(win.x / UI_MIN_CANVAS.x, win.y / UI_MIN_CANVAS.y)
+	return clampf(auto * ui_scale, 0.5, maxf(fit, 0.5))
 
 
 ## Auto (render_scale == 0): render about `pixel_budget` megapixels whatever the window
@@ -188,7 +209,10 @@ func apply(main: Node) -> void:
 			WindowMode.WINDOWED: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 			WindowMode.FULLSCREEN: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
 			WindowMode.BORDERLESS: DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-		main.get_tree().root.content_scale_factor = ui_scale
+		main.get_tree().root.content_scale_factor = effective_ui_scale(vp)
+	# A tiny cap is never intentional (an old 1-step slider could land on 1 fps): treat as uncapped.
+	if max_fps > 0 and max_fps < 30:
+		max_fps = 0
 	Engine.max_fps = max_fps
 	# --- audio buses (Ambience / Effects are created by AmbientAudio)
 	AmbientAudio.ensure_buses()

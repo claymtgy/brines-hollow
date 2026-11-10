@@ -133,6 +133,22 @@ func harvest_to_inventory(pos: Vector3i, inv: Inventory, rng: RandomNumberGenera
 
 	var actual_yield: int = product_cnt - prod_rem
 	crop_harvested.emit(pos, crop_id, actual_yield)
+
+	# Crop hybridization cross-pollination:
+	# Adjacent Shore Wheat & Samphire has a chance to produce Brackish Rye hybrid seeds & produce
+	var r: RandomNumberGenerator = rng if rng != null else RandomNumberGenerator.new()
+	if crop_id in [&"shore_wheat", &"samphire"]:
+		var partner: StringName = &"samphire" if crop_id == &"shore_wheat" else &"shore_wheat"
+		var has_partner := false
+		for off in [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]:
+			var nb: CropPlot = get_plot(pos + off)
+			if nb != null and nb.crop_id == partner and nb.current_stage >= 2:
+				has_partner = true
+				break
+		if has_partner and r.randf() < 0.35:
+			inv.add_item(&"seed_brackish_rye", 1)
+			inv.add_item(&"brackish_rye", 1)
+
 	return true
 
 

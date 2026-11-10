@@ -18,6 +18,10 @@ var wing_r: Node3D
 var _flap := 0.0
 var _scatter_dir := Vector3.ZERO
 var _swoop_from := Vector3.ZERO
+var _flight_phase: float = 0.0
+var _glide_timer: float = 2.0
+var _is_gliding: bool = false
+var _bank_target: float = 0.0
 
 
 func _init() -> void:
@@ -26,6 +30,10 @@ func _init() -> void:
 	hp = 1.0
 	damageable = false
 	radius = 0.35
+	_flight_phase = randf() * TAU
+	_glide_timer = randf_range(2.0, 5.0)
+	circle_r = randf_range(7.0, 13.0)
+	altitude = randf_range(6.5, 9.5)
 
 
 func _build_visuals(root: Node3D) -> void:
@@ -61,6 +69,18 @@ func telegraph_height() -> float:
 
 func hint() -> String:
 	return "Gulls eye unattended fish. Keep moving or stow your catch."
+
+
+func hint_ready(player: Node) -> bool:
+	var inv: Inventory = player.get("inventory") if player != null else null
+	if inv == null:
+		return false
+	for s: ItemSlot in inv.slots:
+		if s != null and not s.is_empty():
+			var d: ItemDef = ItemDB.get_item(s.item_id)
+			if d != null and d.has_tag("fish"):
+				return true
+	return false
 
 
 func on_hit(_damage: float, from: Vector3, _power: float, _attacker: int) -> bool:
@@ -113,12 +133,33 @@ func simulate(dt: float, ctx: Dictionary) -> void:
 			elif state_t > 2.5:
 				set_state(State.FLEE)
 			return
-	# Circling (or flying back to the circle).
-	angle += CIRCLE_SPEED * dt
-	var want := flock_center + Vector3(cos(angle) * circle_r, altitude + sin(angle * 2.0) * 0.6, sin(angle) * circle_r)
+	# Natural coastal soaring and gliding path: wide sweeping loops, banking, and thermals
+	_flight_phase += (CIRCLE_SPEED * 0.75) * dt
+	angle = _flight_phase
+	var r_x := circle_r * (1.0 + sin(_flight_phase * 0.45) * 0.35)
+	var r_z := (circle_r * 0.8) * (1.0 + cos(_flight_phase * 0.6) * 0.3)
+	var alt_thermal := sin(_flight_phase * 1.4) * 0.9 + cos(_flight_phase * 0.6) * 0.6
+	var want := flock_center + Vector3(
+		cos(_flight_phase) * r_x + sin(_flight_phase * 0.5) * 3.0,
+		altitude + alt_thermal,
+		sin(_flight_phase) * r_z + cos(_flight_phase * 0.35) * 2.5
+	)
 	var to := want - position
-	position += to.limit_length(6.0 * dt) if state == State.RETURN else to * (1.0 - exp(-dt * 3.0))
-	turn_toward(Vector3(-sin(angle), 0, cos(angle)) if state != State.RETURN else to, 4.0, dt)
+	var flight_spd: float = 6.5 if state == State.RETURN else (4.2 + sin(_flight_phase * 1.2) * 1.1)
+	position += to.limit_length(flight_spd * dt) if state == State.RETURN else to * (1.0 - exp(-dt * 2.6))
+	var aim_dir := to.normalized() if to.length_squared() > 0.04 else facing()
+	turn_toward(aim_dir, 3.8, dt)
+
+	# Calculate banking angle based on turning sharpness
+	var cross_y := facing().cross(aim_dir).y
+	_bank_target = clampf(cross_y * 1.8, -0.45, 0.45)
+
+	# Gliding vs flapping cadence
+	_glide_timer -= dt
+	if _glide_timer <= 0.0:
+		_is_gliding = not _is_gliding
+		_glide_timer = randf_range(3.5, 6.0) if _is_gliding else randf_range(2.0, 3.5)
+
 	if state == State.RETURN and to.length() < 1.0:
 		set_state(State.WANDER)
 	elif state != State.RETURN:
@@ -131,8 +172,15 @@ func simulate(dt: float, ctx: Dictionary) -> void:
 
 func animate(dt: float) -> void:
 	var rate := 14.0 if state in [State.FLEE, State.RETURN] else (6.0 if state != State.WINDUP else 18.0)
-	_flap += dt * rate
-	var a := sin(_flap) * (0.7 if rate > 6.0 else 0.25) + 0.15
-	wing_l.rotation.z = a
-	wing_r.rotation.z = -a
-	_visual_root.rotation.z = lerpf(_visual_root.rotation.z, -0.35 if state == State.WANDER else 0.0, 1.0 - exp(-dt * 4.0))
+	if state == State.WANDER and _is_gliding:
+		# Gliding: wings extended flat, slight breeze wobble
+		wing_l.rotation.z = 0.05 + sin(_flap * 0.5) * 0.03
+		wing_r.rotation.z = -0.05 - sin(_flap * 0.5) * 0.03
+	else:
+		_flap += dt * rate
+		var a := sin(_flap) * (0.7 if rate > 6.0 else 0.25) + 0.15
+		wing_l.rotation.z = a
+		wing_r.rotation.z = -a
+
+	var bank_dest := _bank_target if state == State.WANDER else (0.0 if state != State.FLEE else -0.3)
+	_visual_root.rotation.z = lerpf(_visual_root.rotation.z, bank_dest, 1.0 - exp(-dt * 4.0))

@@ -111,8 +111,33 @@ func drops() -> Array:
 
 
 ## The non-combat answer, shown once per session the first time you meet one.
+## Is the hint worth showing to this player yet? (e.g. the gull's only matters once you carry fish)
+func hint_ready(_player: Node) -> bool:
+	return true
+
+
 func hint() -> String:
 	return ""
+
+
+var _flinch_impulse := Vector3.ZERO
+var _flinch_t := 0.0
+
+
+func is_armored() -> bool:
+	return false
+
+
+func apply_flinch(hit_from: Vector3, power: float) -> void:
+	_flinch_t = 0.22
+	var dir := (position - hit_from)
+	dir.y = 0.0
+	if dir.length() > 0.01:
+		dir = dir.normalized()
+	else:
+		dir = -facing()
+	var local_dir := dir.rotated(Vector3.UP, -yaw)
+	_flinch_impulse = Vector3(-local_dir.z * 0.35, 0.0, local_dir.x * 0.35) * clampf(power, 0.5, 2.5)
 
 
 ## Host: a player hit us. Returns true if it registered.
@@ -120,6 +145,7 @@ func on_hit(damage: float, from: Vector3, power: float, attacker: int) -> bool:
 	if state == State.DEAD:
 		return false
 	last_attacker = attacker
+	apply_flinch(from, power)
 	if damageable:
 		hp -= damage
 		var kb := CombatMath.knockback(from, position, power * 0.6)
@@ -127,6 +153,7 @@ func on_hit(damage: float, from: Vector3, power: float, attacker: int) -> bool:
 		poise -= power * CombatMath.POISE_PER_STAGGER_POINT
 		poise_regen_cd = 3.0
 		if poise <= 0.0 and state != State.STAGGER and state != State.DEAD:
+			CombatAudio.play_sound("poise_break", position)
 			set_state(State.STAGGER)
 			poise = max_poise
 	if hp <= 0.0 and damageable:
@@ -137,11 +164,16 @@ func on_hit(damage: float, from: Vector3, power: float, attacker: int) -> bool:
 ## Host: our attack was parried. Default: stagger.
 func on_parried() -> void:
 	if state != State.DEAD:
+		CombatAudio.play_sound("poise_break", position)
 		poise = 0.0
 		set_state(State.STAGGER)
 
 
 # ---------------------------------------------------------------- helpers
+
+func _on_windup_started() -> void:
+	pass
+
 
 func set_state(s: int) -> void:
 	if state != s:
@@ -149,6 +181,8 @@ func set_state(s: int) -> void:
 		state_t = 0.0
 		if s == State.STAGGER:
 			poise = max_poise
+		elif s == State.WINDUP:
+			_on_windup_started()
 
 
 func is_staggered() -> bool:
@@ -265,6 +299,20 @@ func _process(delta: float) -> void:
 		_visual_root.scale = Vector3.ONE * (1.0 + _flash * 0.6)
 	else:
 		_visual_root.scale = Vector3.ONE
+
+	# Directional flinch recoil or dazed stagger wobble
+	if _flinch_t > 0.0:
+		_flinch_t -= delta
+		var fk := _flinch_t / 0.22
+		_visual_root.rotation.x = _flinch_impulse.x * sin(fk * PI)
+		_visual_root.rotation.z = _flinch_impulse.z * sin(fk * PI)
+	elif state == State.STAGGER:
+		_visual_root.rotation.x = sin(state_t * 6.0) * 0.12
+		_visual_root.rotation.z = cos(state_t * 7.5) * 0.16
+	else:
+		_visual_root.rotation.x = 0.0
+		_visual_root.rotation.z = 0.0
+
 	animate(delta)
 
 

@@ -6,8 +6,11 @@ extends Node3D
 
 const LENGTH := 70.0
 const TURNS_PER_GAME_HOUR := 6.0
+const MAX_FUEL_SEC := 2160.0 # 3 full in-game days of fuel
 
 var sky: SkyCycle
+var fuel_sec: float = 720.0  # Starts with 1 full in-game day (720s) of fuel
+var lantern_pos: Vector3 = Vector3.ZERO
 var _beams: Array[MeshInstance3D] = []
 var _mat: StandardMaterial3D
 var _glow: OmniLight3D
@@ -15,6 +18,7 @@ var _glow: OmniLight3D
 
 func setup(p_sky: SkyCycle, lantern_m: Vector3) -> void:
 	sky = p_sky
+	lantern_pos = lantern_m
 	name = "LighthouseBeam"
 	position = lantern_m
 	_mat = StandardMaterial3D.new()
@@ -33,9 +37,9 @@ func setup(p_sky: SkyCycle, lantern_m: Vector3) -> void:
 		add_child(mi)
 		_beams.append(mi)
 	_glow = OmniLight3D.new()
-	_glow.light_color = Color(1.0, 0.86, 0.55)
-	_glow.omni_range = 14.0
-	_glow.light_energy = 1.6
+	_glow.light_color = Color(1.0, 0.84, 0.52)
+	_glow.omni_range = 9.0
+	_glow.light_energy = 0.55
 	_glow.shadow_enabled = false
 	add_child(_glow)
 	visible = false
@@ -48,8 +52,8 @@ func _cone_mesh() -> ArrayMesh:
 	var sides := 8
 	var r0 := 0.35
 	var r1 := 6.0
-	var c0 := Color(1.0, 0.9, 0.6, 0.14)
-	var c1 := Color(1.0, 0.9, 0.6, 0.0)
+	var c0 := Color(1.0, 0.88, 0.55, 0.045)
+	var c1 := Color(1.0, 0.88, 0.55, 0.0)
 	for k in sides:
 		var a0 := TAU * k / sides
 		var a1 := TAU * (k + 1) / sides
@@ -63,13 +67,39 @@ func _cone_mesh() -> ArrayMesh:
 	return st.commit()
 
 
-func _process(_delta: float) -> void:
+func add_fuel(sec: float = 720.0) -> float:
+	fuel_sec = clampf(fuel_sec + sec, 0.0, MAX_FUEL_SEC)
+	return fuel_sec
+
+
+func can_refuel() -> bool:
+	return fuel_sec < MAX_FUEL_SEC
+
+
+func fuel_hours_left() -> float:
+	# 720s per game day = 30s per game hour
+	return fuel_sec / 30.0
+
+
+func _process(delta: float) -> void:
 	if sky == null:
 		return
 	var t := sky.time_of_day
 	var night := t < 0.27 or t > 0.80
-	visible = night
-	if not night:
+	var foggy := false
+	if sky.weather != null:
+		foggy = sky.weather.params.fog > 0.35
+
+	var should_light := (night or foggy) and fuel_sec > 0.0
+	visible = should_light
+	if _glow != null:
+		_glow.light_energy = 0.55 if should_light else 0.0
+
+	if not visible:
 		return
+
+	# Burn fuel while beam is active
+	fuel_sec = maxf(0.0, fuel_sec - delta)
+
 	rotation.y = t * 24.0 * TURNS_PER_GAME_HOUR * TAU
 	rotation.x = -0.04   # tipped a touch down towards the sea

@@ -131,6 +131,14 @@ func effective_damage(dmg: float) -> float:
 	return dmg * m
 
 
+func is_armored() -> bool:
+	return true
+
+
+func _on_windup_started() -> void:
+	CombatAudio.play_sound("tell_snap", position, 3.0, 0.05)
+
+
 func on_hit(dmg: float, from: Vector3, power: float, attacker: int) -> bool:
 	if state == State.DEAD:
 		return false

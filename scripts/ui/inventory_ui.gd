@@ -266,6 +266,7 @@ func _build() -> void:
 	var outer := PanelContainer.new()
 	outer.custom_minimum_size = Vector2(1040, 610)
 	center.add_child(outer)
+	UiTheme.keep_on_screen(outer)
 
 	var main_v := VBoxContainer.new()
 	main_v.add_theme_constant_override("separation", 10)
@@ -283,11 +284,13 @@ func _build() -> void:
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(_title_label)
 
+	# Mouse hints live in a footer under the pages, so the header never sets the panel width.
 	var hint_lbl := Label.new()
 	hint_lbl.text = "Click: Move/Swap  ·  Shift+Click: Transfer  ·  Q: Drop  ·  Keys 1-8: Hotbar  ·  RMB: Use"
 	hint_lbl.theme_type_variation = &"Small"
-	hint_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(hint_lbl)
+	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_lbl.custom_minimum_size = Vector2(200, 0)
 
 	var quest_btn := Button.new()
 	quest_btn.text = "Quests (J)"
@@ -317,6 +320,7 @@ func _build() -> void:
 	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cols.add_theme_constant_override("separation", 12)
 	main_v.add_child(cols)
+	main_v.add_child(hint_lbl)   # footer: after the pages
 
 	# 1. Left Column: Equipment Paperdoll + Stats
 	var left_page := PanelContainer.new()
@@ -498,7 +502,7 @@ func _build() -> void:
 	hv.add_child(_hover_title)
 	_hover_sub = Label.new()
 	_hover_sub.theme_type_variation = &"Small"
-	_hover_sub.add_theme_font_size_override("font_size", 12)
+	_hover_sub.add_theme_font_size_override("font_size", 14)
 	_hover_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hv.add_child(_hover_sub)
 
@@ -529,7 +533,7 @@ func _show_hover_label(item_id: StringName, count: int, prefix: String = "") -> 
 		if def.has_tag("pickaxe"):
 			sub_parts.append("Mines stone & ores")
 		elif def.has_tag("axe"):
-			sub_parts.append("Chops trees & timber")
+			sub_parts.append("Fells whole trees, chops wood fast, more logs per tree")
 		elif def.has_tag("shovel"):
 			sub_parts.append("Excavates dirt, sand & gravel")
 		elif def.has_tag("hammer"):
@@ -705,14 +709,14 @@ func _make_equip_cell(slot_key: StringName, label_text: String, slot: ItemSlot) 
 	var cat := Label.new()
 	cat.text = label_text
 	cat.theme_type_variation = &"Small"
-	cat.add_theme_font_size_override("font_size", 11)
+	cat.add_theme_font_size_override("font_size", 14)
 	cat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(cat)
 
 	var item_lbl := Label.new()
 	var def: ItemDef = ItemDB.get_item(slot.item_id) if not slot.is_empty() else null
 	item_lbl.text = def.name if def != null else "Empty"
-	item_lbl.add_theme_font_size_override("font_size", 11)
+	item_lbl.add_theme_font_size_override("font_size", 14)
 	item_lbl.clip_text = true
 	item_lbl.custom_minimum_size = Vector2(44, 16)
 	item_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -855,7 +859,7 @@ func _refresh_inspector(inv: Inventory) -> void:
 		var cat_names := ["Material", "Food", "Tool / Weapon", "Equipment", "Blueprint", "Special"]
 		lines.append("Category: %s" % cat_names[clampi(def.category, 0, cat_names.size() - 1)])
 		if def.has_tag("hammer"):
-			lines.append("Equippable in Hotbar: Unlocks the Hammer Build Menu (Prefabs, Furniture & Blocks).")
+			lines.append("Equippable in Hotbar · Unlocks Hammer Build Menu")
 		elif def.has_tag("pickaxe"):
 			lines.append("Harvest Tool: Excavates terrain voxels and ores.")
 		elif def.has_tag("fishing_rod"):
@@ -906,7 +910,7 @@ func _refresh_inspector(inv: Inventory) -> void:
 		eat_btn.text = "Eat"
 		eat_btn.disabled = not player.vitality.can_eat_food(def.id)
 		if player.vitality.is_full_of(def.id):
-			eat_btn.text = "Still full (%d min)" % maxi(1, ceili(player.vitality.reeat_wait_sec(def.id) / 60.0))
+			eat_btn.text = "Full · %d min" % maxi(1, ceili(player.vitality.reeat_wait_sec(def.id) / 60.0))
 		eat_btn.pressed.connect(func() -> void:
 			if player.vitality.eat_food(def.id, inv):
 				if player.hud:
@@ -990,7 +994,7 @@ func _refresh_hand_crafting(inv: Inventory) -> void:
 			b.text = label_txt
 			b.toggle_mode = true
 			b.button_pressed = (_station_tab == tag)
-			b.add_theme_font_size_override("font_size", 11)
+			b.add_theme_font_size_override("font_size", 14)
 			b.pressed.connect(func() -> void:
 				_station_tab = tag
 				refresh()
@@ -1034,7 +1038,7 @@ func _refresh_hand_crafting(inv: Inventory) -> void:
 		else:
 			fuel_lbl.text = "Fire Out — Recharge with wood to cook"
 			fuel_lbl.add_theme_color_override("font_color", Color(0.65, 0.18, 0.15))
-		fuel_lbl.add_theme_font_size_override("font_size", 12)
+		fuel_lbl.add_theme_font_size_override("font_size", 14)
 		fuel_box.add_child(fuel_lbl)
 
 		var stoke_btn := Button.new()
@@ -1080,7 +1084,7 @@ func _refresh_hand_crafting(inv: Inventory) -> void:
 		var sub := Label.new()
 		sub.text = ", ".join(cost_parts)
 		sub.theme_type_variation = &"InkLabel"
-		sub.add_theme_font_size_override("font_size", 11)
+		sub.add_theme_font_size_override("font_size", 14)
 		info_v.add_child(sub)
 
 		var st_for_rec: StationEntity = nearby_tags.get(r.required_station, null) if r.required_station != &"none" else null
@@ -1103,7 +1107,7 @@ func _refresh_hand_crafting(inv: Inventory) -> void:
 	if hidden_count > 0:
 		var hint := Label.new()
 		hint.theme_type_variation = &"InkLabel"
-		hint.add_theme_font_size_override("font_size", 12)
+		hint.add_theme_font_size_override("font_size", 14)
 		hint.add_theme_color_override("font_color", Color8(120, 92, 70))
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 		hint.text = "%d more recipe%s to discover: find new ingredients, recruit drifters, finish quests, or buy recipe scrolls." % [

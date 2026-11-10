@@ -42,6 +42,29 @@ const BUILTIN := {
 	&"mooring_bollard": ["Mooring Bollard",        {&"driftwood": 4, &"iron_ingot": 1}, &"ground", 10],
 	&"tide_hearth":     ["Tide Hearth",            {&"cobblestone": 16, &"driftwood": 8, &"sea_brass_ingot": 2}, &"ground", 1],
 	&"village_bell":    ["Harbour Bell",           {&"iron_ingot": 2, &"wood_plank": 8, &"cobblestone": 4}, &"ground", 1],
+	&"phosphor_brazier": ["Phosphor Brazier",       {&"copper_ore": 4, &"sea_glass": 2, &"stone": 4}, &"ground", 5],
+	&"defense_barricade": ["Spike Barricade",       {&"driftwood": 6, &"iron_ingot": 1}, &"ground", 10],
+	&"sparring_ring":    ["Town Sparring Ring",    {&"sand": 12, &"wood_plank": 4, &"driftwood": 4}, &"ground", 1],
+	&"regatta_buoy":     ["Regatta Checkpoint Buoy", {&"wood_plank": 4, &"sea_brass_ingot": 1}, &"intertidal", 10],
+	&"diving_bell":      ["Submerged Diving Bell", {&"sea_brass_ingot": 6, &"wood_plank": 8, &"cobblestone": 4}, &"intertidal", 1],
+	&"tide_wheel":       ["Tide Mill Water Wheel", {&"wood_plank": 16, &"iron_ingot": 4, &"driftwood": 8}, &"intertidal", 5],
+	&"automated_grain_mill": ["Automated Grain Mill", {&"stone": 12, &"wood_plank": 8, &"sea_brass_ingot": 2}, &"ground", 5],
+	&"automated_sawmill": ["Automated Sawmill", {&"wood_plank": 12, &"iron_ingot": 6, &"sea_brass_ingot": 2}, &"ground", 5],
+	&"sluice_gate":      ["Tidal Sluice Gate", {&"wood_plank": 8, &"iron_ingot": 2}, &"intertidal", 10],
+	&"undertow_altar":   ["Undertow Gauntlet Altar", {&"cobblestone": 12, &"sea_glass": 4}, &"intertidal", 1],
+	&"tide_regulator":   ["Ancient Tide Regulator", {&"cobblestone": 20, &"ancient_weapon_fragment": 2}, &"ground", 1],
+	&"drafting_desk":    ["Architect's Drafting Desk", {&"wood_plank": 8, &"driftwood": 4, &"sea_brass_ingot": 1}, &"ground", 5],
+	&"fish_trophy":      ["Taxidermy Fish Mount",    {&"wood_plank": 2, &"driftwood": 2, &"silver_mackerel": 1}, &"ground", 10],
+	&"aquarium":         ["Glass Living Aquarium",   {&"sea_glass": 6, &"sea_brass_ingot": 2, &"sand": 2}, &"ground", 5],
+	&"heraldic_banner":  ["Heraldic Settlement Banner", {&"sea_wool": 4, &"driftwood": 4, &"sea_brass_ingot": 1}, &"ground", 10],
+	&"aging_cask":       ["Oak Aging Cask",          {&"wood_plank": 6, &"iron_ingot": 2, &"driftwood": 2}, &"ground", 5],
+	&"oyster_rack":      ["Tidal Oyster Rack",       {&"wood_plank": 6, &"kelp_frond": 4, &"stone": 2}, &"intertidal", 5],
+	&"mangrove_beehive": ["Mangrove Beehive",        {&"wood_plank": 8, &"marsh_honey": 1, &"leaves": 4}, &"ground", 5],
+	&"banquet_table":    ["Communal Banquet Table",  {&"wood_plank": 12, &"driftwood": 6, &"sea_wool": 2}, &"ground", 2],
+	&"farming_station":  ["Farmer's Seed Stand",     {&"wood_plank": 4, &"seed_shore_wheat": 2}, &"ground", 5],
+	&"ranch_station":    ["Rancher's Hitching Post", {&"driftwood": 4, &"wood_plank": 2},       &"ground", 5],
+	&"fisher_station":   ["Fisher's Tackle Bench",   {&"wood_plank": 4, &"driftwood": 2},       &"ground", 5],
+	&"sawhorse":         ["Sawyer's Sawhorse",       {&"driftwood": 4, &"wood_plank": 2},       &"ground", 5],
 }
 
 const TroughEntityClass := preload("res://scripts/entities/trough_entity.gd")
@@ -88,6 +111,10 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"cat_basket", func(c: Vector3i) -> WorldEntity: return GuardAnimalEntity.make_cat_basket(c), {"aliases": [&"cat"]})
 	EntityManager.register_type(&"scarecrow", ScarecrowEntity)
 	EntityManager.register_type(&"village_bell", VillageBellEntity, {"aliases": [&"bell"]})
+	EntityManager.register_type(&"farming_station", func(c: Vector3i) -> WorldEntity: return StationEntity.new(&"farming_station", "Farmer's Seed Stand", c), {"aliases": [&"farm_stand"]})
+	EntityManager.register_type(&"ranch_station", func(c: Vector3i) -> WorldEntity: return StationEntity.new(&"ranch_station", "Rancher's Hitching Post", c), {"aliases": [&"ranch_post"]})
+	EntityManager.register_type(&"fisher_station", func(c: Vector3i) -> WorldEntity: return StationEntity.new(&"fisher_station", "Fisher's Tackle Bench", c), {"aliases": [&"tackle_bench"]})
+	EntityManager.register_type(&"sawhorse", func(c: Vector3i) -> WorldEntity: return StationEntity.new(&"sawhorse", "Sawyer's Sawhorse", c))
 	EntityManager.register_type(&"barnacled_chest", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_barnacled(c), {"item": &""})
 	EntityManager.register_type(&"stone_well", func(c: Vector3i) -> WorldEntity: return WaterSourceEntity.make_well(c), {"aliases": [&"well"]})
 	EntityManager.register_type(&"freshwater_spring", func(c: Vector3i) -> WorldEntity: return WaterSourceEntity.make_spring(c), {"item": &""})
@@ -96,6 +123,25 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"mooring_bollard", BollardEntity, {"aliases": [&"bollard"]})
 	EntityManager.register_type(&"loose_boulder", BoulderEntity, {"item": &""})
 	EntityManager.register_type(&"pantry_barrel", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_pantry_barrel(c), {"aliases": [&"pantry"]})
+	EntityManager.register_type(&"phosphor_brazier", PhosphorBrazierEntity, {"aliases": [&"brazier"]})
+	EntityManager.register_type(&"defense_barricade", BarricadeEntity, {"aliases": [&"barricade"]})
+	EntityManager.register_type(&"sparring_ring", SparringRingEntity, {"aliases": [&"sparring"]})
+	EntityManager.register_type(&"regatta_buoy", RegattaBuoyEntity, {"aliases": [&"buoy"]})
+	EntityManager.register_type(&"diving_bell", DivingBellEntity, {"aliases": [&"bell_dive"]})
+	EntityManager.register_type(&"tide_wheel", TideWheelEntity, {"rule": &"intertidal", "aliases": [&"mill_wheel"]})
+	EntityManager.register_type(&"automated_grain_mill", AutomatedGrainMillEntity, {"aliases": [&"grain_mill", &"mill"]})
+	EntityManager.register_type(&"automated_sawmill", AutomatedSawmillEntity, {"aliases": [&"sawmill"]})
+	EntityManager.register_type(&"sluice_gate", SluiceGateEntity, {"rule": &"intertidal", "aliases": [&"sluice"]})
+	EntityManager.register_type(&"undertow_altar", UndertowGauntletAltar, {"rule": &"intertidal", "aliases": [&"gauntlet"]})
+	EntityManager.register_type(&"tide_regulator", TideRegulatorEntity, {"aliases": [&"regulator", &"monolith"]})
+	EntityManager.register_type(&"drafting_desk", DraftingDeskEntity, {"aliases": [&"desk", &"architect"]})
+	EntityManager.register_type(&"fish_trophy", FishTrophyEntity, {"aliases": [&"trophy"]})
+	EntityManager.register_type(&"aquarium", AquariumEntity, {"aliases": [&"fish_tank"]})
+	EntityManager.register_type(&"heraldic_banner", HeraldicBannerEntity, {"aliases": [&"banner", &"flag"]})
+	EntityManager.register_type(&"aging_cask", AgingCaskEntity, {"aliases": [&"cask", &"barrel_aging"]})
+	EntityManager.register_type(&"oyster_rack", OysterRackEntity, {"rule": &"intertidal", "aliases": [&"oysters", &"aquaculture"]})
+	EntityManager.register_type(&"mangrove_beehive", MangroveBeehiveEntity, {"aliases": [&"beehive", &"apiary", &"bees"]})
+	EntityManager.register_type(&"banquet_table", BanquetTableEntity, {"aliases": [&"feast_table", &"feast"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]
 		add_item(type, b[0], b[1], b[3])

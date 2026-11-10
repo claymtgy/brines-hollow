@@ -12,6 +12,10 @@ var _sell_list: VBoxContainer
 var _contract_list: VBoxContainer
 
 
+func _init() -> void:
+	visible = false
+
+
 func _ready() -> void:
 	layer = 15
 	_build()
@@ -19,20 +23,29 @@ func _ready() -> void:
 
 
 func open() -> void:
-	if trade.current() == null:
+	if trade == null or trade.current() == null:
 		return
 	visible = true
 	refresh()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if trade.main.player != null:
+	if trade.main != null and trade.main.player != null:
 		trade.main.player.input_enabled = false
 
 
 func close() -> void:
 	visible = false
-	if trade.main.player != null:
+	if trade != null and trade.main != null and trade.main.player != null:
 		trade.main.player.input_enabled = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func is_open() -> bool:
+	return visible
+
+
+func _process(_delta: float) -> void:
+	if visible and Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _input(e: InputEvent) -> void:
@@ -47,16 +60,20 @@ func _build() -> void:
 	_root = Control.new()
 	UiTheme.prepare(_root)
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_root)
 	var dim := ColorRect.new()
 	dim.color = Color(0.04, 0.08, 0.10, 0.5)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(dim)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(center)
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(900, 520)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)

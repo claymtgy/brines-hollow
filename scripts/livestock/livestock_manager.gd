@@ -89,15 +89,15 @@ func spawn_starter_livestock() -> void:
 	if main != null and main.get("world") != null and main.world.get("gen") != null:
 		spawn_pos = Vector3(main.world.gen.spawn) * VoxelWorld.VS   # gen.spawn is in voxels
 
-	# Spawn starter pair of each domestic species in pasture near village
-	spawn_animal(&"salt_goat", spawn_pos + Vector3(6.0, 0.0, 3.0), "Barnaby")
-	spawn_animal(&"salt_goat", spawn_pos + Vector3(7.5, 0.0, 5.0), "Clover")
+	# Spawn starter pair of each domestic species in pasture near village (wild until tamed and named!)
+	spawn_animal(&"salt_goat", spawn_pos + Vector3(6.0, 0.0, 3.0), "")
+	spawn_animal(&"salt_goat", spawn_pos + Vector3(7.5, 0.0, 5.0), "")
 
-	spawn_animal(&"shore_sheep", spawn_pos + Vector3(4.0, 0.0, 8.0), "Daisy")
-	spawn_animal(&"shore_sheep", spawn_pos + Vector3(5.5, 0.0, 9.5), "Woolsey")
+	spawn_animal(&"shore_sheep", spawn_pos + Vector3(4.0, 0.0, 8.0), "")
+	spawn_animal(&"shore_sheep", spawn_pos + Vector3(5.5, 0.0, 9.5), "")
 
-	spawn_animal(&"shore_duck", spawn_pos + Vector3(-4.0, 0.0, 5.0), "Pip")
-	spawn_animal(&"shore_duck", spawn_pos + Vector3(-5.5, 0.0, 6.0), "Quigley")
+	spawn_animal(&"shore_duck", spawn_pos + Vector3(-4.0, 0.0, 5.0), "")
+	spawn_animal(&"shore_duck", spawn_pos + Vector3(-5.5, 0.0, 6.0), "")
 
 
 # ---------------------------------------------------------------- Herding & Whistle
