@@ -148,6 +148,11 @@ static func _register_materials() -> void:
 		ItemDef.new(&"exotic_spice", "Exotic Eastern Spice", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"luxury", &"cooking"]),
 		ItemDef.new(&"dye_indigo", "Imperial Indigo Dye", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"dye", &"crafting"]),
 		ItemDef.new(&"silk_bolt", "High-Seas Silk Bolt", ItemDef.Category.MATERIAL, 99, -1, [&"trade", &"textile"]),
+		# Archery & Black Powder Ammunition
+		ItemDef.new(&"flint_arrow", "Flint Hunting Arrow", ItemDef.Category.MATERIAL, 64, -1, [&"ammo", &"arrow"]),
+		ItemDef.new(&"iron_broadhead", "Iron Broadhead Arrow", ItemDef.Category.MATERIAL, 64, -1, [&"ammo", &"arrow", &"pierce"]),
+		ItemDef.new(&"paper_cartridge", "Paper Black-Powder Cartridge", ItemDef.Category.MATERIAL, 30, -1, [&"ammo", &"bullet", &"powder"]),
+		ItemDef.new(&"black_powder", "Black Powder", ItemDef.Category.MATERIAL, 40, -1, [&"crafting", &"powder"]),
 	]
 	for o in ores:
 		register_item(o)
@@ -289,6 +294,9 @@ static func _register_tools_and_weapons() -> void:
 		ItemDef.new(&"animal_whistle", "Shepherd's Whistle", ItemDef.Category.TOOL, 1, -1, [&"tool", &"whistle"]),
 		ItemDef.new(&"glacial_ice_lance", "Glacial Ice Lance", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"harpoon", &"thrust", &"frost"]),
 		ItemDef.new(&"sovereign_trident", "Sovereign Hydro-Trident", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"trident", &"legendary"]),
+		ItemDef.new(&"hunting_bow", "Whittled Shore Bow", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"bow", &"ranged"]),
+		ItemDef.new(&"driftwood_recurve", "Driftwood Recurve Bow", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"bow", &"ranged"]),
+		ItemDef.new(&"flintlock_pistol", "Sea-Dog's Brass Flintlock", ItemDef.Category.TOOL, 1, -1, [&"weapon", &"flintlock", &"ranged", &"firearm"]),
 	]
 
 	# Tool properties
@@ -336,12 +344,23 @@ static func _register_tools_and_weapons() -> void:
 	tools[25].tool_data = {"tier": 2, "till_power": 1.6, "durability": 140}
 	tools[26].tool_data = {"tier": 4, "till_power": 2.5, "durability": 240}
 	tools[1].tool_data = {"tier": 4, "power": 2.8, "durability": 280}
-	tools[tools.size() - 2].tool_data = {"weapon_type": "harpoon", "damage": 42, "reach": 3.8, "frost": true}
-	tools[tools.size() - 2].weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 42, "attack_rate": 1.1, "reach_m": 3.8, "frost": true}
-	tools[tools.size() - 1].tool_data = {"weapon_type": "trident", "damage": 65, "reach": 4.2, "cavitation": true, "legendary": true}
-	tools[tools.size() - 1].weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 65, "attack_rate": 1.3, "reach_m": 4.2, "cavitation": true, "legendary": true}
-
 	for t in tools:
+		match t.id:
+			&"glacial_ice_lance":
+				t.tool_data = {"weapon_type": "harpoon", "damage": 42, "reach": 3.8, "frost": true}
+				t.weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 42, "attack_rate": 1.1, "reach_m": 3.8, "frost": true}
+			&"sovereign_trident":
+				t.tool_data = {"weapon_type": "trident", "damage": 65, "reach": 4.2, "cavitation": true, "legendary": true}
+				t.weapon_data = {"weapon_type": WeaponDef.WeaponType.HARPOON, "damage": 65, "attack_rate": 1.3, "reach_m": 4.2, "cavitation": true, "legendary": true}
+			&"hunting_bow":
+				t.tool_data = {"weapon_type": "bow", "damage": 22, "reach": 35.0, "is_ranged": true}
+				t.weapon_data = {"weapon_type": WeaponDef.WeaponType.BOW, "damage": 22, "attack_rate": 1.0, "reach_m": 35.0, "projectile_speed_m_s": 32.0, "is_ranged": true, "underwater_efficiency": 0.3}
+			&"driftwood_recurve":
+				t.tool_data = {"weapon_type": "bow", "damage": 34, "reach": 45.0, "is_ranged": true}
+				t.weapon_data = {"weapon_type": WeaponDef.WeaponType.BOW, "damage": 34, "attack_rate": 1.2, "reach_m": 45.0, "projectile_speed_m_s": 42.0, "is_ranged": true, "underwater_efficiency": 0.35}
+			&"flintlock_pistol":
+				t.tool_data = {"weapon_type": "flintlock", "damage": 48, "reach": 22.0, "is_ranged": true}
+				t.weapon_data = {"weapon_type": WeaponDef.WeaponType.FLINTLOCK, "damage": 48, "attack_rate": 0.8, "reach_m": 22.0, "projectile_speed_m_s": 60.0, "is_ranged": true, "stagger_power": 2.2, "underwater_efficiency": 0.0}
 		register_item(t)
 
 
@@ -371,10 +390,19 @@ static func _register_equipment_and_backpacks() -> void:
 		ItemDef.new(&"parchment_shore_chart", "Parchment Shore Chart", ItemDef.Category.EQUIPMENT, 1, -1, [&"map", &"chart", &"navigation"]),
 		ItemDef.new(&"hydrographic_sea_chart", "Hydrographic Sea Chart", ItemDef.Category.EQUIPMENT, 1, -1, [&"map", &"chart", &"navigation"]),
 		ItemDef.new(&"master_chronometer_chart", "Master Chronometer Chart", ItemDef.Category.EQUIPMENT, 1, -1, [&"map", &"chart", &"navigation"]),
+		# Off-Hand & Tactical Gear
+		ItemDef.new(&"boarding_shield", "Reinforced Boarding Shield", ItemDef.Category.EQUIPMENT, 1, -1, [&"armor", &"shield", &"accessory", &"offhand"]),
+		ItemDef.new(&"offhand_brass_lantern", "Mariner's Belt Lantern", ItemDef.Category.EQUIPMENT, 1, -1, [&"accessory", &"offhand", &"light"]),
 	]
 
 	for g: ItemDef in gear:
 		match g.id:
+			&"boarding_shield":
+				g.equip_slot = &"accessory"
+				g.armor_data = {"defense": 6, "guard_efficiency": 0.5, "parry_window_bonus": 0.05, "block_angle_deg": 140.0}
+			&"offhand_brass_lantern":
+				g.equip_slot = &"accessory"
+				g.tool_data = {"light_radius": 14.0}
 			&"backpack_canvas":
 				g.equip_slot = &"backpack"
 				g.tool_data = {"capacity": 24}
@@ -438,7 +466,8 @@ static func _register_special_and_currencies() -> void:
 	var specials := [
 		ItemDef.new(&"brass_guilder", "Brass Guilder", ItemDef.Category.SPECIAL, 9999, -1, [&"currency", &"trade"]),
 		ItemDef.new(&"tide_scrip", "Tide Scrip", ItemDef.Category.SPECIAL, 9999, -1, [&"currency", &"export"]),
-		ItemDef.new(&"gilded_ship_wheel", "Gilded Ship Wheel", ItemDef.Category.SPECIAL, 1, -1, [&"trophy", &"boss_drop"]),
+		ItemDef.new(&"gilded_ship_wheel", "Gilded Ship Wheel", ItemDef.Category.SPECIAL, 1, -1, [&"trophy", &"boss_drop", &"boat_fixture", &"placeable"]),
+		ItemDef.new(&"sea_hawk_perch", "Trained Sea-Hawk Perch", ItemDef.Category.SPECIAL, 1, -1, [&"boat_fixture", &"placeable", &"companion"]),
 		ItemDef.new(&"blueprint_tide_mill", "Blueprint: Tide Mill", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"engineering"]),
 		ItemDef.new(&"blueprint_dry_dock", "Blueprint: Dry Dock", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"maritime"]),
 		ItemDef.new(&"skiff_kit", "Outrigger Skiff (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),

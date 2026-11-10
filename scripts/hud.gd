@@ -70,6 +70,31 @@ var breath_bar: ProgressBar
 var stomach_label: Label
 var rested_label: Label
 
+# reticle & ranged aim
+var reticle: Control
+var crosshair: TextureRect
+var reticle_draw: Control
+var _reticle_is_bow := false
+var _reticle_is_flintlock := false
+var _reticle_is_drawing := false
+var _reticle_draw_ratio := 0.0
+var _reticle_ammo_count := 0
+
+# nautical helm & boat hud
+var boat_panel: PanelContainer
+var boat_name_label: Label
+var boat_badges_row: HBoxContainer
+var boat_wheel_badge: Label
+var boat_hawk_badge: Label
+var boat_armor_badge: Label
+var boat_hull_bar: ProgressBar
+var boat_hull_label: Label
+var boat_status_row: HBoxContainer
+var boat_leak_label: Label
+var boat_speed_label: Label
+var boat_sail_label: Label
+var boat_controls_label: Label
+
 var _toast_t := 0.0
 var _toast_queue: Array = []   # [[text, seconds], ...] waiting their turn
 var _toast_shown := ""
@@ -579,13 +604,22 @@ func _build_hud() -> void:
 	hud_root = _root_control()
 	hud_root.visible = false
 
-	var cross := TextureRect.new()
-	cross.texture = UiTheme.tex("crosshair")
-	cross.set_anchors_preset(Control.PRESET_CENTER)
-	cross.offset_left = -16
-	cross.offset_top = -16
-	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud_root.add_child(cross)
+	# --- center reticle / crosshair
+	reticle = Control.new()
+	reticle.set_anchors_preset(Control.PRESET_CENTER)
+	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(reticle)
+
+	crosshair = TextureRect.new()
+	crosshair.texture = UiTheme.tex("crosshair")
+	crosshair.position = Vector2(-16, -16)
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reticle.add_child(crosshair)
+
+	reticle_draw = Control.new()
+	reticle_draw.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reticle_draw.draw.connect(_on_reticle_draw)
+	reticle.add_child(reticle_draw)
 
 	# --- top-left: chronometer, tide, weather
 	var tl := MarginContainer.new()
@@ -782,6 +816,65 @@ func _build_hud() -> void:
 		slot_counts.append(cnt)
 		slot_keys.append(key)
 
+	# --- bottom-centre: nautical helm & boat hull plaque
+	var boat_anchor := VBoxContainer.new()
+	boat_anchor.anchor_top = 1.0
+	boat_anchor.anchor_bottom = 1.0
+	boat_anchor.anchor_right = 1.0
+	boat_anchor.offset_bottom = -12
+	boat_anchor.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	boat_anchor.alignment = BoxContainer.ALIGNMENT_END
+	boat_anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.add_child(boat_anchor)
+
+	boat_panel = PanelContainer.new()
+	boat_panel.theme_type_variation = &"Plaque"
+	boat_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	boat_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boat_panel.visible = false
+	boat_anchor.add_child(boat_panel)
+
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 4)
+	boat_panel.add_child(bv)
+
+	var br1 := _row(bv, 8)
+	br1.alignment = BoxContainer.ALIGNMENT_CENTER
+	br1.add_child(UiTheme.icon(ItemIcons.hud_icon("boat"), 26))
+	boat_name_label = _label("Rowboat", &"Header", 20)
+	br1.add_child(boat_name_label)
+	boat_badges_row = _row(br1, 6)
+	boat_wheel_badge = _label("[★ Wheel]", &"Small", 13)
+	boat_wheel_badge.add_theme_color_override("font_color", UiTheme.BRASS)
+	boat_badges_row.add_child(boat_wheel_badge)
+	boat_hawk_badge = _label("[🦅 Hawk]", &"Small", 13)
+	boat_hawk_badge.add_theme_color_override("font_color", UiTheme.TEAL)
+	boat_badges_row.add_child(boat_hawk_badge)
+	boat_armor_badge = _label("[🛡 Reinforced]", &"Small", 13)
+	boat_armor_badge.add_theme_color_override("font_color", Color8(210, 220, 230))
+	boat_badges_row.add_child(boat_armor_badge)
+
+	var br2 := _row(bv, 8)
+	br2.alignment = BoxContainer.ALIGNMENT_CENTER
+	br2.add_child(UiTheme.icon(ItemIcons.hud_icon("hull"), 22))
+	boat_hull_bar = _bar(br2, &"HealthBar", 240)
+	boat_hull_label = _label("100/100 HP", &"Small", 15)
+	boat_hull_label.custom_minimum_size = Vector2(85, 0)
+	br2.add_child(boat_hull_label)
+
+	boat_status_row = _row(bv, 10)
+	boat_status_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	boat_leak_label = _label("Watertight", &"Small", 14)
+	boat_status_row.add_child(boat_leak_label)
+	boat_speed_label = _label("0.0 kts", &"Small", 14)
+	boat_status_row.add_child(boat_speed_label)
+	boat_sail_label = _label("", &"Small", 14)
+	boat_status_row.add_child(boat_sail_label)
+
+	boat_controls_label = _label("", &"Small", 13)
+	boat_controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bv.add_child(boat_controls_label)
+
 	# --- help sheet (F1), rebuilt when the input device changes
 	# Right edge, mid-height: clear of the clock, quest tracker, banner and hotbar.
 	help = PanelContainer.new()
@@ -962,6 +1055,51 @@ func _unhandled_input(e: InputEvent) -> void:
 			fps_label.visible = not fps_label.visible
 
 
+func _on_reticle_draw() -> void:
+	if reticle_draw == null:
+		return
+	if not _reticle_is_bow and not _reticle_is_flintlock:
+		return
+
+	var center := Vector2.ZERO
+
+	if _reticle_is_bow:
+		if _reticle_is_drawing:
+			# Reticle brackets contract smoothly from 38px down to 14px as tension builds
+			var r := lerpf(38.0, 14.0, _reticle_draw_ratio)
+			# Left bracket
+			reticle_draw.draw_arc(center, r, PI * 0.75, PI * 1.25, 12, UiTheme.OUTLINE, 3.5)
+			reticle_draw.draw_arc(center, r, PI * 0.75, PI * 1.25, 12, UiTheme.CREAM, 2.0)
+			# Right bracket
+			reticle_draw.draw_arc(center, r, -PI * 0.25, PI * 0.25, 12, UiTheme.OUTLINE, 3.5)
+			reticle_draw.draw_arc(center, r, -PI * 0.25, PI * 0.25, 12, UiTheme.CREAM, 2.0)
+
+			# Circular draw tension gauge
+			reticle_draw.draw_arc(center, 22.0, 0.0, TAU, 32, Color(0.1, 0.07, 0.05, 0.5), 3.0)
+			var gauge_col := UiTheme.STAMINA.lerp(UiTheme.TEAL if _reticle_draw_ratio >= 1.0 else UiTheme.BRASS, _reticle_draw_ratio)
+			if _reticle_draw_ratio > 0.01:
+				reticle_draw.draw_arc(center, 22.0, -PI * 0.5, -PI * 0.5 + _reticle_draw_ratio * TAU, 32, gauge_col, 2.5)
+
+			# Maximum draw diamond pips
+			if _reticle_draw_ratio >= 1.0:
+				for angle in [0.0, PI * 0.5, PI, PI * 1.5]:
+					var p := center + Vector2.RIGHT.rotated(angle) * 26.0
+					reticle_draw.draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), UiTheme.BRASS)
+		else:
+			# Resting bow sight notches
+			reticle_draw.draw_arc(center, 28.0, PI * 0.8, PI * 1.2, 8, UiTheme.OUTLINE, 3.0)
+			reticle_draw.draw_arc(center, 28.0, PI * 0.8, PI * 1.2, 8, Color(0.9, 0.85, 0.75, 0.65), 1.8)
+			reticle_draw.draw_arc(center, 28.0, -PI * 0.2, PI * 0.2, 8, UiTheme.OUTLINE, 3.0)
+			reticle_draw.draw_arc(center, 28.0, -PI * 0.2, PI * 0.2, 8, Color(0.9, 0.85, 0.75, 0.65), 1.8)
+
+	elif _reticle_is_flintlock:
+		# Flintlock sight bead and alignment notches
+		reticle_draw.draw_arc(center, 16.0, 0.0, TAU, 24, Color(0.1, 0.07, 0.05, 0.45), 2.0)
+		reticle_draw.draw_line(center + Vector2(0, 16), center + Vector2(0, 22), UiTheme.BRASS, 2.0)
+		reticle_draw.draw_line(center + Vector2(-22, 0), center + Vector2(-16, 0), UiTheme.BRASS, 2.0)
+		reticle_draw.draw_line(center + Vector2(16, 0), center + Vector2(22, 0), UiTheme.BRASS, 2.0)
+
+
 func _set_icon(r: TextureRect, key: String) -> void:
 	if r.get_meta("k", "") != key:
 		r.set_meta("k", key)
@@ -977,7 +1115,10 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	var main_node := get_parent()
 	var tut: Variant = main_node.get("tutorial") if main_node != null else null
 	var talking: bool = tut != null and tut.dialogue != null and tut.dialogue.is_open()
-	bottom_bar.visible = not player.is_seated() and not talking
+	var seated: bool = player.is_seated()
+	bottom_bar.visible = not seated and not talking
+	if boat_panel != null:
+		boat_panel.visible = seated and not talking
 	if talking and help.visible:
 		help.visible = false   # the conversation needs the screen; F1 brings the sheet back
 	underwater.visible = cam_under
@@ -986,6 +1127,68 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 		tut.set_tracker_position(Vector2(14, top_left.position.y + top_left.size.y + 8))
 	if crew_row != null:
 		crew_row.visible = peers_text != "Solo"
+
+	# --- reticle state & bow aiming
+	if player.combat != null:
+		_reticle_is_bow = player.combat.is_holding_bow()
+		_reticle_is_flintlock = player.combat.is_holding_flintlock()
+		_reticle_is_drawing = player.combat.is_drawing_bow
+		_reticle_draw_ratio = player.combat.get_bow_draw_ratio()
+		_reticle_ammo_count = player.combat.get_arrow_ammo_count() if _reticle_is_bow else player.combat.get_cartridge_ammo_count()
+	else:
+		_reticle_is_bow = false
+		_reticle_is_flintlock = false
+		_reticle_is_drawing = false
+		_reticle_draw_ratio = 0.0
+		_reticle_ammo_count = 0
+	if reticle_draw != null:
+		reticle_draw.queue_redraw()
+
+	# --- nautical boat helm HUD
+	if seated and player.boat != null and boat_panel != null:
+		var b: Boat = player.boat
+		boat_name_label.text = b.display_name().capitalize()
+		boat_wheel_badge.visible = b.has_gilded_wheel
+		boat_hawk_badge.visible = b.has_sea_hawk
+		boat_armor_badge.visible = b.reinforced_hull
+
+		boat_hull_bar.max_value = b.max_hull_hp
+		boat_hull_bar.value = b.hull_hp
+		var pct := b.get_hull_percent()
+		boat_hull_label.text = "%d/%d HP (%d%s)" % [int(round(b.hull_hp)), int(round(b.max_hull_hp)), int(round(pct)), "%"]
+
+		if pct > 60.0:
+			boat_hull_bar.modulate = Color.WHITE
+		elif pct > 30.0:
+			boat_hull_bar.modulate = Color(1.15, 0.9, 0.35)
+		else:
+			boat_hull_bar.modulate = Color(1.4, 0.35, 0.35)
+
+		if b.is_leaking():
+			boat_leak_label.text = "⚠ LEAKING (+%.1f L/s)" % b.leak_amount
+			boat_leak_label.add_theme_color_override("font_color", Color8(240, 100, 80))
+		else:
+			boat_leak_label.text = "Watertight Hull"
+			boat_leak_label.add_theme_color_override("font_color", UiTheme.CREAM_DIM)
+
+		var spd_kts: float = b.vel.length() * 1.94384
+		boat_speed_label.text = "%.1f kts" % spd_kts
+
+		if b.has_sail():
+			var heading := b.forward2()
+			var wind := b.wind_vec()
+			var eff := Boat.sail_efficiency(heading, wind) * 100.0
+			var pos_name := Boat.point_of_sail(heading, wind)
+			boat_sail_label.text = "%s (%.0f%% Eff)" % [pos_name, eff]
+			boat_sail_label.visible = true
+		else:
+			boat_sail_label.visible = false
+
+		var disembark_btn := _glyph(&"interact", "F")
+		var patch_btn := _glyph(&"dodge", "C")
+		var patch_hint := "  ·  %s Field Patch" % patch_btn if (b.hull_hp < b.max_hull_hp or b.is_leaking()) else ""
+		boat_controls_label.text = "W/S %s  ·  A/D Steer  ·  %s Step Off%s" % [
+			"Sail" if b.has_sail() else "Row", disembark_btn, patch_hint]
 
 	# --- chronometer
 	var t := sky.time_of_day
@@ -1114,8 +1317,21 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 			text = "%s  ·  %s till / harvest   %s plant / eat   (%s inventory)" % [
 				active_def.name if active_def else "Farm", use_btn, alt_btn, inv_btn]
 		5:
-			text = "%s  ·  %s swing   %s parry   (%s inventory)" % [
-				active_def.name if active_def else "Weapon", use_btn, alt_btn, inv_btn]
+			if player.combat != null and player.combat.is_holding_bow():
+				var arrows: int = player.combat.get_arrow_ammo_count()
+				if _reticle_is_drawing:
+					text = "%s  ·  Drawing... %.0f%% tension  ·  Arrows: %d  (Release %s to shoot)" % [
+						active_def.name if active_def else "Bow", _reticle_draw_ratio * 100.0, arrows, use_btn]
+				else:
+					text = "%s  ·  Hold %s to draw & aim  ·  Arrows: %d   (%s inventory)" % [
+						active_def.name if active_def else "Bow", use_btn, arrows, inv_btn]
+			elif player.combat != null and player.combat.is_holding_flintlock():
+				var bullets: int = player.combat.get_cartridge_ammo_count()
+				text = "%s  ·  %s quickfire  ·  Cartridges: %d  ·  %s parry / guard   (%s inventory)" % [
+					active_def.name if active_def else "Flintlock", use_btn, bullets, alt_btn, inv_btn]
+			else:
+				text = "%s  ·  %s swing   %s parry   (%s inventory)" % [
+					active_def.name if active_def else "Weapon", use_btn, alt_btn, inv_btn]
 		_:
 			if active_def != null:
 				text = "%s (x%d)   (%s inventory)" % [active_def.name, active_slot.count, inv_btn]

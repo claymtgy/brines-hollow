@@ -1056,6 +1056,19 @@ static func hud_icon(name: String) -> Texture2D:
 			_rect(i, 2, 8, 6, 6, Color8(244, 196, 66))
 			_ellipse(i, 11, 5, 2.5, 2.5, Color8(240, 200, 160))
 			_rect(i, 8, 8, 6, 6, Color8(72, 132, 150))
+		"boat", "hull":
+			_line(i, Vector2i(2, 9), Vector2i(4, 13), Color8(130, 85, 45), 2)
+			_line(i, Vector2i(4, 13), Vector2i(12, 13), Color8(130, 85, 45), 2)
+			_line(i, Vector2i(12, 13), Vector2i(14, 9), Color8(130, 85, 45), 2)
+			_rect(i, 3, 9, 10, 3, Color8(180, 130, 80))
+			_line(i, Vector2i(8, 3), Vector2i(8, 9), Color8(110, 75, 45))
+			_line(i, Vector2i(8, 4), Vector2i(12, 7), Color8(240, 230, 210), 2)
+		"leak":
+			_ellipse(i, 8, 10, 4.0, 4.0, water)
+			_line(i, Vector2i(8, 3), Vector2i(8, 8), water, 2)
+			_px(i, 7, 9, Color8(240, 255, 255))
+			_px(i, 6, 12, water)
+			_px(i, 10, 12, water)
 	return _finish_cache(key, i)
 
 

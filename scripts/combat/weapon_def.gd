@@ -8,7 +8,9 @@ enum WeaponType {
 	ANCHOR_MAUL,      ## Heavy crushing bludgeon, breaks carapace & voxels
 	SPEARGUN,         ## Ranged underwater quarrel thrower
 	TRAPPER_NET,      ## Entangles, weighs down, and drags creatures
-	TIDAL_LANTERN     ## Occult bioluminescent ray emitter
+	TIDAL_LANTERN,    ## Occult bioluminescent ray emitter
+	BOW,              ## High-arc ranged archery with variable draw tension
+	FLINTLOCK         ## High-impact black powder burst pistol
 }
 
 enum DamageType {

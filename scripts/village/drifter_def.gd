@@ -9,7 +9,8 @@ enum Profession {
 	SMOKER_CHEF,  ## Smokes fish and cooks hearty meals
 	LAMPLIGHTER,  ## Lights beacons at dusk, tolls alarm bell
 	TRADER,       ## Sells town surplus to visiting merchant boats
-	RANCHER       ## Tends livestock and gathers milk, wool, and eggs
+	RANCHER,      ## Tends livestock and gathers milk, wool, and eggs
+	BUILDER       ## Hauls materials from Community Chest and erects requested buildings
 }
 
 enum Routine {
@@ -123,7 +124,50 @@ func tick_work(delta_sec: float, town_depot: StorageContainer) -> Dictionary:
 			town_depot.deposit(produce, 2)
 			produced[produce] = 2
 
+		Profession.BUILDER:
+			# Shapes masonry and refines timber for village construction
+			if town_depot.inventory.has_item(&"stone", 2):
+				town_depot.withdraw(&"stone", 2)
+				town_depot.deposit(&"cobblestone", 2)
+				produced[&"cobblestone"] = 2
+			elif town_depot.inventory.has_item(&"driftwood", 1):
+				town_depot.withdraw(&"driftwood", 1)
+				town_depot.deposit(&"wood_plank", 4)
+				produced[&"wood_plank"] = 4
+			else:
+				town_depot.deposit(&"stone", 2)
+				produced[&"stone"] = 2
+
 	return produced
+
+
+## Work routine specifically for constructing an active building site.
+## Draws needed materials from community chest/depot and advances site progress.
+func tick_builder_site(delta_sec: float, site: ConstructionSiteEntity, chest: ChestEntity = null, world: VoxelWorld = null) -> bool:
+	if profession != Profession.BUILDER or current_routine != Routine.WORK or site == null or site.is_completed:
+		return false
+
+	var home_mult: float = 1.0 if not is_homeless() else 0.5
+	var morale_mult: float = 0.7 + morale * 0.6
+	var build_power: float = delta_sec * 0.05 * home_mult * morale_mult
+
+	if chest != null and not site.is_materials_satisfied():
+		site.pull_from_chest(chest)
+
+	return site.build_step(build_power, world)
+
+
+func profession_name() -> String:
+	match profession:
+		Profession.FISHER: return "Fisher"
+		Profession.FARMER: return "Farmer"
+		Profession.CARPENTER: return "Carpenter"
+		Profession.SMOKER_CHEF: return "Smoker-Chef"
+		Profession.LAMPLIGHTER: return "Lamplighter"
+		Profession.TRADER: return "Trader"
+		Profession.RANCHER: return "Rancher"
+		Profession.BUILDER: return "Builder"
+		_: return "Drifter"
 
 
 func serialize() -> Dictionary:

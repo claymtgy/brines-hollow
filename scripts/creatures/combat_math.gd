@@ -138,22 +138,23 @@ static func combo_lunge_speed(step: int) -> float:
 
 
 ## Does a guard stance facing direction block an attack from attacker?
-static func guard_succeeds(defender: Vector3, facing: Vector3, attacker: Vector3) -> bool:
+static func guard_succeeds(defender: Vector3, facing: Vector3, attacker: Vector3, max_arc_deg: float = GUARD_ARC_DEG) -> bool:
 	var to := attacker - defender
 	to.y = 0.0
 	if to.length() < 0.05:
 		return true
 	var f := Vector3(facing.x, 0.0, facing.z).normalized()
-	return rad_to_deg(f.angle_to(to.normalized())) <= GUARD_ARC_DEG * 0.5
+	return rad_to_deg(f.angle_to(to.normalized())) <= max_arc_deg * 0.5
 
 
 ## Calculate guard block damage absorption & stamina consumption
-static func calculate_guard_block(incoming: float, current_stamina: float, difficulty: int = Difficulty.TIDEWATCH) -> Dictionary:
+static func calculate_guard_block(incoming: float, current_stamina: float, difficulty: int = Difficulty.TIDEWATCH, guard_efficiency: float = 1.0) -> Dictionary:
 	if incoming <= 0.0:
 		return {"blocked": true, "damage_taken": 0.0, "stamina_cost": 0.0, "guard_broken": false}
-	var stamina_needed := maxf(6.0, incoming * GUARD_STAMINA_RATIO)
+	var eff: float = maxf(0.1, guard_efficiency)
+	var stamina_needed := maxf(6.0 * eff, incoming * GUARD_STAMINA_RATIO * eff)
 	if current_stamina >= stamina_needed:
-		var chip: float = incoming * (0.15 if difficulty == Difficulty.UNDERTOW else 0.0)
+		var chip: float = incoming * (0.15 if difficulty == Difficulty.UNDERTOW else 0.0) * eff
 		return {"blocked": true, "damage_taken": chip, "stamina_cost": stamina_needed, "guard_broken": false}
 	# Stamina depleted -> Guard Break!
 	var blocked_ratio: float = clampf(current_stamina / stamina_needed, 0.0, 1.0)
@@ -214,8 +215,8 @@ static func in_swing_arc(origin: Vector3, forward: Vector3, target: Vector3, rea
 
 
 ## Does a parry started `since_press` seconds ago deflect an attack from `attacker`?
-static func parry_succeeds(since_press: float, defender: Vector3, facing: Vector3, attacker: Vector3) -> bool:
-	if since_press < 0.0 or since_press > PARRY_WINDOW:
+static func parry_succeeds(since_press: float, defender: Vector3, facing: Vector3, attacker: Vector3, max_window: float = PARRY_WINDOW) -> bool:
+	if since_press < 0.0 or since_press > max_window:
 		return false
 	var to := attacker - defender
 	to.y = 0.0
@@ -246,3 +247,28 @@ static func knockback(from: Vector3, to: Vector3, power: float) -> Vector3:
 	if d.length() < 0.01:
 		d = Vector3.FORWARD
 	return d.normalized() * 3.5 * power + Vector3.UP * 1.5 * power
+
+
+## Returns true if the weapon type is classified as a ranged projectile armament.
+static func is_ranged_weapon(weapon_type: int) -> bool:
+	return weapon_type == WeaponDef.WeaponType.SPEARGUN or weapon_type == WeaponDef.WeaponType.BOW or weapon_type == WeaponDef.WeaponType.FLINTLOCK or weapon_type == WeaponDef.WeaponType.TRAPPER_NET
+
+
+## Calculates arrow velocity vector based on aim direction and draw charge fraction (0.2 to 1.0).
+static func calc_arrow_launch_velocity(aim_dir: Vector3, draw_charge: float, max_speed: float = 38.0) -> Vector3:
+	var power: float = clampf(draw_charge, 0.25, 1.0)
+	var speed: float = max_speed * power
+	# Slight natural upward loft on long-range release
+	var loft: Vector3 = Vector3.UP * (0.08 * (1.0 - power))
+	return (aim_dir.normalized() + loft).normalized() * speed
+
+
+## Flintlock point-blank burst damage scaling with distance falloff.
+static func calc_flintlock_damage(base_dmg: float, dist_m: float) -> float:
+	if dist_m <= 4.0:
+		return base_dmg * 1.5 # Point blank blast bonus
+	elif dist_m <= 12.0:
+		return base_dmg
+	elif dist_m <= 22.0:
+		return base_dmg * 0.65 # Medium distance falloff
+	return 0.0 # Beyond effective range

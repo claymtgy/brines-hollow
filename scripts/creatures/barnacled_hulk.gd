@@ -152,6 +152,19 @@ func on_hit(dmg: float, from: Vector3, power: float, attacker: int) -> bool:
 	return ok
 
 
+## Harpoon finisher: piercing the exposed eye stalks deals massive 2.2x weakpoint damage, bypassing shell armor.
+func eye_stalk_harpoon_strike(dmg: float, from: Vector3, attacker: int) -> bool:
+	if state == State.DEAD:
+		return false
+	risen = true
+	var weakpoint_dmg: float = dmg * 2.2
+	var ok := super.on_hit(weakpoint_dmg, from, 4.0, attacker)
+	CombatAudio.play_sound("tell_screech", position, 4.0, 0.05)
+	if net != null and net.main != null and net.main.hud != null:
+		net.main.hud.show_banner("Vulnerable Eye-Stalk Wrenched!", "Harpoon grapple bypasses galleon shell plating!")
+	return ok
+
+
 ## Host: a cliff boulder landed on it.
 func boulder_hit(attacker: int) -> void:
 	if state == State.DEAD:

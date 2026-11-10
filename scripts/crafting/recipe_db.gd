@@ -685,3 +685,64 @@ static func _register_weapons_and_armor() -> void:
 		[{"item_id": &"sea_wool", "count": 4}, {"item_id": &"marsh_honey", "count": 1}],
 		&"oilskin_coat", 1, 6.0, [&"armor", &"body"]
 	))
+
+	# Ranged Weapons & Ammunition
+	register_recipe(RecipeDef.new(
+		&"craft_hunting_bow", "Whittled Shore Bow", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 4}, {"item_id": &"kelp_frond", "count": 2}],
+		&"hunting_bow", 1, 4.0, [&"weapon", &"bow", &"ranged"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_driftwood_recurve", "Driftwood Recurve Bow", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"dark_wood", "count": 3}, {"item_id": &"driftwood", "count": 3}],
+		&"driftwood_recurve", 1, 6.0, [&"weapon", &"bow", &"ranged"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_flint_arrow", "Flint Hunting Arrows (x8)", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"stone", "count": 2}],
+		&"flint_arrow", 8, 2.0, [&"ammo", &"arrow"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_iron_broadhead", "Iron Broadhead Arrows (x8)", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 2}, {"item_id": &"iron_ingot", "count": 1}],
+		&"iron_broadhead", 8, 3.5, [&"ammo", &"arrow"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_black_powder", "Black Powder (x2)", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"sea_salt", "count": 2}, {"item_id": &"stone", "count": 1}],
+		&"black_powder", 2, 3.0, [&"crafting", &"powder"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_paper_cartridge", "Paper Cartridges (x4)", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"black_powder", "count": 2}, {"item_id": &"sea_iron_ore", "count": 1}],
+		&"paper_cartridge", 4, 3.0, [&"ammo", &"bullet", &"powder"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"forge_flintlock_pistol", "Sea-Dog's Brass Flintlock", RecipeDef.Category.FORGE, &"workbench",
+		[{"item_id": &"iron_ingot", "count": 3}, {"item_id": &"dark_wood", "count": 2}, {"item_id": &"copper_ore", "count": 2}],
+		&"flintlock_pistol", 1, 8.0, [&"weapon", &"flintlock", &"ranged"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_boarding_shield", "Reinforced Boarding Shield", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 4}, {"item_id": &"iron_ingot", "count": 2}],
+		&"boarding_shield", 1, 6.0, [&"armor", &"shield", &"accessory"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_offhand_lantern", "Mariner's Belt Lantern", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"copper_ore", "count": 2}, {"item_id": &"fish_oil", "count": 1}, {"item_id": &"sea_glass", "count": 1}],
+		&"offhand_brass_lantern", 1, 4.0, [&"accessory", &"offhand", &"light"]
+	))
+
+	register_recipe(RecipeDef.new(
+		&"craft_sea_hawk_perch", "Trained Sea-Hawk Perch", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"driftwood", "count": 6}, {"item_id": &"silver_mackerel", "count": 2}, {"item_id": &"sea_wool", "count": 2}],
+		&"sea_hawk_perch", 1, 5.0, [&"boat_fixture", &"companion"]
+	))

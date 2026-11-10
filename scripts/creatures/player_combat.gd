@@ -17,6 +17,9 @@ var is_guarding := false        # true while holding guard (RMB / LT)
 var guard_broken_t := 0.0       # stun recovery timer after guard break
 var riposte_ready_t := 0.0      # window to unleash high-multiplier counter
 var is_plunging := false        # true during downward aerial strike
+var bow_draw_t := 0.0           # seconds bow has been drawn
+var is_drawing_bow := false     # true while holding draw
+const BOW_MAX_DRAW_TIME := 0.75
 
 var _attack_cd := 0.0
 var _strike_in := -1.0          # seconds until the swing's active frame
@@ -24,6 +27,7 @@ var _swing_stats := {}
 var _dodge_t := -1.0            # elapsed time in the current dodge (-1 = none)
 var _dodge_cd := 0.0
 var _dodge_dir := Vector3.ZERO
+var _dodge_is_hop := false
 var _parry_t := -1.0            # elapsed since parry press (-1 = none)
 var _parry_cd := 0.0
 var _shake := 0.0
@@ -31,16 +35,84 @@ var _hit_stop_t := 0.0
 var _weapon_cached: ItemDef = null
 
 
-func weapon_def() -> ItemDef:
+func active_weapon() -> ItemDef:
 	if player == null or player.inventory == null:
 		return null
 	var slot: ItemSlot = player.inventory.get_active_item()
 	if slot == null or slot.is_empty():
 		return null
 	var def: ItemDef = ItemDB.get_item(slot.item_id)
-	if def != null and (def.has_tag("weapon") or not def.weapon_data.is_empty()) and not def.weapon_data.get("is_ranged", false):
+	if def != null and (def.has_tag("weapon") or not def.weapon_data.is_empty()):
 		return def
 	return null
+
+
+func is_holding_ranged() -> bool:
+	var wd := active_weapon()
+	if wd == null:
+		return false
+	var wt := int(wd.weapon_data.get("weapon_type", -1))
+	return CombatMath.is_ranged_weapon(wt) or wd.weapon_data.get("is_ranged", false)
+
+
+func is_holding_bow() -> bool:
+	var wd := active_weapon()
+	if wd == null:
+		return false
+	var wt := int(wd.weapon_data.get("weapon_type", -1))
+	return wt == WeaponDef.WeaponType.BOW
+
+
+func is_holding_flintlock() -> bool:
+	var wd := active_weapon()
+	if wd == null:
+		return false
+	var wt := int(wd.weapon_data.get("weapon_type", -1))
+	return wt == WeaponDef.WeaponType.FLINTLOCK
+
+
+func get_bow_draw_ratio() -> float:
+	if not is_drawing_bow:
+		return 0.0
+	return clampf(bow_draw_t / BOW_MAX_DRAW_TIME, 0.0, 1.0)
+
+
+func get_arrow_ammo_count() -> int:
+	if player == null or player.inventory == null:
+		return 0
+	return player.inventory.count_item(&"iron_broadhead") + player.inventory.count_item(&"flint_arrow")
+
+
+func get_cartridge_ammo_count() -> int:
+	if player == null or player.inventory == null:
+		return 0
+	return player.inventory.count_item(&"paper_cartridge")
+
+
+func weapon_def() -> ItemDef:
+	var wd := active_weapon()
+	if wd != null and not wd.weapon_data.get("is_ranged", false):
+		return wd
+	return null
+
+
+func get_offhand_item() -> ItemDef:
+	if player == null or player.inventory == null:
+		return null
+	var slot: ItemSlot = player.inventory.equipment.get(&"accessory", null)
+	if slot == null or slot.is_empty():
+		return null
+	return ItemDB.get_item(slot.item_id)
+
+
+func has_offhand_shield() -> bool:
+	var off := get_offhand_item()
+	return off != null and off.has_tag("shield")
+
+
+func has_offhand_light() -> bool:
+	var off := get_offhand_item()
+	return off != null and off.has_tag("light")
 
 
 func active_item() -> ItemDef:
@@ -65,11 +137,21 @@ func holding_fish() -> bool:
 
 func has_light() -> bool:
 	var d := active_item()
-	return d != null and d.has_tag("light")
+	if d != null and d.has_tag("light"):
+		return true
+	return has_offhand_light()
 
 
 func is_dodging() -> bool:
 	return CombatMath.dodge_protects(_dodge_t)
+
+
+func is_dodge_hop() -> bool:
+	return _dodge_is_hop
+
+
+func get_dodge_dir() -> Vector3:
+	return _dodge_dir
 
 
 ## Called from Player._process. Returns true when a weapon is in hand (tools are skipped).
@@ -102,7 +184,7 @@ func process_input(delta: float, can_input: bool) -> bool:
 				player.model.animate_dodge(-1.0)
 		else:
 			if player.model.has_method("animate_dodge"):
-				player.model.animate_dodge(_dodge_t / CombatMath.DODGE_TIME)
+				player.model.animate_dodge(_dodge_t / CombatMath.DODGE_TIME, _dodge_is_hop)
 			else:
 				player.model.rotation.x = -TAU * (_dodge_t / CombatMath.DODGE_TIME)
 
@@ -123,16 +205,64 @@ func process_input(delta: float, can_input: bool) -> bool:
 		if _strike_in < 0.0:
 			_resolve_strike()
 
-	var wd := weapon_def()
-	if wd == null:
+	var aw := active_weapon()
+	if aw == null:
+		if has_offhand_shield() and can_input and guard_broken_t <= 0.0 and _dodge_t < 0.0:
+			is_guarding = Input.is_action_pressed("alt_use")
+			if can_input and Input.is_action_just_pressed("alt_use") and _parry_cd <= 0.0:
+				_parry_t = 0.0
+				_parry_cd = CombatMath.PARRY_COOLDOWN
+			return is_guarding
 		return false
 
-	var wt: int = int(CombatMath.weapon_stats(wd).weapon_type)
+	var wt: int = int(aw.weapon_data.get("weapon_type", -1))
+	if is_holding_ranged():
+		if wt == WeaponDef.WeaponType.BOW:
+			player.model.set_tool(11)
+			is_guarding = has_offhand_shield() and can_input and Input.is_action_pressed("alt_use") and guard_broken_t <= 0.0 and _dodge_t < 0.0
+			if can_input and guard_broken_t <= 0.0 and _dodge_t < 0.0 and not is_guarding:
+				if Input.is_action_pressed("use"):
+					if not is_drawing_bow and _attack_cd <= 0.0:
+						if not _has_arrow_ammo():
+							if player.hud != null:
+								player.hud.show_toast("No arrows in pack!")
+							CombatAudio.play_sound("dry_click", player.position)
+							_attack_cd = 0.5
+						else:
+							is_drawing_bow = true
+							bow_draw_t = 0.0
+							CombatAudio.play_sound("bow_draw", player.position)
+					elif is_drawing_bow:
+						bow_draw_t = minf(bow_draw_t + delta, 1.2)
+						if bow_draw_t >= BOW_MAX_DRAW_TIME:
+							player.vitality.consume_stamina(3.0 * delta)
+						if player.rig != null and not player.rig.first_person:
+							player.facing = player.rig.yaw + PI
+						if player.model.has_method("animate_bow_draw"):
+							player.model.animate_bow_draw(bow_draw_t / BOW_MAX_DRAW_TIME)
+				elif Input.is_action_just_released("use"):
+					if is_drawing_bow:
+						if bow_draw_t >= 0.2:
+							fire_bow(aw, bow_draw_t)
+						is_drawing_bow = false
+						bow_draw_t = 0.0
+						if player.model.has_method("animate_bow_draw"):
+							player.model.animate_bow_draw(-1.0)
+			return true
+
+		elif wt == WeaponDef.WeaponType.FLINTLOCK:
+			player.model.set_tool(12)
+			is_guarding = has_offhand_shield() and can_input and Input.is_action_pressed("alt_use") and guard_broken_t <= 0.0 and _dodge_t < 0.0
+			if can_input and Input.is_action_just_pressed("use") and guard_broken_t <= 0.0 and _dodge_t < 0.0 and not is_guarding:
+				fire_flintlock(aw)
+			return true
+
+	var wd := aw
 	player.model.set_tool(6 if wt == WeaponDef.WeaponType.HARPOON else (7 if wt == WeaponDef.WeaponType.ANCHOR_MAUL else 5))
 
 	# Guard stance / parry pose visuals
-	is_guarding = can_input and Input.is_action_pressed("alt_use") and guard_broken_t <= 0.0
-	if (_parry_t >= 0.0 and _parry_t < CombatMath.PARRY_WINDOW) or is_guarding:
+	is_guarding = can_input and Input.is_action_pressed("alt_use") and guard_broken_t <= 0.0 and _dodge_t < 0.0
+	if _dodge_t < 0.0 and (((_parry_t >= 0.0 and _parry_t < CombatMath.PARRY_WINDOW)) or is_guarding):
 		player.model.arm_r.rotation.x = -1.4   # blade / shield raised across chest
 		player.model.arm_r.rotation.z = 0.9
 
@@ -264,7 +394,7 @@ func attack(wd: ItemDef, is_charged: bool = false) -> bool:
 	player.vel += fwd * float(strike_stats.lunge_speed)
 
 	# Audio and slash trail juice
-	var wt := int(base_stats.weapon_type)
+	var wt := int(base_stats.get(&"weapon_type", WeaponDef.WeaponType.CUTLASS))
 	var is_thrust := (wt == WeaponDef.WeaponType.HARPOON)
 	var sfx := "swing_heavy" if (is_charged or combo_step == 3 or wt == WeaponDef.WeaponType.ANCHOR_MAUL) else ("swing_thrust" if is_thrust else "swing_light")
 	CombatAudio.play_sound(sfx, player.position)
@@ -339,12 +469,21 @@ func try_dodge() -> bool:
 	_strike_in = -1.0
 	is_charging = false
 	charge_held_t = 0.0
+	if is_drawing_bow:
+		is_drawing_bow = false
+		bow_draw_t = 0.0
+		if player != null and player.model != null and player.model.has_method("animate_bow_draw"):
+			player.model.animate_bow_draw(-1.0)
 
 	var b := Basis(Vector3.UP, player.rig.yaw)
 	var wish_z := Input.get_axis("move_back", "move_forward") if InputMap.has_action("move_back") and InputMap.has_action("move_forward") else 0.0
 	var wish_x := Input.get_axis("move_left", "move_right") if InputMap.has_action("move_left") and InputMap.has_action("move_right") else 0.0
 	var wish := -b.z * wish_z + b.x * wish_x
-	_dodge_dir = wish.normalized() if wish.length() > 0.2 else b.z  # no input: hop backwards
+	var has_dir := wish.length() > 0.2
+	_dodge_is_hop = not has_dir
+	_dodge_dir = wish.normalized() if has_dir else b.z  # no input: hop backwards
+	if has_dir and player != null and (player.rig == null or not player.rig.first_person):
+		player.facing = atan2(_dodge_dir.x, _dodge_dir.z)
 	_dodge_t = 0.0
 	_dodge_cd = CombatMath.DODGE_COOLDOWN
 	CombatAudio.play_sound("dodge", player.position)
@@ -361,6 +500,8 @@ func modify_move(target_v: Vector3) -> Vector3:
 		return Vector3.ZERO
 	if is_guarding:
 		return target_v * 0.6
+	if is_drawing_bow:
+		return target_v * 0.55
 	if is_charging:
 		return target_v * 0.5
 	if sneaking:
@@ -374,19 +515,26 @@ func receive_hit(amount: float, from: Vector3, creature_id: int) -> String:
 		return "dodged"
 
 	var facing := Vector3(sin(player.facing), 0.0, cos(player.facing))
+	var can_defend: bool = (weapon_def() != null or has_offhand_shield())
+	var offhand := get_offhand_item()
+	var shield_data: Dictionary = offhand.armor_data if (offhand != null and offhand.has_tag("shield")) else {}
+	var guard_eff: float = float(shield_data.get("guard_efficiency", 1.0))
+	var block_arc: float = float(shield_data.get("block_angle_deg", CombatMath.GUARD_ARC_DEG))
+	var parry_win: float = CombatMath.PARRY_WINDOW + float(shield_data.get("parry_window_bonus", 0.0))
 
 	# Precision Parry check (first ~200ms of pressing RMB)
-	if weapon_def() != null and CombatMath.parry_succeeds(_parry_t, player.position, facing, from):
+	if can_defend and CombatMath.parry_succeeds(_parry_t, player.position, facing, from, parry_win):
 		if net != null and net.has_method("report_parry"):
 			net.report_parry(creature_id)
 		riposte_ready_t = CombatMath.RIPOSTE_WINDOW
 		_shake = 0.18
 		trigger_hit_stop(CombatMath.HITSTOP_HEAVY)
+		CombatAudio.play_sound("parry", player.position)
 		return "parried"
 
 	# Guard Stance Block check (holding RMB)
-	if weapon_def() != null and is_guarding and CombatMath.guard_succeeds(player.position, facing, from):
-		var blk := CombatMath.calculate_guard_block(amount, player.vitality.current_stamina)
+	if can_defend and is_guarding and CombatMath.guard_succeeds(player.position, facing, from, block_arc):
+		var blk := CombatMath.calculate_guard_block(amount, player.vitality.current_stamina, CombatMath.Difficulty.TIDEWATCH, guard_eff)
 		if blk.guard_broken:
 			player.vitality.consume_stamina(player.vitality.current_stamina)
 			guard_broken_t = CombatMath.GUARD_BREAK_DURATION
@@ -405,6 +553,7 @@ func receive_hit(amount: float, from: Vector3, creature_id: int) -> String:
 			var kb := CombatMath.knockback(from, player.position, 0.3)
 			player.vel += Vector3(kb.x, 0.0, kb.z) * 0.4
 			trigger_hit_stop(CombatMath.HITSTOP_LIGHT)
+			CombatAudio.play_sound("shield_block" if has_offhand_shield() else "block", player.position)
 			return "blocked"
 
 	if amount <= 0.0:
@@ -415,6 +564,147 @@ func receive_hit(amount: float, from: Vector3, creature_id: int) -> String:
 	player.vel += kb
 	_shake = 0.2
 	return "hit"
+
+
+func _has_arrow_ammo() -> bool:
+	if player == null or player.inventory == null:
+		return false
+	return player.inventory.has_item(&"iron_broadhead", 1) or player.inventory.has_item(&"flint_arrow", 1)
+
+
+func _consume_arrow_ammo() -> ItemDef:
+	if player == null or player.inventory == null:
+		return null
+	if player.inventory.has_item(&"iron_broadhead", 1):
+		player.inventory.remove_item(&"iron_broadhead", 1)
+		return ItemDB.get_item(&"iron_broadhead")
+	elif player.inventory.has_item(&"flint_arrow", 1):
+		player.inventory.remove_item(&"flint_arrow", 1)
+		return ItemDB.get_item(&"flint_arrow")
+	return null
+
+
+func _has_cartridge_ammo() -> bool:
+	if player == null or player.inventory == null:
+		return false
+	return player.inventory.has_item(&"paper_cartridge", 1)
+
+
+func _consume_cartridge_ammo() -> bool:
+	if player == null or player.inventory == null:
+		return false
+	if player.inventory.has_item(&"paper_cartridge", 1):
+		return player.inventory.remove_item(&"paper_cartridge", 1) > 0
+	return false
+
+
+func fire_bow(wd: ItemDef, draw_time: float) -> bool:
+	var arrow := _consume_arrow_ammo()
+	if arrow == null:
+		if player != null and player.hud != null:
+			player.hud.show_toast("No arrows remaining!")
+		return false
+
+	var charge := clampf(draw_time / BOW_MAX_DRAW_TIME, 0.25, 1.0)
+	var base_stats := CombatMath.weapon_stats(wd)
+	var max_spd: float = float(base_stats.get("projectile_speed_m_s", 36.0))
+
+	var aim_dir := -player.rig.cam.global_transform.basis.z if (player != null and player.rig != null and player.rig.cam != null) else (Vector3(sin(player.facing), 0.0, cos(player.facing)) if player != null else Vector3.FORWARD)
+	var aim_origin := (player.position + Vector3.UP * 1.3) if player != null else Vector3.ZERO
+
+	var vel := CombatMath.calc_arrow_launch_velocity(aim_dir, charge, max_spd)
+	if player != null and player.swimming:
+		var eff: float = float(base_stats.get("underwater_efficiency", 0.3))
+		vel *= eff
+
+	var base_dmg: float = float(base_stats.damage) * charge
+	var arrow_bonus: float = 12.0 if arrow.id == &"iron_broadhead" else 4.0
+	var total_dmg: float = base_dmg + arrow_bonus
+	if player != null and player.swimming:
+		total_dmg *= float(base_stats.get("underwater_efficiency", 0.3))
+
+	var is_pierce: bool = (arrow.id == &"iron_broadhead")
+	_attack_cd = 0.45
+
+	CombatAudio.play_sound("arrow_release", player.position if player != null else Vector3.ZERO)
+
+	var hit_count := 0
+	if net != null and net.has_method("local_raycast_strike"):
+		var stats := {
+			"damage": total_dmg,
+			"stagger_power": 1.6 if is_pierce else 1.0,
+			"weapon_type": WeaponDef.WeaponType.BOW,
+			"is_arrow": true,
+			"is_pierce": is_pierce,
+			"reach_m": float(base_stats.reach_m) * charge
+		}
+		hit_count = net.local_raycast_strike(aim_origin, vel.normalized(), float(base_stats.reach_m) * charge, stats, player != null and player.swimming)
+
+	if player != null and player.get_parent() != null:
+		CombatFX.spawn_arrow_tracer(player.get_parent() as Node3D, aim_origin, vel, 0.6)
+
+	if player != null:
+		player.swing_count += 1
+		if player.hud != null:
+			if hit_count > 0:
+				player.hud.show_toast("Target Struck! (%.0f dmg)" % total_dmg)
+			else:
+				player.hud.show_toast("Arrow Loosed")
+	return true
+
+
+func fire_flintlock(wd: ItemDef) -> bool:
+	if _attack_cd > 0.0:
+		return false
+	if player != null and player.swimming:
+		CombatAudio.play_sound("dry_click", player.position if player != null else Vector3.ZERO)
+		if player.hud != null:
+			player.hud.show_toast("Powder is waterlogged! Flintlock misfires.")
+		_attack_cd = 0.6
+		return false
+	if not _consume_cartridge_ammo():
+		CombatAudio.play_sound("dry_click", player.position if player != null else Vector3.ZERO)
+		if player != null and player.hud != null:
+			player.hud.show_toast("No paper cartridges loaded!")
+		_attack_cd = 0.5
+		return false
+
+	var base_stats := CombatMath.weapon_stats(wd)
+	var aim_dir := -player.rig.cam.global_transform.basis.z if (player != null and player.rig != null and player.rig.cam != null) else (Vector3(sin(player.facing), 0.0, cos(player.facing)) if player != null else Vector3.FORWARD)
+	var aim_origin := (player.position + Vector3.UP * 1.3) if player != null else Vector3.ZERO
+
+	# Gun-Kata combo integration: immediate follow-up to melee swing
+	var is_combo: bool = (combo_step > 0 or riposte_ready_t > 0.0)
+	combo_step = 0
+	riposte_ready_t = 0.0
+
+	var base_dmg: float = float(base_stats.damage)
+	var max_reach: float = float(base_stats.reach_m)
+	var pwr: float = float(base_stats.get("stagger_power", 2.2))
+
+	if player != null:
+		player.vel -= aim_dir * 2.2
+	_shake = 0.35
+	_attack_cd = 1.15
+
+	CombatAudio.play_sound("flintlock_shot", player.position if player != null else Vector3.ZERO)
+	if player != null and player.get_parent() != null:
+		CombatFX.spawn_muzzle_flash_and_smoke(player.get_parent() as Node3D, aim_origin, aim_dir)
+
+	var hit_count := 0
+	if net != null and net.has_method("local_flintlock_shot"):
+		hit_count = net.local_flintlock_shot(aim_origin, aim_dir, base_dmg, max_reach, pwr, player != null and player.swimming, is_combo)
+
+	if player != null:
+		player.swing_count += 1
+		if player.hud != null:
+			if is_combo:
+				player.hud.show_toast("Gun-Kata Blast! (Heavy Stagger)")
+			elif hit_count > 0:
+				player.hud.show_toast("Direct Shot! (Flintlock Blast)")
+			else:
+				player.hud.show_toast("Flintlock Discharged")
+	return true
 
 
 func _update_shake(delta: float) -> void:

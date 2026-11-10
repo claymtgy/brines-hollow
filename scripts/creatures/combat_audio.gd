@@ -69,6 +69,11 @@ static func init_audio(force: bool = false) -> void:
 	_sounds["tell_roar"] = _bake_sound(0.28, _gen_tell_roar)
 	_sounds["water_lap"] = _bake_sound(0.28, _gen_water_lap)
 	_sounds["fanfare"] = _bake_sound(0.75, _gen_fanfare)
+	_sounds["arrow_release"] = _bake_sound(0.16, _gen_arrow_release)
+	_sounds["bow_draw"] = _bake_sound(0.20, _gen_bow_draw)
+	_sounds["flintlock_shot"] = _bake_sound(0.38, _gen_flintlock_shot)
+	_sounds["dry_click"] = _bake_sound(0.08, _gen_dry_click)
+	_sounds["shield_block"] = _bake_sound(0.22, _gen_shield_block)
 
 
 static func play_sound(sound_key: String, origin: Vector3 = Vector3.ZERO, volume_db: float = 0.0, pitch_var: float = 0.08) -> void:
@@ -294,3 +299,49 @@ static func _gen_fanfare(i: int, _n: int) -> float:
 	var overtone := sin(TAU * t * freq * 2.0) * 0.35
 	var third := sin(TAU * t * freq * 3.0) * 0.15
 	return (fundamental + overtone + third) * env * 0.65
+
+
+# Bow string release snap & arrow hiss
+static func _gen_arrow_release(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var snap := sin(TAU * t * lerpf(980.0, 320.0, prog)) * exp(-prog * 18.0)
+	var noise := randf_range(-1.0, 1.0) * exp(-prog * 14.0) * 0.4
+	return (snap * 0.7 + noise * 0.3) * 0.85
+
+
+# Bow draw wood-creak and string tension
+static func _gen_bow_draw(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var creak := sin(TAU * t * (280.0 + sin(t * 80.0) * 40.0)) * sin(prog * PI)
+	var grit := randf_range(-0.5, 0.5) * sin(prog * PI) * 0.25
+	return (creak * 0.6 + grit) * 0.5
+
+
+# Flintlock explosive muzzle report
+static func _gen_flintlock_shot(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var crack := randf_range(-1.0, 1.0) * exp(-prog * 24.0) * 1.0
+	var boom := sin(TAU * t * lerpf(140.0, 45.0, prog)) * exp(-prog * 6.0) * 0.9
+	var rumble := sin(TAU * t * 65.0) * exp(-prog * 4.0) * 0.6
+	return clampf(crack * 0.55 + boom * 0.35 + rumble * 0.25, -1.0, 1.0)
+
+
+# Dry click on empty chamber / unstrung bow
+static func _gen_dry_click(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var click := sin(TAU * t * 2400.0) * exp(-prog * 45.0)
+	return click * 0.6
+
+
+# Solid shield block impact
+static func _gen_shield_block(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var thud := sin(TAU * t * lerpf(280.0, 90.0, prog)) * exp(-prog * 10.0) * 0.8
+	var wood_crack := randf_range(-0.8, 0.8) * exp(-prog * 18.0) * 0.5
+	return (thud + wood_crack) * 0.85
+

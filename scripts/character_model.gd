@@ -31,11 +31,15 @@ var tool_maul: Node3D
 var tool_lantern: Node3D
 var tool_axe: Node3D
 var tool_shovel: Node3D
+var tool_bow: Node3D
+var tool_flintlock: Node3D
 
 # Paperdoll equipment attachments
 var backpack_node: Node3D
 var diving_helmet_node: Node3D
 var flippers_node: Node3D
+var shield_node: Node3D
+var offhand_lantern: Node3D
 
 var _phase := 0.0
 var _swing := 0.0
@@ -388,6 +392,44 @@ func _build_tool_arsenal() -> void:
 	sv.box(0, 6, 0, 2, 8, 0, Palette.METAL)
 	tool_shovel = _tool(sv)
 
+	# 11. Whittled Shore Bow
+	var bw := _grid(3, 11, 2)
+	bw.box(1, 0, 0, 1, 10, 0, Palette.DARK_WOOD)
+	bw.setv(1, 0, 1, Palette.HANDLE)
+	bw.setv(1, 10, 1, Palette.HANDLE)
+	bw.box(1, 1, 1, 1, 9, 1, Palette.METAL)
+	tool_bow = _tool(bw)
+
+	# 12. Sea-Dog's Flintlock Pistol
+	var fl := _grid(3, 7, 2)
+	fl.box(1, 0, 0, 1, 3, 1, Palette.DARK_WOOD)
+	fl.box(1, 4, 0, 1, 6, 0, Palette.METAL)
+	fl.setv(1, 3, 1, Palette.METAL)
+	tool_flintlock = _tool(fl)
+
+	# Offhand Boarding Shield (strapped to arm_l)
+	var sh := _grid(6, 8, 2)
+	sh.box(0, 0, 0, 5, 7, 0, Palette.PLANK)
+	sh.box(0, 0, 1, 5, 7, 1, Palette.METAL)
+	shield_node = Node3D.new()
+	shield_node.position = Vector3(0.5, -3.5, 0) * U
+	shield_node.rotation = Vector3(0, PI * 0.5, 0)
+	arm_l.add_child(shield_node)
+	_part(shield_node, sh, Vector3(-3, -4, -1))
+	shield_node.visible = false
+
+	# Offhand Lantern (held in left hand)
+	var lt2 := _grid(3, 8, 3)
+	lt2.box(1, 0, 1, 1, 5, 1, Palette.HANDLE)
+	lt2.box(0, 5, 0, 2, 7, 2, Palette.METAL)
+	lt2.setv(1, 6, 1, Palette.LANTERN)
+	offhand_lantern = Node3D.new()
+	offhand_lantern.position = Vector3(0, -5.5, 0.5) * U
+	offhand_lantern.rotation = Vector3(PI * 0.5, 0, 0)
+	arm_l.add_child(offhand_lantern)
+	_part(offhand_lantern, lt2, Vector3(-1.5, -1, -1.5))
+	offhand_lantern.visible = false
+
 
 func _part(parent: Node3D, g: Prefabs.Grid, offset_u: Vector3) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -433,6 +475,8 @@ func set_tool(i: int) -> void:
 	if tool_lantern: tool_lantern.visible = (i == 8)
 	if tool_axe: tool_axe.visible = (i == 9)
 	if tool_shovel: tool_shovel.visible = (i == 10)
+	if tool_bow: tool_bow.visible = (i == 11)
+	if tool_flintlock: tool_flintlock.visible = (i == 12)
 
 
 func set_backpack_visible(is_visible: bool) -> void:
@@ -443,6 +487,28 @@ func set_backpack_visible(is_visible: bool) -> void:
 func set_diving_helmet_visible(is_visible: bool) -> void:
 	if diving_helmet_node:
 		diving_helmet_node.visible = is_visible
+
+
+func set_shield_visible(is_visible: bool) -> void:
+	if shield_node:
+		shield_node.visible = is_visible
+
+
+func set_offhand_lantern_visible(is_visible: bool) -> void:
+	if offhand_lantern:
+		offhand_lantern.visible = is_visible
+
+
+func animate_bow_draw(charge: float) -> void:
+	if charge < 0.0:
+		return
+	var c := clampf(charge, 0.0, 1.0)
+	arm_l.rotation.x = -1.45
+	arm_l.rotation.y = 0.20
+	arm_l.rotation.z = -0.15
+	arm_r.rotation.x = -1.20 - c * 0.25
+	arm_r.rotation.y = -0.40 * c
+	arm_r.rotation.z = 0.50 * c
 
 
 func swing() -> void:
@@ -462,23 +528,62 @@ func swing_attack(step: int = 1, is_charged: bool = false, is_thrust: bool = fal
 		_swing_step = step if step >= 1 and step <= 2 else 1
 
 
-func animate_dodge(prog: float) -> void:
+func animate_dodge(prog: float, is_hop: bool = false) -> void:
 	if prog < 0.0 or prog > 1.0:
 		if body != null:
-			body.rotation.x = 0.0
-			body.position.y = 0.0
+			body.rotation = Vector3.ZERO
+			body.position = Vector3.ZERO
+		if head != null:
+			head.rotation = Vector3.ZERO
+		if leg_l != null:
+			leg_l.rotation = Vector3.ZERO
+		if leg_r != null:
+			leg_r.rotation = Vector3.ZERO
+		if arm_l != null:
+			arm_l.rotation = Vector3.ZERO
+		if arm_r != null:
+			arm_r.rotation = Vector3.ZERO
 		return
-	if body != null:
-		body.position.y = -0.32 * sin(prog * PI)
-		body.rotation.x = -TAU * prog
-	if leg_l != null and leg_r != null:
-		var tuck := 1.25 * sin(prog * PI)
-		leg_l.rotation.x = tuck
-		leg_r.rotation.x = tuck
-	if arm_l != null and arm_r != null:
-		var arm_tuck := -1.35 * sin(prog * PI)
-		arm_l.rotation.x = arm_tuck
-		arm_r.rotation.x = arm_tuck
+
+	var s := sin(prog * PI)
+	if is_hop:
+		# Backward evasive hop: athletic spring, torso braced forward, legs trailing
+		if body != null:
+			body.position.y = 0.32 * s
+			body.rotation.x = 0.22 * s
+		if head != null:
+			head.rotation.x = 0.15 * s
+		if leg_l != null and leg_r != null:
+			var leg_trail := -0.35 * s
+			leg_l.rotation.x = leg_trail
+			leg_r.rotation.x = leg_trail
+		if arm_l != null and arm_r != null:
+			arm_l.rotation.x = 0.3 * s
+			arm_r.rotation.x = 0.3 * s
+			arm_l.rotation.z = -0.25 * s
+			arm_r.rotation.z = 0.25 * s
+	else:
+		# Acrobatic tucked forward somersault roll.
+		# Rotate around the character's center of mass (yc ~ 0.72m) so the roll
+		# stays above the ground instead of diving into the floor.
+		const YC := 8.0 * U  # ~0.72m center of mass height
+		var roll_angle := -TAU * prog
+		if body != null:
+			body.position.y = YC * (1.0 - cos(roll_angle)) - 0.28 * s
+			body.position.z = 0.0
+			body.rotation.x = roll_angle
+		if head != null:
+			head.rotation.x = 0.55 * s  # tuck chin to chest
+		if leg_l != null and leg_r != null:
+			var tuck := 1.35 * s
+			leg_l.rotation.x = tuck
+			leg_r.rotation.x = tuck
+		if arm_l != null and arm_r != null:
+			var arm_tuck := -1.4 * s
+			arm_l.rotation.x = arm_tuck
+			arm_r.rotation.x = arm_tuck
+			arm_l.rotation.z = -0.15 * s
+			arm_r.rotation.z = 0.15 * s
 
 
 func cast_line() -> void:

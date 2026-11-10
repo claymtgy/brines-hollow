@@ -620,7 +620,8 @@ func _process(_delta: float) -> void:
 		if kit >= 0 and b == null and launch_spot(p) != null:
 			prompt = "F  Launch %s" % ["rowboat", "skiff", "Tide-Barge", "Coastal Sloop"][kit]
 		elif b != null:
-			prompt = ("F  Board %s" % b.display_name()) if b.free_seat() == 0 else "F  Ride along"
+			var hull_status := " (Hull %.0f%%)" % b.get_hull_percent() if b.get_hull_percent() < 99.0 else ""
+			prompt = (("F  Board %s" % b.display_name()) if b.free_seat() == 0 else "F  Ride along") + hull_status
 			if b.hold != null:
 				prompt += "      Shift+F  stow / take cargo (%d/%d)" % [b.hold_used(), Boat.HOLD_SLOTS]
 		elif main.entities != null:

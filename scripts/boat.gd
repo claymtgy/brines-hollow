@@ -76,14 +76,30 @@ var _bow_lantern: OmniLight3D = null
 var _lantern_mesh: MeshInstance3D = null
 var small_hold: Inventory = null
 var reinforced_hull := false
+var has_reinforced_hull: bool:
+	get: return reinforced_hull
+	set(v): reinforced_hull = v
 var outrigger_rigged := false
 var _water_lap_cd := 0.0
 var deck_fixtures: Dictionary = {}  # slot_idx: int -> Dictionary {"id": StringName, "node": Node3D, "hold": Inventory}
+var max_hull_hp: float = 100.0
+var hull_hp: float = 100.0
+var leak_amount: float = 0.0
+var has_gilded_wheel: bool = false
+var has_sea_hawk: bool = false
 
 
 func setup(p_id: int, p_world: VoxelWorld, p_sky: SkyCycle, pos: Vector3, p_yaw: float, p_kind := KIND_ROWBOAT) -> void:
 	id = p_id
 	kind = p_kind
+	match kind:
+		KIND_ROWBOAT: max_hull_hp = 100.0
+		KIND_SKIFF: max_hull_hp = 150.0
+		KIND_SLOOP: max_hull_hp = 200.0
+		KIND_BARGE: max_hull_hp = 250.0
+		KIND_SCHOONER: max_hull_hp = 350.0
+	hull_hp = max_hull_hp
+	leak_amount = 0.0
 	if kind == KIND_SKIFF:
 		half_beam = 1.15     # the outrigger float sits out to port
 		half_len = 2.3
@@ -207,27 +223,27 @@ func get_deck_slots() -> Array[Dictionary]:
 	match kind:
 		KIND_SLOOP:
 			return [
-				{"index": 0, "name": "Bow Mount", "pos": Vector3(0.0, 0.45, 1.8), "allowed": [&"deck_lantern", &"harpoon_swivel"]},
-				{"index": 1, "name": "Port Deck", "pos": Vector3(-0.6, 0.25, 0.2), "allowed": [&"cargo_crate", &"deck_lantern", &"diving_winch"]},
-				{"index": 2, "name": "Cuddy Cabin", "pos": Vector3(0.0, 0.25, 1.0), "allowed": [&"sea_cot", &"navigation_table", &"cargo_crate"]}
+				{"index": 0, "name": "Bow Mount", "pos": Vector3(0.0, 0.45, 1.8), "allowed": [&"deck_lantern", &"harpoon_swivel", &"sea_hawk_perch"]},
+				{"index": 1, "name": "Port Deck", "pos": Vector3(-0.6, 0.25, 0.2), "allowed": [&"cargo_crate", &"deck_lantern", &"diving_winch", &"gilded_ship_wheel"]},
+				{"index": 2, "name": "Cuddy Cabin", "pos": Vector3(0.0, 0.25, 1.0), "allowed": [&"sea_cot", &"navigation_table", &"cargo_crate", &"gilded_ship_wheel"]}
 			]
 		KIND_SCHOONER:
 			return [
-				{"index": 0, "name": "Bow Pulpit", "pos": Vector3(0.0, 0.65, 3.4), "allowed": [&"deck_lantern", &"harpoon_swivel"]},
+				{"index": 0, "name": "Bow Pulpit", "pos": Vector3(0.0, 0.65, 3.4), "allowed": [&"deck_lantern", &"harpoon_swivel", &"sea_hawk_perch"]},
 				{"index": 1, "name": "Foredeck Starboard", "pos": Vector3(0.7, 0.35, 1.6), "allowed": [&"cargo_crate", &"harpoon_swivel", &"diving_winch"]},
 				{"index": 2, "name": "Foredeck Port", "pos": Vector3(-0.7, 0.35, 1.6), "allowed": [&"cargo_crate", &"deck_lantern", &"diving_winch"]},
-				{"index": 3, "name": "Midship Deck", "pos": Vector3(0.0, 0.35, -0.4), "allowed": [&"navigation_table", &"cargo_crate", &"diving_winch"]},
-				{"index": 4, "name": "Quarterdeck Cabin", "pos": Vector3(0.0, 0.45, -2.2), "allowed": [&"sea_cot", &"navigation_table"]}
+				{"index": 3, "name": "Midship Deck", "pos": Vector3(0.0, 0.35, -0.4), "allowed": [&"navigation_table", &"cargo_crate", &"diving_winch", &"sea_hawk_perch"]},
+				{"index": 4, "name": "Quarterdeck Cabin", "pos": Vector3(0.0, 0.45, -2.2), "allowed": [&"sea_cot", &"navigation_table", &"gilded_ship_wheel"]}
 			]
 		KIND_BARGE:
 			return [
-				{"index": 0, "name": "Bow Cleat Mount", "pos": Vector3(0.0, 0.35, 2.0), "allowed": [&"deck_lantern"]},
+				{"index": 0, "name": "Bow Cleat Mount", "pos": Vector3(0.0, 0.35, 2.0), "allowed": [&"deck_lantern", &"gilded_ship_wheel", &"sea_hawk_perch"]},
 				{"index": 1, "name": "Port Cargo Bay", "pos": Vector3(-0.7, 0.25, -0.5), "allowed": [&"cargo_crate", &"diving_winch"]},
 				{"index": 2, "name": "Starboard Cargo Bay", "pos": Vector3(0.7, 0.25, -0.5), "allowed": [&"cargo_crate", &"diving_winch"]}
 			]
 		_:
 			return [
-				{"index": 0, "name": "Bow Stem", "pos": Vector3(0.0, 0.35, half_len - 0.3), "allowed": [&"deck_lantern", &"cargo_crate"]}
+				{"index": 0, "name": "Bow Stem", "pos": Vector3(0.0, 0.35, half_len - 0.3), "allowed": [&"deck_lantern", &"cargo_crate", &"gilded_ship_wheel", &"sea_hawk_perch"]}
 			]
 
 
@@ -378,6 +394,33 @@ func install_fixture(slot_idx: int, fixture_id: StringName, hold_data: Variant =
 			bell.material_override = brass_mat
 			bell.position = Vector3(0, -0.4, 0)
 			fixture_node.add_child(bell)
+		&"gilded_ship_wheel":
+			has_gilded_wheel = true
+			var wh := MeshInstance3D.new()
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = 0.32
+			cyl.bottom_radius = 0.32
+			cyl.height = 0.08
+			wh.mesh = cyl
+			var g_mat := StandardMaterial3D.new()
+			g_mat.albedo_color = Color(0.95, 0.82, 0.25)
+			wh.material_override = g_mat
+			wh.rotation.x = PI * 0.5
+			fixture_node.add_child(wh)
+		&"sea_hawk_perch":
+			has_sea_hawk = true
+			var post := MeshInstance3D.new()
+			var cpost := BoxMesh.new()
+			cpost.size = Vector3(0.08, 0.8, 0.08)
+			post.mesh = cpost
+			fixture_node.add_child(post)
+			var hawk := MeshInstance3D.new()
+			var hmesh := SphereMesh.new()
+			hmesh.radius = 0.12
+			hmesh.height = 0.25
+			hawk.mesh = hmesh
+			hawk.position = Vector3(0, 0.45, 0)
+			fixture_node.add_child(hawk)
 
 	if visual != null:
 		visual.add_child(fixture_node)
@@ -406,6 +449,10 @@ func remove_fixture(slot_idx: int) -> StringName:
 		return &""
 	var f: Dictionary = deck_fixtures[slot_idx]
 	var fid: StringName = f["id"]
+	if fid == &"gilded_ship_wheel":
+		has_gilded_wheel = false
+	elif fid == &"sea_hawk_perch":
+		has_sea_hawk = false
 	var node: Node3D = f.get("node")
 	if node != null and is_instance_valid(node):
 		node.queue_free()
@@ -458,6 +505,63 @@ func interact_fixture(slot_idx: int, player: Node) -> void:
 					player.hud.show_toast("Diving Bell lowered 8m — underwater oxygen pocket active!")
 				else:
 					player.hud.show_toast("Diving Bell winched back up to surface.")
+
+
+func take_hull_damage(dmg: float, _attacker = null) -> void:
+	if dmg <= 0.0:
+		return
+	var eff_dmg := dmg * (0.65 if reinforced_hull else 1.0)
+	hull_hp = maxf(0.0, hull_hp - eff_dmg)
+	if hull_hp < max_hull_hp * 0.5:
+		leak_amount = clampf(leak_amount + (eff_dmg / max_hull_hp) * 1.5, 0.0, 1.0)
+	CombatAudio.play_sound("shield_block", position)
+
+
+func repair_hull(amount: float) -> void:
+	hull_hp = minf(max_hull_hp, hull_hp + amount)
+	if hull_hp >= max_hull_hp * 0.75:
+		leak_amount = maxf(0.0, leak_amount - 0.4)
+	if hull_hp >= max_hull_hp:
+		leak_amount = 0.0
+
+
+func repair_at_sea(player_node: Node) -> bool:
+	if player_node == null or not ("inventory" in player_node) or player_node.inventory == null:
+		return false
+	var inv: Inventory = player_node.inventory
+	var repair_mat := &""
+	if inv.has_item(&"dark_wood", 1):
+		repair_mat = &"dark_wood"
+	elif inv.has_item(&"wood_plank", 1):
+		repair_mat = &"wood_plank"
+	elif inv.has_item(&"pine_wood", 1):
+		repair_mat = &"pine_wood"
+
+	if repair_mat == &"":
+		if "hud" in player_node and player_node.hud != null:
+			player_node.hud.show_toast("Need wood planks or tarred wood to repair hull!")
+		return false
+
+	inv.remove_item(repair_mat, 1)
+	repair_hull(40.0)
+	leak_amount = maxf(0.0, leak_amount - 0.35)
+	if "hud" in player_node and player_node.hud != null:
+		player_node.hud.show_toast("Hull Patched with %s (%.0f%% Integrity)" % [ItemDB.get_item(repair_mat).name, get_hull_percent()])
+	return true
+
+
+func is_leaking() -> bool:
+	return leak_amount > 0.0
+
+
+func get_hull_percent() -> float:
+	return (hull_hp / maxf(1.0, max_hull_hp)) * 100.0
+
+
+func scout_surroundings() -> String:
+	if not has_sea_hawk:
+		return ""
+	return "Sea-Hawk takes flight and circles overhead, keeping vigilant watch over the brine."
 
 
 func serialize_fixtures() -> Array:
@@ -938,12 +1042,15 @@ func _sail_drive(delta: float, f: float, t: float, hard: bool) -> void:
 	var schooner := kind == KIND_SCHOONER
 	var eff := sail_efficiency(fwd, wind, 155.0 if (sloop or schooner) else 140.0)
 	var mult: float = SCHOONER_SAIL if schooner else (SLOOP_SAIL if sloop else 1.0)
-	vel += fwd * row_power * eff * wind.length() * SAIL_ACCEL * mult * delta
+	var wheel_speed_mult: float = 1.15 if has_gilded_wheel else 1.0
+	var leak_speed_mult: float = maxf(0.3, 1.0 - leak_amount * 0.45)
+	vel += fwd * row_power * eff * wind.length() * SAIL_ACCEL * mult * wheel_speed_mult * leak_speed_mult * delta
 	if hard:
 		row_phase += delta * TAU * 1.2
-		vel += fwd * maxf(0.0, sin(row_phase)) * PADDLE_ACCEL * 2.0 * delta
+		vel += fwd * maxf(0.0, sin(row_phase)) * PADDLE_ACCEL * 2.0 * wheel_speed_mult * leak_speed_mult * delta
 	var speed := absf(vel.dot(fwd))
-	yaw_vel += t * TURN * (0.35 + minf(speed, 6.0) * 0.18) * delta
+	var wheel_turn_mult: float = 1.30 if has_gilded_wheel else 1.0
+	yaw_vel += t * TURN * wheel_turn_mult * (0.35 + minf(speed, 6.0) * 0.18) * delta
 	# The boom swings out to leeward, further off the wind.
 	var rel := fwd.angle_to(wind)        # signed
 	var want := clampf(PI - absf(rel), 0.15, 1.35) * (1.0 if rel > 0.0 else -1.0) * 0.8
@@ -965,13 +1072,18 @@ func simulate(delta: float, f: float, t: float, hard: bool) -> void:
 	var pulse := maxf(0.0, sin(row_phase))
 	var fwd := forward2()
 	var heavy := 0.8 if kind == KIND_BARGE else 1.0        # the barge's sweeps: slow but steady
-	vel += fwd * f * pulse * THRUST * heavy * (1.45 if hard else 1.0) * delta
-	yaw_vel += t * (0.45 + pulse) * TURN * (0.75 if kind == KIND_BARGE else 1.0) * delta
+	var wheel_speed_mult: float = 1.15 if has_gilded_wheel else 1.0
+	var leak_speed_mult: float = maxf(0.3, 1.0 - leak_amount * 0.45)
+	var wheel_turn_mult: float = 1.30 if has_gilded_wheel else 1.0
+	vel += fwd * f * pulse * THRUST * heavy * (1.45 if hard else 1.0) * wheel_speed_mult * leak_speed_mult * delta
+	yaw_vel += t * (0.45 + pulse) * TURN * (0.75 if kind == KIND_BARGE else 1.0) * wheel_turn_mult * delta
 	_integrate(delta, water)
 
 
 ## Drag, drift, terrain collision and grounding (shared by both kinds of boat).
 func _integrate(delta: float, water: float) -> void:
+	if leak_amount > 0.0:
+		water += leak_amount * 0.18
 	var fwd := forward2()
 	# Drag: keel resists sideways motion far more than forward motion.
 	var along := vel.dot(fwd)

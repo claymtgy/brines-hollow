@@ -130,11 +130,11 @@ func _add_action(action: String, keys: Array, pads: Array) -> void:
 
 
 func is_authority() -> bool:
-	return not main.is_net or main.multiplayer.multiplayer_peer == null or main.multiplayer.is_server()
+	return main == null or not main.is_net or main.multiplayer.multiplayer_peer == null or main.multiplayer.is_server()
 
 
 func local_id() -> int:
-	return main.multiplayer.get_unique_id() if main.is_net and main.multiplayer.multiplayer_peer != null else 1
+	return main.multiplayer.get_unique_id() if main != null and main.is_net and main.multiplayer.multiplayer_peer != null else 1
 
 
 ## Voxel query used by creature movement (tests substitute a fake).
@@ -648,6 +648,75 @@ func local_aoe_strike(center: Vector3, radius: float, stats: Dictionary, in_wate
 			_apply_hit(c, dmg, center, pwr, local_id())
 		else:
 			cr_hit.rpc_id(1, c.cid, dmg, center, pwr)
+	return hits
+
+
+## Local raycast strike for arrows and quarrels. Returns number of creatures struck.
+func local_raycast_strike(origin: Vector3, dir: Vector3, max_dist: float, stats: Dictionary, in_water: bool = false) -> int:
+	var hits := 0
+	var d := dir.normalized()
+	for c: Creature in creatures.values():
+		if c.state == Creature.State.DEAD:
+			continue
+		var to_c := (c.position + Vector3.UP * 0.3) - origin
+		var t := to_c.dot(d)
+		if t < 0.2 or t > max_dist:
+			continue
+		var closest_pt := origin + d * t
+		var rad_dist := (c.position + Vector3.UP * 0.3 - closest_pt).length()
+		if rad_dist > (c.radius + 0.35):
+			continue
+		hits += 1
+		c.flash()
+		var dmg := CombatMath.outgoing_damage(stats, c.is_staggered(), in_water)
+		var pwr: float = float(stats.get("stagger_power", 1.0))
+
+		CombatAudio.play_sound("hit_shell" if c.is_armored() else "hit_flesh", c.position)
+		var p_parent: Node3D = c.get_parent() as Node3D
+		if p_parent != null:
+			CombatFX.spawn_hit_sparks(p_parent, c.position + Vector3.UP * 0.3, -d, c.is_armored(), stats.get("is_pierce", false))
+
+		if is_authority():
+			_apply_hit(c, dmg, origin, pwr, local_id())
+		else:
+			cr_hit.rpc_id(1, c.cid, dmg, origin, pwr)
+	return hits
+
+
+## Local flintlock shot: cone/ray hit check with distance damage falloff and Gun-Kata combo.
+func local_flintlock_shot(origin: Vector3, dir: Vector3, base_dmg: float, max_dist: float, stagger_power: float, in_water: bool = false, is_combo: bool = false) -> int:
+	if in_water:
+		return 0
+	var hits := 0
+	var d := dir.normalized()
+	for c: Creature in creatures.values():
+		if c.state == Creature.State.DEAD:
+			continue
+		var to_c := (c.position + Vector3.UP * 0.3) - origin
+		var t := to_c.dot(d)
+		if t < 0.2 or t > max_dist:
+			continue
+		var closest_pt := origin + d * t
+		var rad_dist := (c.position + Vector3.UP * 0.3 - closest_pt).length()
+		var allowed_rad := c.radius + (0.3 + t * 0.04)
+		if rad_dist > allowed_rad:
+			continue
+		hits += 1
+		c.flash()
+		var dmg := CombatMath.calc_flintlock_damage(base_dmg, t)
+		if is_combo:
+			dmg *= 1.25
+		var pwr := stagger_power * (1.5 if is_combo else 1.0)
+
+		CombatAudio.play_sound("hit_shell" if c.is_armored() else "hit_flesh", c.position)
+		var p_parent: Node3D = c.get_parent() as Node3D
+		if p_parent != null:
+			CombatFX.spawn_hit_sparks(p_parent, c.position + Vector3.UP * 0.3, -d, c.is_armored(), true)
+
+		if is_authority():
+			_apply_hit(c, dmg, origin, pwr, local_id())
+		else:
+			cr_hit.rpc_id(1, c.cid, dmg, origin, pwr)
 	return hits
 
 

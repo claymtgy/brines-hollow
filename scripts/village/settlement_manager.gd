@@ -23,6 +23,8 @@ var rooms: Array[Dictionary] = []           ## Validated housing records
 var drifters: Array[DrifterDef] = []        ## Recruited villagers
 var town_depot: StorageContainer            ## Automated shared village stockpile
 var hearth_placed := false                  ## a Tide Hearth has founded the town
+var community_chest: ChestEntity = null     ## Communal stockpile chest
+var active_construction_site: ConstructionSiteEntity = null ## Active building project
 ## Town conditions, measured by VillageManager (authority) every few seconds:
 var food_kinds := 0                         ## distinct foods in the depot and pantry barrels
 var safety := 0.5                           ## 0..1: lanterns, the harbour bell
@@ -247,7 +249,10 @@ func tick_settlement(delta_sec: float, day_fraction: float) -> void:
 		_morale_t = 5.0
 	for d in drifters:
 		d.update_routine(day_fraction)
-		d.tick_work(delta_sec, town_depot)
+		if d.profession == DrifterDef.Profession.BUILDER and active_construction_site != null and not active_construction_site.is_completed:
+			d.tick_builder_site(delta_sec, active_construction_site, community_chest)
+		else:
+			d.tick_work(delta_sec, town_depot)
 		if drift:
 			# morale settles toward its target over a few in-game hours
 			d.morale = move_toward(d.morale, float(morale_parts(d).total), 0.02)

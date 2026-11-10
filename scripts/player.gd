@@ -103,9 +103,12 @@ func board(b: Boat, seat_index: int) -> void:
 	on_ground = false
 	swimming = false
 	horizontal_speed = 0.0
-	_highlight.visible = false
-	_ghost.visible = false
-	rig.extra_dist = 2.2
+	if _highlight != null:
+		_highlight.visible = false
+	if _ghost != null:
+		_ghost.visible = false
+	if rig != null:
+		rig.extra_dist = 2.2
 
 
 func unboard(stand_at: Vector3) -> void:
@@ -113,7 +116,8 @@ func unboard(stand_at: Vector3) -> void:
 	position = stand_at
 	vel = Vector3.ZERO
 	_step_offset = 0.0
-	rig.extra_dist = 0.0
+	if rig != null:
+		rig.extra_dist = 0.0
 
 
 func set_player_name(p_name: String) -> void:
@@ -157,6 +161,12 @@ func _ready() -> void:
 		elif slot_name == &"head":
 			var is_helm: bool = not slot.is_empty() and (slot.item_id == &"deep_diving_helmet" or slot.item_id == &"diving_rebreather")
 			model.set_diving_helmet_visible(is_helm)
+		elif slot_name == &"accessory":
+			var def: ItemDef = ItemDB.get_item(slot.item_id) if not slot.is_empty() else null
+			var is_shield: bool = def != null and def.has_tag("shield")
+			var is_lantern: bool = def != null and def.has_tag("light")
+			model.set_shield_visible(is_shield)
+			model.set_offhand_lantern_visible(is_lantern)
 	)
 
 	vitality.player_defeated.connect(func(pos: Vector3) -> void:
@@ -471,7 +481,10 @@ func _physics_process(delta: float) -> void:
 		position.y = (VoxelWorld.WY - 2) * VS
 
 	horizontal_speed = Vector2(vel.x, vel.z).length()
-	if rig != null and rig.first_person:
+	if combat != null and combat.is_dodging():
+		if not combat.is_dodge_hop() and (rig == null or not rig.first_person):
+			facing = atan2(combat.get_dodge_dir().x, combat.get_dodge_dir().z)
+	elif rig != null and rig.first_person:
 		facing = rig.yaw + PI
 	elif wish.length() > 0.1:
 		facing = lerp_angle(facing, atan2(wish.x, wish.z), 1.0 - exp(-12.0 * delta))
@@ -712,7 +725,21 @@ func _set_tool(new_tool: int) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if not input_enabled or is_seated():
+	if not input_enabled:
+		return
+	if is_seated():
+		if e.is_action_pressed("dodge") or (e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_C):
+			if boat != null:
+				if boat.repair_at_sea(self):
+					if hud != null:
+						hud.show_toast("Patched boat hull with wood plank! (+40 HP)")
+				elif boat.hull_hp >= boat.max_hull_hp and not boat.is_leaking():
+					if hud != null:
+						hud.show_toast("Boat hull is in seaworthy condition.")
+				else:
+					if hud != null:
+						hud.show_toast("Need wood planks in pack to patch hull at sea!")
+			return
 		return
 	if not InputMap.has_action(&"tool_1"):
 		ControllerManager.new().setup_input_map()
@@ -963,7 +990,9 @@ func _process(delta: float) -> void:
 		facing = rig.yaw + PI
 	model.rotation = Vector3(0, facing, 0)
 	model.set_fishing_state(fishing.current_state if tool == 3 and fishing != null else 0, fishing_cast_power)
-	model.animate(delta, horizontal_speed, on_ground, swimming)
+	var is_dodging: bool = (combat != null and combat.is_dodging())
+	if not is_dodging:
+		model.animate(delta, horizontal_speed, on_ground, swimming)
 	var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
 	if not shift_held or tool != 1:
 		_line_anchor = Vector3i(-99999, -99999, -99999)

@@ -61,10 +61,16 @@ const BUILTIN := {
 	&"oyster_rack":      ["Tidal Oyster Rack",       {&"wood_plank": 6, &"kelp_frond": 4, &"stone": 2}, &"intertidal", 5],
 	&"mangrove_beehive": ["Mangrove Beehive",        {&"wood_plank": 8, &"marsh_honey": 1, &"leaves": 4}, &"ground", 5],
 	&"banquet_table":    ["Communal Banquet Table",  {&"wood_plank": 12, &"driftwood": 6, &"sea_wool": 2}, &"ground", 2],
+	&"community_chest":  ["Community Stockpile Chest", {&"wood_plank": 14, &"driftwood": 8, &"sea_brass_ingot": 2}, &"ground", 1],
+	&"construction_site": ["House Construction Site", {&"driftwood": 4, &"wood_plank": 2}, &"ground", 5],
+	&"notice_board":     ["Town Notice Board",       {&"wood_plank": 8, &"driftwood": 4, &"sea_glass": 1}, &"ground", 1],
+	&"market_stall":     ["Village Market Stall",    {&"wood_plank": 10, &"driftwood": 6, &"sea_wool": 2}, &"ground", 1],
 	&"farming_station":  ["Farmer's Seed Stand",     {&"wood_plank": 4, &"seed_shore_wheat": 2}, &"ground", 5],
 	&"ranch_station":    ["Rancher's Hitching Post", {&"driftwood": 4, &"wood_plank": 2},       &"ground", 5],
 	&"fisher_station":   ["Fisher's Tackle Bench",   {&"wood_plank": 4, &"driftwood": 2},       &"ground", 5],
 	&"sawhorse":         ["Sawyer's Sawhorse",       {&"driftwood": 4, &"wood_plank": 2},       &"ground", 5],
+	&"boat_slipway":     ["Harbor Slipway Dry-Dock", {&"wood_plank": 18, &"iron_ingot": 4, &"driftwood": 8}, &"intertidal", 1],
+	&"reaver_dock":      ["Sea-Reaver Outpost Dock", {&"wood_plank": 12, &"driftwood": 8, &"reaver_crest": 1}, &"intertidal", 1],
 }
 
 const TroughEntityClass := preload("res://scripts/entities/trough_entity.gd")
@@ -142,6 +148,12 @@ static func register_builtin() -> void:
 	EntityManager.register_type(&"oyster_rack", OysterRackEntity, {"rule": &"intertidal", "aliases": [&"oysters", &"aquaculture"]})
 	EntityManager.register_type(&"mangrove_beehive", MangroveBeehiveEntity, {"aliases": [&"beehive", &"apiary", &"bees"]})
 	EntityManager.register_type(&"banquet_table", BanquetTableEntity, {"aliases": [&"feast_table", &"feast"]})
+	EntityManager.register_type(&"community_chest", func(c: Vector3i) -> WorldEntity: return ChestEntity.make_community_chest(c), {"aliases": [&"stockpile", &"town_chest"]})
+	EntityManager.register_type(&"construction_site", ConstructionSiteEntity, {"aliases": [&"building_site", &"plot_marker"]})
+	EntityManager.register_type(&"notice_board", NoticeBoardEntity, {"aliases": [&"bulletin", &"chores_board"]})
+	EntityManager.register_type(&"market_stall", MarketStallEntity, {"aliases": [&"stall", &"purser_stall"]})
+	EntityManager.register_type(&"boat_slipway", BoatSlipwayEntity, {"rule": &"intertidal", "aliases": [&"slipway", &"drydock"]})
+	EntityManager.register_type(&"reaver_dock", ReaverDockEntity, {"rule": &"intertidal", "aliases": [&"pirate_dock"]})
 	for type: StringName in BUILTIN:
 		var b: Array = BUILTIN[type]
 		add_item(type, b[0], b[1], b[3])

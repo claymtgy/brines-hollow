@@ -132,6 +132,41 @@ static func make_pantry_barrel(coord: Vector3i) -> ChestEntity:
 	return c
 
 
+## High-capacity village community stockpile chest (48 slots) shared between players and workers.
+static func make_community_chest(coord: Vector3i) -> ChestEntity:
+	var c := ChestEntity.new("Community Stockpile Chest", coord, 48)
+	c.entity_id = &"community_chest"
+	c.style = &"community"
+	c.sealed = true # Rat-proof
+	c.size = Vector3(12, 8, 8) * U
+	return c
+
+
+## Deposits supplies into this chest. Returns count successfully deposited.
+func deposit_supplies(item_id: StringName, count: int, custom_data: Dictionary = {}) -> int:
+	var remainder := container.deposit(item_id, count, custom_data)
+	return count - remainder
+
+
+## Returns whether the chest contains at least `count` of `item_id`.
+func has_supplies(item_id: StringName, count: int = 1) -> bool:
+	return container.inventory.get_item_count(item_id) >= count
+
+
+## Withdraws up to `count` items of `item_id`. Returns amount successfully withdrawn.
+func withdraw_supplies(item_id: StringName, count: int) -> int:
+	return container.withdraw(item_id, count)
+
+
+## Returns dictionary of all available supplies {item_id: total_count}.
+func get_available_supplies() -> Dictionary:
+	var dict: Dictionary = {}
+	for slot in container.inventory.slots:
+		if not slot.is_empty():
+			dict[slot.item_id] = dict.get(slot.item_id, 0) + slot.count
+	return dict
+
+
 ## Food a shore rat could carry off (empty if sealed).
 func raidable_food() -> Array:
 	var out: Array = []
@@ -171,6 +206,17 @@ func _build_visuals() -> void:
 			g.box(2, 9, 2, 4, 9, 4, Palette.DARK_WOOD)
 			if entity_id == &"pantry_barrel":
 				g.box(1, 9, 1, 5, 9, 5, Palette.BEDROCK)   # tarred lid
+		&"community":
+			g = Prefabs.Grid.new(12, 8, 8)
+			g.box(0, 0, 0, 11, 7, 7, Palette.DARK_WOOD)     # Reinforced heavy frame
+			g.box(1, 1, 1, 10, 6, 6, Palette.PLANK)         # Sanded oak panels
+			g.box(0, 6, 0, 11, 7, 7, Palette.DARK_WOOD)     # Heavy arched lid
+			g.box(1, 7, 1, 10, 7, 6, Palette.ROOF_BLUE)      # Painted municipal crest lid
+			for x in [0, 11]:
+				g.box(x, 0, 0, x, 7, 1, Palette.FLOWER_Y)
+				g.box(x, 0, 6, x, 7, 7, Palette.FLOWER_Y)
+			g.box(3, 4, 7, 4, 6, 7, Palette.FLOWER_Y)
+			g.box(7, 4, 7, 8, 6, 7, Palette.FLOWER_Y)
 		_:
 			g = Prefabs.Grid.new(9, 6, 6)
 			g.box(0, 0, 0, 8, 5, 5, Palette.DRIFTWOOD)

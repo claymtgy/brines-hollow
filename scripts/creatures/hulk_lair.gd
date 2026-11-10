@@ -104,8 +104,11 @@ func on_slain(h: BarnacledHulk) -> void:
 @rpc("authority", "call_local", "reliable")
 func hulk_slain() -> void:
 	slain = true
-	if net.main.hud != null:
-		net.main.hud.show_banner("The Barnacled Hulk is slain", "The Hollow Flats are quiet. Its pearl goes to whoever struck last.")
+	if net != null and net.main != null:
+		if net.main.player != null and net.main.player.inventory != null:
+			net.main.player.inventory.add_item(&"gilded_ship_wheel", 1)
+		if net.main.hud != null:
+			net.main.hud.show_banner("The Barnacled Hulk is slain", "The Hollow Flats are quiet. Gilded Ship Wheel and Pearl recovered!")
 
 
 func say(text: String) -> void:

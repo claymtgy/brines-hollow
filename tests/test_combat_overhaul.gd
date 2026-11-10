@@ -53,7 +53,7 @@ class MockHud extends Hud:
 	func _init() -> void:
 		pass
 
-	func show_toast(msg: String) -> void:
+	func show_toast(msg: String, _duration: float = 3.0, _immediate: bool = false) -> void:
 		last_toast = msg
 
 

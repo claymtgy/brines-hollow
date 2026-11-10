@@ -237,3 +237,92 @@ static func spawn_plunge_shockwave(parent: Node3D, pos: Vector3, max_radius: flo
 		tween.tween_callback(ring.queue_free)
 	else:
 		ring.queue_free()
+
+
+## Spawns a flintlock black-powder muzzle blast: bright flash, sparks, and an expanding smoke puff.
+static func spawn_muzzle_flash_and_smoke(parent: Node3D, pos: Vector3, forward: Vector3) -> void:
+	if DisplayServer.get_name() == "headless" or parent == null:
+		return
+	if not _init_done:
+		init_materials()
+
+	# 1. Muzzle sparks & flash
+	var p := CPUParticles3D.new()
+	p.position = pos
+	p.emitting = false
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.lifetime = 0.18
+	p.amount = 16
+	p.material_override = _mat_charged_slash
+	p.direction = forward
+	p.spread = 35.0
+	p.initial_velocity_min = 6.0
+	p.initial_velocity_max = 12.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.12
+	parent.add_child(p)
+	p.emitting = true
+
+	# 2. Black powder smoke puff
+	var smk := CPUParticles3D.new()
+	smk.position = pos
+	smk.emitting = false
+	smk.one_shot = true
+	smk.explosiveness = 0.8
+	smk.lifetime = 0.55
+	smk.amount = 14
+	smk.direction = forward + Vector3.UP * 0.4
+	smk.spread = 45.0
+	smk.gravity = Vector3(0, 1.2, 0)
+	smk.initial_velocity_min = 2.0
+	smk.initial_velocity_max = 4.5
+	smk.scale_amount_min = 0.08
+	smk.scale_amount_max = 0.22
+	smk.color = Color(0.85, 0.85, 0.85, 0.6)
+	parent.add_child(smk)
+	smk.emitting = true
+
+	var tree := parent.get_tree()
+	if tree != null:
+		tree.create_timer(0.6, true, false, true).timeout.connect(func():
+			if is_instance_valid(p): p.queue_free()
+			if is_instance_valid(smk): smk.queue_free()
+		)
+	else:
+		p.queue_free()
+		smk.queue_free()
+
+
+## Spawns an arrow tracer ribbon / flight trail.
+static func spawn_arrow_tracer(parent: Node3D, start_pos: Vector3, vel: Vector3, duration: float = 0.5) -> void:
+	if DisplayServer.get_name() == "headless" or parent == null:
+		return
+	if not _init_done:
+		init_materials()
+
+	var line := MeshInstance3D.new()
+	var imm := ImmediateMesh.new()
+	line.mesh = imm
+	line.material_override = _mat_light_slash
+	parent.add_child(line)
+
+	var dir := vel.normalized()
+	var end_pos := start_pos + dir * minf(vel.length() * duration, 35.0)
+
+	imm.clear_surfaces()
+	imm.surface_begin(Mesh.PRIMITIVE_LINES)
+	imm.surface_set_color(Color(1.0, 1.0, 0.9, 0.9))
+	imm.surface_add_vertex(start_pos)
+	imm.surface_set_color(Color(0.8, 0.8, 0.8, 0.0))
+	imm.surface_add_vertex(end_pos)
+	imm.surface_end()
+
+	var tree := parent.get_tree()
+	if tree != null:
+		var tw := tree.create_tween()
+		tw.tween_property(line, "transparency", 1.0, 0.35)
+		tw.tween_callback(line.queue_free)
+	else:
+		line.queue_free()
+
