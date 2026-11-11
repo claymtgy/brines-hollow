@@ -4,7 +4,7 @@
 
 Every recipe, by station. **Known from the start** unless an unlock is listed: then you learn it by finding the ingredient, recruiting a villager, finishing one of Wren's lessons, or reading a recipe scroll.
 
-## Hand craft (32)
+## Hand craft (33)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -21,6 +21,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | anywhere | instant | locked |
 | Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | anywhere | instant | locked |
 | Iron Shovel | 2 Tarred Wood, 1 Iron Ingot | 1 Iron Shovel | anywhere | instant | locked |
+| Makeshift Rowboat | 12 Driftwood, 6 Kelp Fronds | 1 Rowboat (kit) | anywhere | 5 s | known |
 | Parchment Shore Chart | 2 Shore Wheat | 1 Parchment Shore Chart | anywhere | instant | find Shore Wheat; recruit a Trader; Wren: "Beyond the Shallows" |
 | Pine Sapling | 2 Forest Foliage, 1 Pine Wood | 2 Pine Sapling | anywhere | instant | locked |
 | Pine Sapling (Driftwood) | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | anywhere | instant | known |
@@ -41,7 +42,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Wooden Hatchet | 2 Driftwood, 1 Wood Plank | 1 Wooden Hatchet | anywhere | instant | known |
 | Wooden Shovel | 1 Driftwood, 2 Wood Plank | 1 Wooden Shovel | anywhere | instant | known |
 
-## Workbench (96)
+## Workbench (97)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -49,8 +50,8 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Architect's Drafting Desk | 8 Wood Plank, 4 Driftwood, 1 Sea-Brass Ingot | 1 Architect's Drafting Desk | Workbench | 2 s | locked |
 | Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 2 s | locked |
 | Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 6 s | locked |
-| Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 6 s | locked |
 | Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 2 s | locked |
+| Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 6 s | locked |
 | Barber's Looking Glass | 3 Wood Plank, 2 Polished Sea Glass | 1 Barber's Looking Glass | Workbench | 2 s | recruit a Carpenter; merchant scroll; rare scroll (wrecks, sumps, caves) |
 | Bayberry & Honey Candle | 2 Natural Beeswax, 1 Marsh Honey | 2 Bayberry & Honey Candle | Workbench | instant | locked |
 | Black Powder (x2) | 2 Sea Salt, 1 Limestone | 2 Black Powder | Workbench | 3 s | locked |
@@ -102,6 +103,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Rancher's Hitching Post | 4 Driftwood, 2 Wood Plank | 1 Rancher's Hitching Post | Workbench | 2 s | known |
 | Regatta Checkpoint Buoy | 4 Wood Plank, 1 Sea-Brass Ingot | 1 Regatta Checkpoint Buoy | Workbench | 2 s | locked |
 | Reinforced Boarding Shield | 4 Wood Plank, 2 Iron Ingot | 1 Reinforced Boarding Shield | Workbench | 6 s | locked |
+| Rowboat | 16 Wood Plank, 6 Driftwood, 4 Kelp Fronds | 1 Rowboat (kit) | Workbench | 4 s | known |
 | Sailor's Sea Cot | 4 Wood Plank, 2 Shore-Sheep Wool | 1 Sailor's Sea Cot | Workbench | instant | locked |
 | Salvage Diving Winch | 4 Iron Ingot, 2 Sea-Brass Ingot, 3 Driftwood | 1 Salvage Diving Winch | Workbench | instant | locked |
 | Sawyer's Sawhorse | 4 Driftwood, 2 Wood Plank | 1 Sawyer's Sawhorse | Workbench | 2 s | known |
@@ -128,8 +130,8 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 2 s | locked |
 | Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 4 s | locked |
 | Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | 1 Tide Hearth | Workbench | 2 s | locked |
-| Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 2 s | locked |
 | Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 6 s | locked |
+| Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 2 s | locked |
 | Tide-Barge | 40 Wood Plank, 12 Driftwood, 2 Iron Ingot, 10 Kelp Fronds | 1 Tide-Barge (kit) | Workbench | 10 s | locked |
 | Town Notice Board | 8 Wood Plank, 4 Driftwood, 1 Polished Sea Glass | 1 Town Notice Board | Workbench | 2 s | locked |
 | Town Sparring Ring | 12 Sand, 4 Wood Plank, 4 Driftwood | 1 Town Sparring Ring | Workbench | 2 s | known |

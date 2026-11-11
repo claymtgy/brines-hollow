@@ -157,8 +157,15 @@ func launch_spot(p: Player) -> Variant:
 	return null
 
 
-const KITS := {&"skiff_kit": Boat.KIND_SKIFF, &"barge_kit": Boat.KIND_BARGE, &"sloop_kit": Boat.KIND_SLOOP, &"schooner_kit": Boat.KIND_SCHOONER}
+const KITS := {
+	&"rowboat_kit": Boat.KIND_ROWBOAT,
+	&"skiff_kit": Boat.KIND_SKIFF,
+	&"barge_kit": Boat.KIND_BARGE,
+	&"sloop_kit": Boat.KIND_SLOOP,
+	&"schooner_kit": Boat.KIND_SCHOONER,
+}
 const KIT_HINT := {
+	Boat.KIND_ROWBOAT: "Rowboat launched. F to board; W/S to row, A/D to steer, Shift to pull hard.",
 	Boat.KIND_SKIFF: "Skiff launched. F to board, W to raise the sail.",
 	Boat.KIND_BARGE: "Tide-Barge launched. F to board; Shift+F beside it to stow or take cargo.",
 	Boat.KIND_SLOOP: "Coastal Sloop launched. F to board, W to raise the sail: she points higher than a skiff.",
@@ -320,12 +327,12 @@ var _saved_fleet: Array = []
 var _fleet_registered := false
 
 
-## Launched boats (skiffs, barges, sloops, and the barge's cargo) are kept with the world;
-## the starting rowboats are always re-made where the world puts them.
+## Launched boats (rowboats, skiffs, barges, sloops, and cargo) are kept with the world;
+## the starting world-spawn boats are re-made where the world puts them.
 func _save_fleet() -> Variant:
 	var out: Array = []
 	for b: Boat in boats.values():
-		if b.is_world_spawn or b.kind == Boat.KIND_ROWBOAT:
+		if b.is_world_spawn:
 			continue
 		out.append({
 			"kind": b.kind,
@@ -621,7 +628,7 @@ func _process(_delta: float) -> void:
 		var b := nearest_boardable(p.position)
 		var kit := held_kit()
 		if kit >= 0 and b == null and launch_spot(p) != null:
-			prompt = "F  Launch %s" % ["rowboat", "skiff", "Tide-Barge", "Coastal Sloop"][kit]
+			prompt = "F  Launch %s" % ["rowboat", "skiff", "Tide-Barge", "Coastal Sloop", "Ocean Schooner"][kit]
 		elif b != null:
 			var hull_status := " (Hull %.0f%%)" % b.get_hull_percent() if b.get_hull_percent() < 99.0 else ""
 			prompt = (("F  Board %s" % b.display_name()) if b.free_seat() == 0 else "F  Ride along") + hull_status

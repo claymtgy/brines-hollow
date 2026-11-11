@@ -470,6 +470,7 @@ static func _register_special_and_currencies() -> void:
 		ItemDef.new(&"sea_hawk_perch", "Trained Sea-Hawk Perch", ItemDef.Category.SPECIAL, 1, -1, [&"boat_fixture", &"placeable", &"companion"]),
 		ItemDef.new(&"blueprint_tide_mill", "Blueprint: Tide Mill", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"engineering"]),
 		ItemDef.new(&"blueprint_dry_dock", "Blueprint: Dry Dock", ItemDef.Category.BLUEPRINT, 1, -1, [&"blueprint", &"maritime"]),
+		ItemDef.new(&"rowboat_kit", "Rowboat (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"skiff_kit", "Outrigger Skiff (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"barge_kit", "Tide-Barge (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),
 		ItemDef.new(&"sloop_kit", "Coastal Sloop (kit)", ItemDef.Category.TOOL, 1, -1, [&"maritime", &"boat"]),

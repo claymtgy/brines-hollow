@@ -103,7 +103,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Tidepool Flounder | `tidepool_flounder` | 20 | 1 | fish, benthic, fresh |
 | Vintage Maritime Cask Ale | `vintage_maritime_ale` | 20 | 1 | food, beverage, fermented |
 
-## Tool (40)
+## Tool (41)
 
 | Item | Id | Stack | Value | Tags |
 |---|---|---|---|---|
@@ -130,6 +130,7 @@ Every item in the game, by category. Value is the base merchant price in Brass G
 | Outrigger Skiff (kit) | `skiff_kit` | 1 | 1 | maritime, boat |
 | Phosphor Lantern Staff | `phosphor_lantern_staff` | 1 | 1 | weapon, occult, light |
 | Pneumatic Speargun | `pneumatic_speargun` | 1 | 1 | weapon, speargun, ranged |
+| Rowboat (kit) | `rowboat_kit` | 1 | 1 | maritime, boat |
 | Rusty Cutlass | `rusty_cutlass` | 1 | 1 | weapon, cutlass, blade |
 | Sea-Dog's Brass Flintlock | `flintlock_pistol` | 1 | 1 | weapon, flintlock, ranged, firearm |
 | Shearing Shears | `shearing_shears` | 1 | 1 | tool, shears |

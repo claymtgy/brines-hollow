@@ -283,7 +283,19 @@ static func _register_basic_and_tools() -> void:
 		&"iron_hoe", 1, 0.0, [&"tool", &"hoe"]
 	))
 
+	register_recipe(RecipeDef.new(
+		&"emergency_rowboat_kit", "Makeshift Rowboat", RecipeDef.Category.BASIC, &"none",
+		[{"item_id": &"driftwood", "count": 12}, {"item_id": &"kelp_frond", "count": 6}],
+		&"rowboat_kit", 1, 5.0, [&"maritime", &"boat"]
+	))
+
 	# Workbench Crafting
+	register_recipe(RecipeDef.new(
+		&"craft_rowboat_kit", "Rowboat", RecipeDef.Category.WORKBENCH, &"workbench",
+		[{"item_id": &"wood_plank", "count": 16}, {"item_id": &"driftwood", "count": 6},
+			{"item_id": &"kelp_frond", "count": 4}],
+		&"rowboat_kit", 1, 4.0, [&"maritime", &"boat"]
+	))
 	register_recipe(RecipeDef.new(
 		&"craft_skiff_kit", "Outrigger Skiff", RecipeDef.Category.WORKBENCH, &"workbench",
 		[{"item_id": &"wood_plank", "count": 24}, {"item_id": &"driftwood", "count": 8},
