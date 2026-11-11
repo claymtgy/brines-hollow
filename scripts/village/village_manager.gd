@@ -79,12 +79,9 @@ func _build_roster() -> void:
 	var gen: WorldGen = main.world.gen
 	var st: Dictionary = gen.starter
 	var hut: Vector3i = st.hut
-	var rng := RandomNumberGenerator.new()
-	rng.seed = gen.seed_value * 7919 + 17
-	var taken: Array = []
+	var spots := roster_spots(gen)
 	for i in ROSTER.size():
-		var spot := _find_wreck_spot(hut, rng, taken, 50 + i * 26)
-		taken.append(spot)
+		var spot: Vector3i = spots[i]
 		var id := StringName("drifter_%d" % i)
 		var def: DrifterDef = main.village.get_drifter(id)
 		var recruited := def != null
@@ -156,29 +153,69 @@ func _add_castaways() -> void:
 func tide_low() -> bool:
 	return main.sky.water_level_m() < VoxelWorld.SEA_MID * VS
 
-## Deterministic beach spot on the home island, roughly `radius` voxels from the hut.
-func _find_wreck_spot(hut: Vector3i, rng: RandomNumberGenerator, taken: Array, radius: int) -> Vector3i:
-	var gen: WorldGen = main.world.gen
-	var nat: ArchipelagoGen = gen.native
-	var a0 := rng.randf() * TAU
-	for ring in range(0, 14):
-		var r := radius + ring * 12
-		for k in 24:
-			var a := a0 + k * TAU / 24.0
+## How far from the starter hut each stranded drifter washes up (metres): the first close
+## enough to find by its signal smoke, the rest strung out along the coast to discover.
+const ROSTER_DIST_M := [40.0, 70.0, 105.0, 145.0, 190.0, 240.0]
+const ROSTER_GAP_M := 40.0       # no two stranded drifters closer than this
+const ROSTER_CLEAR_M := 32.0     # nobody stranded this close to the hut or the spawn point
+
+
+## Where each ROSTER drifter is stranded (voxel cell, feet), deterministic per seed:
+## beach columns on the home island, spread out along the shore away from the hut.
+static func roster_spots(gen: WorldGen) -> Array:
+	var hut: Vector3i = gen.starter.hut
+	var spawn := Vector2(gen.spawn.x, gen.spawn.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = gen.seed_value * 7919 + 17
+	var out: Array = []
+	for i in ROSTER.size():
+		var spot := Vector3i(-1, -1, -1)
+		var a0 := rng.randf() * TAU
+		# A small home island can't fit the full trail: pull it in before crowding people together.
+		for tries: Array in [[1.0, 1.0], [0.75, 1.0], [0.55, 1.0], [0.55, 0.6], [0.4, 0.3]]:
+			var radius := maxf(ROSTER_CLEAR_M, float(ROSTER_DIST_M[i]) * tries[0]) / VS
+			spot = _shore_spot(gen, hut, spawn, a0, radius, out, ROSTER_GAP_M * tries[1] / VS)
+			if spot.x >= 0:
+				break
+		if spot.x < 0:   # no beach at all: stand on dry land by the spawn point, never in the sea
+			var sx := int(gen.spawn.x) + 3 * (i + 1)
+			var sz := int(gen.spawn.z)
+			spot = Vector3i(sx, gen.col_h(sx, sz) + 1, sz)
+		out.append(spot)
+	return out
+
+
+## A beach column about `radius` voxels from the hut (searching outward from there), clear
+## of the hut, the spawn point and every spot in `taken` by `gap` voxels. (-1,-1,-1) if none.
+static func _shore_spot(gen: WorldGen, hut: Vector3i, spawn: Vector2, a0: float, radius: float,
+		taken: Array, gap: float) -> Vector3i:
+	var clear := ROSTER_CLEAR_M / VS
+	var home: Dictionary = gen.islands[0] if not gen.islands.is_empty() else {}
+	for ring in range(0, 24):
+		var r := radius + ring * 12.0
+		var steps := clampi(int(TAU * r / 24.0), 24, 240)
+		for k in steps:
+			var a := a0 + k * TAU / steps
 			var x := hut.x + int(cos(a) * r)
 			var z := hut.z + int(sin(a) * r)
-			var h := nat.column_height(x, z)
-			if h < gen.sea_high or h > gen.sea_high + 8 or nat.column_kind(x, z) == 2:
+			if x < 8 or z < 8 or x >= gen.wx - 8 or z >= gen.wz - 8:
 				continue
-			var p := Vector3i(x, h + 1, z)
+			var h := gen.col_h(x, z)
+			if h < gen.sea_high or h > gen.sea_high + 8 or gen.col_k(x, z) == WorldGen.Kind.ROCK:
+				continue
+			var p2 := Vector2(x, z)
+			if not home.is_empty() and p2.distance_to(home.center) > float(home.radius) * 1.1:
+				continue   # another island: they'd have no way home on foot
+			if p2.distance_to(Vector2(hut.x, hut.z)) < clear or p2.distance_to(spawn) < clear:
+				continue
 			var ok := true
 			for t: Vector3i in taken:
-				if Vector2(t.x - p.x, t.z - p.z).length() < 40.0:
+				if p2.distance_to(Vector2(t.x, t.z)) < gap:
 					ok = false
 					break
 			if ok:
-				return p
-	return Vector3i(hut.x + radius, hut.y, hut.z)
+				return Vector3i(x, h + 1, z)
+	return Vector3i(-1, -1, -1)
 
 
 func _create_signal_smoke() -> CPUParticles3D:

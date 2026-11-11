@@ -23,6 +23,7 @@ var _hold_t := -1.0
 var _hold_target: WorldEntity = null
 var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
+var arrow: PlacementArrow           ## points out of the front of what you're placing
 var _place_coord := Vector3i.ZERO
 var _place_type: StringName = &""
 var _place_ok := false
@@ -41,6 +42,8 @@ func setup(p: Player) -> void:
 	_ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ghost.visible = false
 	add_child(_ghost)
+	arrow = PlacementArrow.new()
+	add_child(arrow)
 
 
 # ---------------------------------------------------------------- input
@@ -128,11 +131,14 @@ func hud_text() -> String:
 func update_ghost() -> void:
 	_place_type = active_type()
 	_ghost.visible = false
+	arrow.visible = false
 	_place_ok = false
 	_place_reason = ""
 	if _place_type == &"" or player.entities == null:
 		return
 	player._ghost.visible = false
+	if player._ghost_arrow != null:
+		player._ghost_arrow.visible = false
 	# Keep player._highlight visible so the block/entity under the cursor stays highlighted
 	if player.target.is_empty():
 		_place_reason = "aim at the ground"
@@ -156,6 +162,8 @@ func update_ghost() -> void:
 	_ghost.global_position = box.get_center()
 	_ghost_mat.albedo_color = Color(0.55, 1.0, 0.7, 0.45) if _place_ok else Color(1.0, 0.45, 0.4, 0.45)
 	_ghost.visible = true
+	arrow.show_for(box, PlacementArrow.entity_front(player.prefab_rot),
+		Color(0.55, 1.0, 0.7) if _place_ok else Color(1.0, 0.45, 0.4))
 
 
 func _probe(type: StringName, c: Vector3i, rot: int) -> WorldEntity:

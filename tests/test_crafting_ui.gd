@@ -101,5 +101,32 @@ func _run() -> void:
 	ui._rebuild_all()
 	check("Ready-only view builds on an empty bag", ui._list.get_child_count() > 0)
 
+	# "Used for": what an item is good for
+	var stew_uses := ItemUses.lines(&"hearty_clam_chowder")
+	check("Meals say what eating does", stew_uses.any(func(l: String) -> bool: return l.begins_with("Eat:") and "health" in l))
+	check("Driftwood says it's fuel", ItemUses.lines(&"driftwood").any(func(l: String) -> bool: return l.begins_with("Fuel:")))
+	check("Bait says it's bait", ItemUses.lines(&"kelp_frond").any(func(l: String) -> bool: return l.begins_with("Bait:")))
+	check("Planks pay for building", ItemUses.lines(&"wood_plank").any(func(l: String) -> bool: return l.begins_with("Building:")))
+	var all_rec := ItemUses.recipes_using(&"wood_plank")
+	check("Recipes using planks are found", (all_rec.known as Array).size() > 0 and int(all_rec.locked) == 0)
+	var none_known := ItemUses.recipes_using(&"wood_plank", func(_r: RecipeDef) -> bool: return false)
+	check("Unlearned recipes are counted, not named", (none_known.known as Array).is_empty() and int(none_known.locked) > 0)
+	check("Tooltip summary names the item", ItemUses.summary(&"wood_plank").begins_with(ItemSlotView.item_name(&"wood_plank")))
+	ui._only_ready = false
+	ui.show_recipe(planks.id)
+	check("Recipe link jumps to that recipe", ui._selected == planks.id and ui._where == planks.required_station)
+	var found_used_for := false
+	var found_link := false
+	var stack: Array = [ui._detail]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Label and (n as Label).text == "Used for":
+			found_used_for = true
+		if n is LinkButton:
+			found_link = true
+		stack.append_array(n.get_children())
+	check("Detail panel has a Used for section", found_used_for)
+	check("Recipe names in it are clickable", found_link)
+
 	print("Results: %d/%d passed" % [counts.passed, counts.total])
 	quit(0 if counts.passed == counts.total else 1)

@@ -947,6 +947,8 @@ func _refresh_detail() -> void:
 		var cl := _ink("%d / %d" % [have, need], 15, true, COL_READY if have >= need else COL_BLOCKED)
 		cl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(cl)
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.tooltip_text = ItemUses.summary(iid, _knows)   # hover an ingredient: what else it's for
 		_detail.add_child(row)
 	if r.required_station != HAND:
 		var sname: String = RecipeDB.STATION_NAMES.get(r.required_station, String(r.required_station).capitalize())
@@ -960,14 +962,7 @@ func _refresh_detail() -> void:
 		tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_detail.add_child(tl)
 
-	var uses := used_in(r.output_item_id)
-	if not uses.is_empty():
-		_detail.add_child(HSeparator.new())
-		_detail.add_child(_ink("Used to make", 16, true))
-		var more := uses.size() - 4
-		var ul := _ink(", ".join(uses.slice(0, 4)) + ((" and %d more" % more) if more > 0 else ""), 14, false, COL_MUTED)
-		ul.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_detail.add_child(ul)
+	_add_used_for(r.output_item_id)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -999,6 +994,73 @@ func _refresh_detail() -> void:
 		var times: int = s[1]
 		b.pressed.connect(func() -> void: craft(r, times))
 		btns.add_child(b)
+
+
+const USED_FOR_LINES := 4
+const USED_FOR_RECIPES := 5
+
+## "Used for": eating, fuel, wearing, building... then the recipes that take it (click one
+## to jump to it).
+func _add_used_for(item_id: StringName) -> void:
+	var uses := ItemUses.lines(item_id)
+	var rec := ItemUses.recipes_using(item_id, _knows)
+	var known: Array = rec.known
+	var locked: int = rec.locked
+	_detail.add_child(HSeparator.new())
+	_detail.add_child(_ink("Used for", 16, true))
+	if uses.is_empty() and known.is_empty() and locked == 0:
+		_detail.add_child(_ink("Nothing else yet: it's a finished good.", 13, false, COL_MUTED))
+		return
+	for i in mini(uses.size(), USED_FOR_LINES):
+		var l := _ink("•  " + uses[i], 13)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(l)
+	if known.is_empty() and locked == 0:
+		return
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 4)
+	flow.add_theme_constant_override("v_separation", 2)
+	_detail.add_child(flow)
+	flow.add_child(_ink("•  Makes:", 13))
+	for i in mini(known.size(), USED_FOR_RECIPES):
+		var r2: RecipeDef = known[i]
+		var lb := LinkButton.new()
+		lb.text = r2.name + ("," if i < mini(known.size(), USED_FOR_RECIPES) - 1 else "")
+		lb.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
+		lb.focus_mode = Control.FOCUS_NONE
+		lb.add_theme_font_size_override("font_size", 13)
+		lb.add_theme_color_override("font_color", Color8(40, 104, 112))
+		lb.add_theme_color_override("font_hover_color", Color8(176, 120, 52))
+		lb.tooltip_text = "Show the %s recipe" % r2.name
+		var rid := r2.id
+		lb.pressed.connect(func() -> void: show_recipe(rid))
+		flow.add_child(lb)
+	var extra := known.size() - USED_FOR_RECIPES
+	var tail: Array[String] = []
+	if extra > 0:
+		tail.append("and %d more" % extra)
+	if locked > 0:
+		tail.append("%d not learned yet" % locked)
+	if not tail.is_empty():
+		flow.add_child(_ink("(%s)" % ", ".join(tail), 13, false, COL_MUTED))
+
+
+## Jumps the page to a recipe: its station's list, selected and in view.
+func show_recipe(id: StringName) -> void:
+	var r := RecipeDB.get_recipe(id)
+	if r == null:
+		return
+	_search = ""
+	if _search_edit != null:
+		_search_edit.text = ""
+	_only_ready = false
+	if _ready_check != null:
+		_ready_check.button_pressed = false
+	_where = r.required_station
+	_selected = &""
+	_rebuild_all()
+	_select(id)
+	_focus_selected()
 
 
 func _pulse_detail_icon() -> void:

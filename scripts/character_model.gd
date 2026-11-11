@@ -42,6 +42,11 @@ var shield_node: Node3D
 var offhand_lantern: Node3D
 
 var _phase := 0.0
+## Sneaking: hips drop, torso leans in, legs go into a low creeping stride. Set each frame.
+var crouching := false
+var _crouch := 0.0               # 0 standing .. 1 fully crouched (eased)
+const CROUCH_LEAN := 0.42        # torso lean forward (rad)
+const CROUCH_STANCE := 0.72      # each leg's angle from vertical in the creeping stride (rad)
 var _swing := 0.0
 var _swing_step := 0
 var _swing_charged := false
@@ -633,8 +638,9 @@ func set_first_person_view(fp: bool) -> void:
 
 ## speed: horizontal m/s. Call every frame.
 func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> void:
+	_crouch = move_toward(_crouch, 1.0 if crouching and on_ground and not swimming else 0.0, delta * 6.0)
 	var moving := clampf(speed / 4.5, 0.0, 1.4)
-	_phase += delta * (4.0 + speed * 1.9)
+	_phase += delta * (4.0 + speed * (1.9 + 2.2 * _crouch))   # short, quick creeping steps
 	var s := sin(_phase)
 	var target_leg := s * 0.75 * moving
 	var bob := absf(cos(_phase)) * 0.05 * moving
@@ -726,20 +732,47 @@ func animate(delta: float, speed: float, on_ground: bool, swimming: bool) -> voi
 			arm_l_x = -0.82 + cos(_phase * 5.0) * 0.24
 			body_lean_val = -0.08 + sin(_phase * 2.4) * 0.06
 	var f := 1.0 - exp(-delta * 14.0)
-	leg_l.rotation.x = lerpf(leg_l.rotation.x, target_leg, f)
-	leg_r.rotation.x = lerpf(leg_r.rotation.x, -target_leg, f)
+	var leg_l_x := target_leg
+	var leg_r_x := -target_leg
+	if _crouch > 0.0:
+		# Low creeping stride: one leg forward, one back (feet stay on the ground with the hips
+		# down), a small swing while moving. Legs hang off the torso, so undo its lean.
+		var c := smoothstep(0.0, 1.0, _crouch)
+		var stride := s * 0.3 * moving
+		leg_l_x = lerpf(target_leg, -CROUCH_STANCE + stride - CROUCH_LEAN, c)
+		leg_r_x = lerpf(-target_leg, CROUCH_STANCE - stride - CROUCH_LEAN, c)
+		if _swing <= 0.0:
+			arm_l_x = lerpf(arm_l_x, -0.55 - s * 0.15 * moving, c)
+			arm_r_x = lerpf(arm_r_x, -0.55 + s * 0.15 * moving, c)
+		body_lean_val = lerpf(body_lean_val, CROUCH_LEAN + body_lean, c)
+		bob *= 1.0 - 0.6 * c
+	leg_l.rotation.x = lerpf(leg_l.rotation.x, leg_l_x, f)
+	leg_r.rotation.x = lerpf(leg_r.rotation.x, leg_r_x, f)
 	arm_l.rotation.x = lerpf(arm_l.rotation.x, arm_l_x, f)
 	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_x, f * (2.0 if _swing > 0.0 else 1.0))
 	arm_r.rotation.y = lerpf(arm_r.rotation.y, arm_r_y, f * (2.0 if _swing > 0.0 else 1.0))
 	arm_l.rotation.z = lerpf(arm_l.rotation.z, -arm_spread, f)
 	arm_r.rotation.z = lerpf(arm_r.rotation.z, arm_r_z, f * (2.0 if _swing > 0.0 else 1.0))
-	body.position.y = bob
-	head.rotation.x = lerpf(head.rotation.x, 0.15 if swimming else 0.0, f)
+	var cs := smoothstep(0.0, 1.0, _crouch)
+	body.position.y = bob - crouch_drop() * cs
+	head.rotation.x = lerpf(head.rotation.x, 0.15 if swimming else -CROUCH_LEAN * 0.7 * cs, f)   # eyes up while crouched
 	body.rotation.x = lerpf(body.rotation.x, body_lean_val, f)
 	body.rotation.y = lerpf(body.rotation.y, body_twist, f * (2.0 if _swing > 0.0 else 1.0))
 	if _swing_step == 4 or arm_thrust_z > 0.0:
 		var base_pos := (Vector3(3.4, 15.6, 2.6) if _first_person_view else Vector3(4.0, 10.5, 0.0)) * U
 		arm_r.position = base_pos + Vector3(0, 0, arm_thrust_z * U)
+
+
+## How far the hips sit below standing when fully crouched, so the feet touch the ground.
+static func crouch_drop() -> float:
+	var hip := 5.0 * U   # leg pivot height; legs are as long as that
+	return hip * cos(CROUCH_LEAN) - hip * cos(CROUCH_STANCE)
+
+
+## How much lower the eyes are when fully crouched (for the camera).
+static func crouch_eye_drop() -> float:
+	var eye := 1.5
+	return eye - eye * cos(CROUCH_LEAN) + crouch_drop()
 
 
 ## Seated pose for boats: thighs forward, arms reaching for the oars.

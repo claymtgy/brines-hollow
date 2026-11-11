@@ -48,6 +48,7 @@ func apply_state(pos: Vector3, yaw: float, speed: float, flags: int, tool: int, 
 	_speed = speed
 	_on_ground = flags & 1 != 0
 	_swimming = flags & 2 != 0
+	model.crouching = flags & 4 != 0
 	model.set_tool(tool)
 	if swings != _swing_seen:
 		_swing_seen = swings

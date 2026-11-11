@@ -574,7 +574,7 @@ func _process(delta: float) -> void:
 		_send_t -= delta
 		if _send_t <= 0.0:
 			_send_t = 0.05
-			var flags := (1 if player.on_ground else 0) | (2 if player.swimming else 0)
+			var flags := (1 if player.on_ground else 0) | (2 if player.swimming else 0) 				| (4 if player.is_crouching() else 0)
 			player_state.rpc(player.position, player.facing, player.horizontal_speed, flags, player.tool, player.swing_count)
 		if multiplayer.is_server():
 			_time_sync_t -= delta

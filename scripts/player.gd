@@ -74,6 +74,7 @@ var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ghost_key := -1
 var _ghost_cache := {}
+var _ghost_arrow: PlacementArrow     # which side of the blueprint is its front
 var hovered_entity: WorldEntity = null
 var _last_ray_origin := Vector3.ZERO
 var _last_ray_dir := Vector3.FORWARD
@@ -112,6 +113,8 @@ func board(b: Boat, seat_index: int) -> void:
 		_highlight.visible = false
 	if _ghost != null:
 		_ghost.visible = false
+		if _ghost_arrow != null:
+			_ghost_arrow.visible = false
 	if rig != null:
 		rig.extra_dist = 2.2
 
@@ -214,6 +217,8 @@ void fragment() {
 	_ghost.top_level = true
 	_ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ghost)
+	_ghost_arrow = PlacementArrow.new()
+	add_child(_ghost_arrow)
 	_setup_fishing_visuals()
 
 	# Starter kit: a castaway's three tools and an armful of salvage. The axe, hoe, seeds and
@@ -321,6 +326,25 @@ func _collides(p: Vector3) -> bool:
 	return world.aabb_collides(lo, hi) or (entities != null and entities.blocks(lo, hi))
 
 
+## Top of the solid furniture the player's box at `p` overlaps, or -INF.
+func _entity_top_at(p: Vector3) -> float:
+	if entities == null:
+		return -INF
+	const EPS := 0.002
+	return entities.solid_top(Vector3(p.x - HW + EPS, p.y + EPS, p.z - HW + EPS),
+		Vector3(p.x + HW - EPS, p.y + H - EPS, p.z + HW - EPS))
+
+
+## Sneaking on solid ground crouches the character (and lowers the camera).
+func is_crouching() -> bool:
+	return combat != null and combat.sneaking and on_ground and not swimming and not is_seated()
+
+
+## How much lower the camera sits right now (eased with the crouch pose).
+func eye_drop() -> float:
+	return CharacterModel.crouch_eye_drop() * smoothstep(0.0, 1.0, model._crouch) if model != null else 0.0
+
+
 func _move_horizontal(axis: int, amount: float) -> bool:
 	if amount == 0.0:
 		return false
@@ -331,6 +355,17 @@ func _move_horizontal(axis: int, amount: float) -> bool:
 		return false
 	# Try auto-stepping up onto a ledge.
 	if on_ground or swimming:
+		# Furniture first: step onto its real top, not the voxel line above it.
+		var top := _entity_top_at(p)
+		if top > position.y and top - position.y <= MAX_STEP * VS + 0.001:
+			var lifted := p
+			lifted.y = top
+			var up_only := position
+			up_only.y = top
+			if not _collides(up_only) and not _collides(lifted):
+				_step_offset -= top - position.y
+				position = lifted
+				return false
 		var base := floori(position.y / VS + 0.02)
 		for k in range(1, MAX_STEP + 1):
 			var lifted := p
@@ -362,6 +397,14 @@ func _move_vertical(amount: float) -> bool:
 		position = p
 		return false
 	if amount < 0.0:
+		# Landing on furniture: rest on its top (beds and the like end mid-voxel).
+		var top := _entity_top_at(p)
+		if top > p.y and top <= position.y + 0.001:
+			var on_top := p
+			on_top.y = top
+			if not _collides(on_top):
+				position.y = top
+				return true
 		p.y = (floori((p.y + 0.002) / VS) + 1) * VS
 	else:
 		p.y = floori((p.y + H) / VS) * VS - H - 0.0005
@@ -980,6 +1023,8 @@ func _process(delta: float) -> void:
 		target = {}
 		_highlight.visible = false
 		_ghost.visible = false
+		if _ghost_arrow != null:
+			_ghost_arrow.visible = false
 		return
 	_step_offset = lerpf(_step_offset, 0.0, 1.0 - exp(-delta * 16.0))
 	model.position = Vector3(0, _step_offset, 0)
@@ -989,6 +1034,7 @@ func _process(delta: float) -> void:
 	model.set_fishing_state(fishing.current_state if tool == 3 and fishing != null else 0, fishing_cast_power)
 	var is_dodging: bool = (combat != null and combat.is_dodging())
 	if not is_dodging:
+		model.crouching = is_crouching()
 		model.animate(delta, horizontal_speed, on_ground, swimming)
 	var shift_held := is_shift_held()
 	if not shift_held or tool != 1:
@@ -1043,6 +1089,8 @@ func _update_target() -> void:
 			target = hit
 	_highlight.visible = false
 	_ghost.visible = false
+	if _ghost_arrow != null:
+		_ghost_arrow.visible = false
 	if target.is_empty():
 		return
 	var cell: Vector3i = target.cell
@@ -1080,6 +1128,8 @@ func _update_target() -> void:
 		var pf2 := Prefabs.rotated(prefab_id, prefab_rot)
 		_ghost.global_position = Vector3(o - (pf2.anchor as Vector3i)) * VS
 		_ghost.visible = true
+		_ghost_arrow.show_for(AABB(_ghost.global_position, Vector3(pf2.size as Vector3i) * VS),
+			PlacementArrow.prefab_front(prefab_rot), Color(0.55, 1.0, 0.7))
 
 
 func _update_cursor_highlight(origin: Vector3, dir: Vector3, hit: Dictionary) -> void:

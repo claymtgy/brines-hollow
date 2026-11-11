@@ -96,7 +96,7 @@ func _process(delta: float) -> void:
 
 	var b := view_basis()
 	if first_person:
-		var eye_pos: Vector3 = target.global_position + Vector3(0.0, 1.56, 0.0)
+		var eye_pos: Vector3 = target.global_position + Vector3(0.0, 1.56 - _eye_drop(), 0.0)
 		_pivot = eye_pos
 		_snapped = true
 		cam.global_transform = Transform3D(b, eye_pos)
@@ -108,7 +108,7 @@ func _process(delta: float) -> void:
 			(target as Player).model.set_first_person_view(true)
 		return
 
-	var want: Vector3 = target.global_position + Vector3(0, 1.55, 0)
+	var want: Vector3 = target.global_position + Vector3(0, 1.55 - _eye_drop(), 0)
 	if not _snapped or _pivot.distance_to(want) > 4.0:
 		_pivot = want
 		_snapped = true
@@ -144,3 +144,8 @@ func _process(delta: float) -> void:
 	if target is Player and (target as Player).model != null:
 		(target as Player).model.set_first_person_view(false)
 		(target as Player).model.visible = _cur_dist > 1.0
+
+
+## Crouching (sneak) lowers the view with the character.
+func _eye_drop() -> float:
+	return (target as Player).eye_drop() if target is Player else 0.0

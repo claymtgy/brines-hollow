@@ -917,6 +917,19 @@ func blocks(min_m: Vector3, max_m: Vector3, ignore: Object = null) -> bool:
 	return _boat_blocks(box, ignore)
 
 
+## Top (metres) of the highest solid entity overlapping the box, or -INF if none.
+## Lets the player stand on furniture whose top isn't on a voxel boundary (a bed is 0.45 m).
+func solid_top(min_m: Vector3, max_m: Vector3, ignore: Object = null) -> float:
+	var box := AABB(min_m, max_m - min_m)
+	var top := -INF
+	for ent: WorldEntity in entities.values():
+		if ent.solid and ent != ignore:
+			var a := ent.get_aabb()
+			if a.intersects(box):
+				top = maxf(top, a.end.y)
+	return top
+
+
 func point_solid(p: Vector3, ignore: Object = null) -> bool:
 	return blocks(p - Vector3.ONE * 0.01, p + Vector3.ONE * 0.01, ignore)
 
