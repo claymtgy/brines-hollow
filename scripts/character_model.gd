@@ -45,8 +45,8 @@ var _phase := 0.0
 ## Sneaking: hips drop, torso leans in, legs go into a low creeping stride. Set each frame.
 var crouching := false
 var _crouch := 0.0               # 0 standing .. 1 fully crouched (eased)
-const CROUCH_LEAN := 0.42        # torso lean forward (rad)
-const CROUCH_STANCE := 0.72      # each leg's angle from vertical in the creeping stride (rad)
+const CROUCH_LEAN := 0.5         # torso lean forward (rad)
+const CROUCH_STANCE := 0.85      # each leg's angle from vertical in the creeping stride (rad)
 var _swing := 0.0
 var _swing_step := 0
 var _swing_charged := false

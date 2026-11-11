@@ -97,7 +97,15 @@ func _run() -> void:
 		p._physics_process(1.0 / 60.0)
 	check("A 1.2 m crate blocks instead of being climbed", p.position.y < (FLOOR_Y + 1) * VS + 0.01)
 
-	# --- sneaking crouches
+	# --- sneaking crouches (combat normally comes from CreatureNet; a bare one is enough here)
+	var cb := PlayerCombat.new()
+	cb.player = p
+	cb.set_process(false)
+	cb.set_physics_process(false)
+	cb.set_process_input(false)
+	cb.set_process_unhandled_input(false)
+	p.add_child(cb)
+	p.combat = cb
 	p.position = Vector3(5.5, FLOOR_Y + 1, 5.5) * VS
 	_settle(p, 30)
 	var m := p.model
