@@ -47,6 +47,8 @@ func _bake_all() -> void:
 		"thunder": _load_or_bake("thunder", 4.5, _gen_thunder, false),
 		"shanty_whistle": _load_or_bake("shanty_whistle", 8.0, _gen_shanty_whistle),
 		"harbor_drone": _load_or_bake("harbor_drone", 6.0, _gen_harbor_drone),
+		"tavern_accordion": _load_or_bake("tavern_accordion", 6.0, _gen_tavern_accordion),
+		"rigging_wind": _load_or_bake("rigging_wind", 5.0, _gen_rigging_wind),
 	}
 	bake_ms = Time.get_ticks_msec() - t0
 	_baked = out
@@ -170,8 +172,35 @@ static func _gen_harbor_drone(i: int, n: int, _st: Dictionary) -> float:
 	return (c1 + c2 + c3) * swell * 0.25
 
 
+static func _gen_tavern_accordion(i: int, n: int, _st: Dictionary) -> float:
+	var t := float(i % n) / RATE
+	# Warm tavern sea-shanty melody: D4 -> F4 -> A4 -> G4 -> F4 -> E4 -> D4 -> A3
+	var notes := [293.66, 349.23, 440.00, 392.00, 349.23, 329.63, 293.66, 220.00]
+	var note_idx := int(t * 1.33) % notes.size()
+	var freq: float = notes[note_idx]
+	var bellow_swell := 0.65 + 0.35 * sin(TAU * t * 0.66)
+	# Dual-reed tremolo (accordion detuned dry/wet reeds)
+	var reed1 := sin(TAU * freq * t)
+	var reed2 := sin(TAU * (freq * 1.004) * t)
+	var reed_sub := sin(TAU * (freq * 0.5) * t) * 0.3
+	var reed_oct := sin(TAU * (freq * 2.0) * t) * 0.22
+	var note_phase := fposmod(t, 0.75)
+	var env := minf(note_phase / 0.08, 1.0) * (1.0 - maxf(0.0, (note_phase - 0.55) / 0.2))
+	return (reed1 * 0.45 + reed2 * 0.4 + reed_sub + reed_oct) * bellow_swell * env * 0.38
+
+
+static func _gen_rigging_wind(i: int, n: int, st: Dictionary) -> float:
+	var t := float(i % n) / RATE
+	var flutter := sin(TAU * 7.5 * t) * 0.06
+	var cable1 := sin(TAU * 587.33 * (1.0 + flutter) * t) * 0.35
+	var cable2 := sin(TAU * 880.00 * (1.0 - flutter * 0.8) * t) * 0.25
+	var wn: float = st.rng.randf_range(-0.15, 0.15)
+	var gust := 0.5 + 0.5 * sin(TAU * t * 0.35)
+	return (cable1 + cable2 + wn) * gust * 0.38
+
+
 func _create_players() -> void:
-	for key in ["surf", "wind", "rain_ground", "rain_roof", "underwater", "shanty_whistle", "harbor_drone"]:
+	for key in ["surf", "wind", "rain_ground", "rain_roof", "underwater", "shanty_whistle", "harbor_drone", "tavern_accordion", "rigging_wind"]:
 		var p := AudioStreamPlayer.new()
 		p.stream = _baked[key]
 		p.bus = BUS_AMBIENCE
@@ -228,6 +257,8 @@ func update(delta: float, w: Weather) -> void:
 		_vol("underwater", clampf(0.55 + depth_att * 0.45, 0.5, 1.0), delta)
 		_vol("shanty_whistle", 0.0, delta)
 		_vol("harbor_drone", 0.0, delta)
+		_vol("tavern_accordion", 0.0, delta)
+		_vol("rigging_wind", 0.0, delta)
 	else:
 		_vol("underwater", 0.0, delta)
 		_vol("surf", clampf(surf, 0.0, 1.2), delta)
@@ -246,6 +277,29 @@ func update(delta: float, w: Weather) -> void:
 		var harbor_target: float = clampf((_shore - 0.5) * 1.2, 0.0, 0.55) if not in_boat and _shore > 0.5 and height >= 0.0 and height < 20.0 else 0.0
 		_vol("shanty_whistle", shanty_target, delta)
 		_vol("harbor_drone", harbor_target, delta)
+
+		# Tavern accordion in evening/night near hearth or village
+		var village_near := false
+		var m := w._main()
+		if m != null and m.player != null:
+			var p_pos: Vector3 = m.player.position
+			if m.village != null and m.village.hearth_placed:
+				var h_pos := Vector3(m.village.hearth_pos) * VoxelWorld.VS
+				if p_pos.distance_to(h_pos) <= 45.0:
+					village_near = true
+			if not village_near and m.npc_villages != null and m.world != null and m.world.gen != null:
+				for v in m.world.gen.villages:
+					var vc: Vector3 = (Vector3(v.center.x, v.center.y, v.center.z) + Vector3(0.5, 0.5, 0.5)) * VoxelWorld.VS
+					if p_pos.distance_to(vc) <= 55.0:
+						village_near = true
+						break
+		var time_of_day: float = sky.time_of_day if sky != null else 0.5
+		var is_evening: bool = (time_of_day >= 0.65 or time_of_day <= 0.12)
+		var accordion_target: float = 0.52 if (village_near and is_evening and not in_boat) else 0.0
+		_vol("tavern_accordion", accordion_target, delta)
+
+		var rigging_target: float = clampf((wind - 0.35) * 1.5, 0.0, 0.65) if (in_boat and wind > 0.35) else 0.0
+		_vol("rigging_wind", rigging_target, delta)
 	(_players["wind"] as AudioStreamPlayer).pitch_scale = 0.8 + wind * 0.45
 	for i in range(_pending_thunder.size() - 1, -1, -1):
 		_pending_thunder[i] -= delta

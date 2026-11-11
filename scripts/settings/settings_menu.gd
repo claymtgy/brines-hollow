@@ -20,7 +20,7 @@ const REBINDABLE := [
 	["dodge", "Dodge roll / Evade"], ["sneak", "Sneak / Crouch"],
 	["move_forward", "Move forward"], ["move_back", "Move back"], ["move_left", "Move left"],
 	["move_right", "Move right"], ["jump", "Jump / swim up"], ["sprint", "Sprint / pull hard"],
-	["interact", "Interact / board"], ["inventory_toggle", "Inventory"], ["build_menu_toggle", "Build menu (hammer)"],
+	["interact", "Interact / board"], ["inventory_toggle", "Inventory"], ["crafting_toggle", "Crafting"],["build_menu_toggle", "Build menu (hammer)"],
 	["tool_1", "Hotbar 1"], ["tool_2", "Hotbar 2"], ["tool_3", "Hotbar 3"], ["tool_4", "Hotbar 4"],
 	["tool_5", "Hotbar 5"], ["tool_6", "Hotbar 6"], ["tool_7", "Hotbar 7"], ["tool_8", "Hotbar 8"],
 	["prev_item", "Previous item"], ["next_item", "Next item"],

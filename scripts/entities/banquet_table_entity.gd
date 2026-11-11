@@ -19,7 +19,6 @@ func _init(p_coord: Vector3i = Vector3i.ZERO) -> void:
 
 
 func _build_visuals() -> void:
-	var root := Node3D.new()
 	var g := Prefabs.Grid.new(14, 5, 8)
 
 	# 4 Heavy wooden table legs
@@ -38,16 +37,14 @@ func _build_visuals() -> void:
 	g.box(0, 1, 0, 13, 1, 0, Palette.PLANK)
 	g.box(0, 1, 7, 13, 1, 7, Palette.PLANK)
 
-	var mi := _voxel_model(g)
-	mi.position = Vector3(-7, 0, -4) * U
-	root.add_child(mi)
+	_mesh_instance = _voxel_model(g)
 
 	_dishes_group = Node3D.new()
 	_dishes_group.name = "Dishes"
-	root.add_child(_dishes_group)
+	add_child(_dishes_group)
 
-	_mesh_instance = root
 	_update_dish_visuals()
+
 
 
 func _update_dish_visuals() -> void:
@@ -82,6 +79,26 @@ func _update_dish_visuals() -> void:
 		morsel.material_override = food_mat
 		morsel.position.y = 0.04
 		plate.add_child(morsel)
+
+		# Steaming hot feast aroma
+		var steam := CPUParticles3D.new()
+		steam.amount = 6
+		steam.lifetime = 1.4
+		steam.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
+		steam.direction = Vector3(0, 1, 0)
+		steam.spread = 15.0
+		steam.initial_velocity_min = 0.2
+		steam.initial_velocity_max = 0.5
+		steam.gravity = Vector3(0, 0.2, 0)
+		var s_mesh := BoxMesh.new()
+		s_mesh.size = Vector3.ONE * 0.035
+		var s_mat := StandardMaterial3D.new()
+		s_mat.albedo_color = Color(0.95, 0.95, 0.95, 0.45)
+		s_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		s_mesh.material = s_mat
+		steam.mesh = s_mesh
+		steam.position.y = 0.08
+		plate.add_child(steam)
 
 		_dishes_group.add_child(plate)
 
@@ -130,6 +147,29 @@ func client_interact(player: Player) -> void:
 
 func _partake_feast(player: Player) -> void:
 	CombatAudio.play_sound("fanfare", position)
+
+	# Festival celebration confetti / sparkle burst
+	var burst := CPUParticles3D.new()
+	burst.one_shot = true
+	burst.explosiveness = 0.95
+	burst.amount = 36
+	burst.lifetime = 1.6
+	burst.direction = Vector3(0, 1, 0)
+	burst.spread = 75.0
+	burst.initial_velocity_min = 2.5
+	burst.initial_velocity_max = 5.0
+	var b_mesh := BoxMesh.new()
+	b_mesh.size = Vector3.ONE * 0.05
+	var b_mat := StandardMaterial3D.new()
+	b_mat.albedo_color = Color(1.0, 0.85, 0.25, 0.95)
+	b_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	b_mesh.material = b_mat
+	burst.mesh = b_mesh
+	burst.position = Vector3(0, 4 * U + 0.2, 0)
+	add_child(burst)
+	burst.emitting = true
+	if is_inside_tree() and get_tree() != null:
+		get_tree().create_timer(2.0).timeout.connect(func(): if is_instance_valid(burst): burst.queue_free())
 
 	# Grant Banquet Rested buff to player
 	if player.vitality != null:

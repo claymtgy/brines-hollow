@@ -163,6 +163,22 @@ func has_space_for(p_id: StringName, p_count: int = 1, p_custom_data: Dictionary
 	return remaining <= 0
 
 
+## How many of `p_id` would fit right now (topping up stacks, then empty slots).
+func room_for(p_id: StringName, p_custom_data: Dictionary = {}) -> int:
+	if p_id == &"":
+		return 0
+	var def: ItemDef = ItemDB.get_item(p_id)
+	var max_stk: int = def.max_stack if def else 999
+	var n := 0
+	for i in capacity:
+		var slot: ItemSlot = slots[i]
+		if slot.is_empty():
+			n += max_stk
+		elif max_stk > 1 and slot.can_stack_with(p_id, p_custom_data):
+			n += maxi(0, max_stk - slot.count)
+	return n
+
+
 ## Simulates adding multiple items to determine if the inventory can fit all of them.
 ## items_to_check: Array of Dictionary {"id": StringName, "count": int}
 func can_fit_items(items_to_check: Array) -> bool:
@@ -583,6 +599,38 @@ func get_buoyancy_offset() -> float:
 			if def and def.armor_data.has("buoyancy_offset"):
 				offset += float(def.armor_data["buoyancy_offset"])
 	return offset
+
+
+## All gear-driven stats in one dictionary (what the Pack page shows).
+func gear_stats() -> Dictionary:
+	return {
+		"defense": get_total_defense(),
+		"cold": get_cold_protection(),
+		"depth": get_max_safe_depth(),
+		"breath": get_extra_breath(),
+		"swim": get_swim_speed_multiplier(),
+		"capacity": capacity,
+	}
+
+
+## Stats now vs. stats if `item_id` were worn instead of what's in its slot.
+## Swaps the slot for a moment (no signals) so the real getters do the maths.
+## Returns {} for items that can't be equipped.
+func preview_stats(item_id: StringName) -> Dictionary:
+	var def: ItemDef = ItemDB.get_item(item_id)
+	if def == null or def.equip_slot == &"":
+		return {}
+	var eq_slot: StringName = &"body" if def.equip_slot == &"chest" else def.equip_slot
+	if not equipment.has(eq_slot):
+		return {}
+	var before := gear_stats()
+	var worn: ItemSlot = equipment[eq_slot]
+	equipment[eq_slot] = ItemSlot.new(item_id, 1)
+	var after := gear_stats()
+	equipment[eq_slot] = worn
+	if eq_slot == &"backpack":
+		after["capacity"] = maxi(MAX_HOTBAR_SLOTS, int(def.tool_data.get("capacity", DEFAULT_BASE_CAPACITY)))
+	return {"slot": eq_slot, "worn": worn.item_id, "before": before, "after": after}
 
 
 ## Returns currently held weapon (either from active hotbar or main_hand slot).

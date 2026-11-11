@@ -42,6 +42,11 @@ var _world_ver := 0
 var _prompt_npc: DrifterNPC = null
 var _quests_bound := false
 var _auto_work_t := 15.0
+var _cook_t := 2.0
+const LAMP_REFILL_BELOW := 1080.0   # seconds of lighthouse oil: 1.5 in-game days
+const LAMP_OIL_SEC := 720.0         # one flask of fish oil, same as the player's refill
+var _cook_station := {}         # npc idx -> station cell the cook is tending
+var orders_ui: CookOrdersUI
 
 
 func _ready() -> void:
@@ -95,6 +100,7 @@ func _build_roster() -> void:
 		npc.facing = atan2(away.x, away.y)   # stranded drifters look out to sea
 		if not recruited:
 			_add_wreck_prop(npc)
+			_spawn_wreck_gulls(npc.position)
 		npcs.append(npc)
 	_add_castaways()
 
@@ -139,6 +145,11 @@ func _add_castaways() -> void:
 		var d: Vector2i = w.dir
 		npc.facing = atan2(d.x, d.y)
 		npcs.append(npc)
+		if not recruited:
+			var smoke := _create_signal_smoke()
+			smoke.position = Vector3(0, 0.5, 0)
+			npc.add_child(smoke)
+			_spawn_wreck_gulls(npc.position)
 
 
 ## Low water: below half tide a castaway's timbers are clear of the sea and can be shifted.
@@ -170,6 +181,46 @@ func _find_wreck_spot(hut: Vector3i, rng: RandomNumberGenerator, taken: Array, r
 	return Vector3i(hut.x + radius, hut.y, hut.z)
 
 
+func _create_signal_smoke() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.name = "SignalSmoke"
+	p.amount = 28
+	p.lifetime = 4.2
+	p.preprocess = 2.0
+	p.speed_scale = 0.9
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.2
+	p.direction = Vector3(0.05, 1.0, 0.03)
+	p.spread = 10.0
+	p.gravity = Vector3(0.06, 1.25, 0.03)
+	p.initial_velocity_min = 1.1
+	p.initial_velocity_max = 1.9
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 2.4
+	var sm_mat := StandardMaterial3D.new()
+	sm_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm_mat.vertex_color_use_as_albedo = true
+	var sm_mesh := SphereMesh.new()
+	sm_mesh.radius = 0.2
+	sm_mesh.height = 0.4
+	sm_mesh.material = sm_mat
+	p.mesh = sm_mesh
+	p.color = Color(0.92, 0.94, 0.96, 0.48)
+	return p
+
+
+func _spawn_wreck_gulls(flock_pos: Vector3) -> void:
+	if main == null or main.get("creatures") == null or not is_authority():
+		return
+	for k in 2:
+		var g := main.creatures.spawn(&"gull", flock_pos + Vector3(randf_range(-2.5, 2.5), 8.5 + k * 1.5, randf_range(-2.5, 2.5))) as Gull
+		if g != null:
+			g.flock_center = flock_pos
+			g.circle_r = randf_range(8.0, 13.0)
+			g.altitude = 8.5 + k * 1.8
+
+
 func _add_wreck_prop(npc: DrifterNPC) -> void:
 	var g := Prefabs.Grid.new(6, 3, 4)
 	g.box(0, 0, 0, 5, 0, 3, Palette.DRIFTWOOD)
@@ -186,6 +237,10 @@ func _add_wreck_prop(npc: DrifterNPC) -> void:
 	mi.top_level = true
 	mi.position = npc.position + Vector3(0.7, 0.0, -0.4)
 	npc.add_child(mi)
+
+	var smoke := _create_signal_smoke()
+	smoke.position = Vector3(0.7, 0.4, -0.4)
+	npc.add_child(smoke)
 
 
 ## The starter hut gets a bunk inside so it can become the first home.
@@ -334,6 +389,11 @@ func _authority_tick(delta: float) -> void:
 	if _auto_work_t <= 0.0:
 		_auto_work_t = 15.0
 		_villager_automation()
+	_cook_t -= delta
+	if _cook_t <= 0.0:
+		_cook_t = 2.0
+		cook_shift()
+		lamplighter_shift()
 
 
 func _villager_automation() -> void:
@@ -366,9 +426,156 @@ func _villager_automation() -> void:
 			DrifterDef.Profession.CARPENTER:
 				primary_chest.container.deposit(&"driftwood", 1)
 			DrifterDef.Profession.SMOKER_CHEF:
-				primary_chest.container.deposit(&"smoked_fish_ration", 1)
+				if not cook_orders().has_orders():   # with orders set, they cook those instead
+					primary_chest.container.deposit(&"smoked_fish_ration", 1)
 			DrifterDef.Profession.RANCHER:
 				primary_chest.container.deposit(&"salt_milk", 1)
+
+
+# ---------------------------------------------------------------- the cook's pantry orders
+
+func cook_orders() -> CookOrders:
+	return main.village.cook_orders
+
+
+func _in_town(cell: Vector3i) -> bool:
+	var v: SettlementManager = main.village
+	return Vector2(cell.x - v.hearth_pos.x, cell.z - v.hearth_pos.z).length() <= v.territory_radius_m / VS
+
+
+## Where the town keeps food, in the order the cook fills them:
+## pantry barrels, the community stockpile chest, then the depot.
+func town_stores() -> Array:
+	var pantries: Array = []
+	var chests: Array = []
+	if main.entities != null:
+		for ent: WorldEntity in main.entities.entities.values():
+			if ent is ChestEntity and (ent as ChestEntity).container != null and _in_town(ent.grid_coord):
+				if ent.entity_id == &"pantry_barrel":
+					pantries.append((ent as ChestEntity).container.inventory)
+				elif ent.entity_id == &"community_chest":
+					chests.append((ent as ChestEntity).container.inventory)
+	var out: Array = pantries + chests
+	out.append(main.village.town_depot.inventory)
+	return out
+
+
+## Cooking fires and pots inside the town's bounds.
+func town_cook_stations() -> Array:
+	var out: Array = []
+	if main.entities != null:
+		for ent: WorldEntity in main.entities.entities.values():
+			if ent is StationEntity and (ent as StationEntity).is_cooking_station() and _in_town(ent.grid_coord):
+				out.append(ent)
+	return out
+
+
+func has_cook() -> bool:
+	for npc in npcs:
+		if npc.recruited and npc.def.profession == DrifterDef.Profession.SMOKER_CHEF:
+			return true
+	return false
+
+
+## Sets how many of a meal the cook keeps in store (clients ask the host).
+func set_cook_order(item_id: StringName, n: int) -> void:
+	if is_authority():
+		cook_orders().set_target(item_id, n)
+		_sync_village()
+	else:
+		cook_orders().set_target(item_id, n)   # show it now; the host's copy follows
+		req_cook_order.rpc_id(1, String(item_id), n)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func req_cook_order(item_id: String, n: int) -> void:
+	if is_authority() and _ready_done:
+		cook_orders().set_target(StringName(item_id), n)
+		_sync_village()
+
+
+## Host, every couple of seconds: each cook on shift tends up to two town fires: carries
+## finished dishes to the stores, feeds the fire, and starts the meal furthest below its order.
+func cook_shift() -> void:
+	if main == null or main.village == null or main.entities == null:
+		return
+	var orders := cook_orders()
+	var stations := town_cook_stations()
+	var stores := town_stores()
+	# Dishes already done go to the stores whoever's on shift (night, or the cook left).
+	for st: StationEntity in stations:
+		var key := CookOrders.key_for(st.grid_coord)
+		if orders.pending.has(key) and orders.collect(st.station, key, stores) > 0:
+			main.entities.push_state(st)
+	for k: String in orders.pending.keys():   # a fire that was knocked down
+		var found := false
+		for st: StationEntity in stations:
+			if CookOrders.key_for(st.grid_coord) == k:
+				found = true
+		if not found:
+			orders.pending.erase(k)
+	if not orders.has_orders() or stations.is_empty():
+		_cook_station.clear()
+		return
+	var book: RecipeBook = main.player.recipes if main.player != null else null
+	var free := stations.duplicate()
+	# Fires a cook already has something on stay with them.
+	free.sort_custom(func(a: StationEntity, b: StationEntity) -> bool:
+		return orders.pending.has(CookOrders.key_for(a.grid_coord)) and not orders.pending.has(CookOrders.key_for(b.grid_coord)))
+	for npc in npcs:
+		if not npc.recruited or npc.def.profession != DrifterDef.Profession.SMOKER_CHEF:
+			continue
+		if npc.def.current_routine != DrifterDef.Routine.WORK:
+			_cook_station.erase(npc.idx)
+			continue
+		var tended := 0
+		for st: StationEntity in free.duplicate():
+			if tended >= 2:
+				break
+			var key := CookOrders.key_for(st.grid_coord)
+			if st.station.is_active and not orders.pending.has(key):
+				free.erase(st)
+				continue   # a player's dish is on this one
+			var r := orders.work_station(st.station, key, stores, book)
+			if r != null or orders.pending.has(key):
+				free.erase(st)
+				tended += 1
+				if tended == 1:
+					_cook_station[npc.idx] = st.grid_coord   # where they stand to work
+				if r != null:
+					main.entities.push_state(st)
+
+
+## Host: a lamplighter who's up and about tops up the lighthouse lamp with Refined Fish Oil
+## from the town's stores whenever it's down to under a day and a half of oil.
+## Returns true when they poured some in.
+func lamplighter_shift() -> bool:
+	var beam: LighthouseBeam = main.get("_beam") if main != null else null
+	if beam == null or beam.fuel_sec >= LAMP_REFILL_BELOW or not beam.can_refuel():
+		return false
+	var who: DrifterNPC = null
+	for npc in npcs:
+		if npc.recruited and npc.def.profession == DrifterDef.Profession.LAMPLIGHTER \
+				and npc.def.current_routine != DrifterDef.Routine.SLEEP:
+			who = npc
+			break
+	if who == null:
+		return false
+	for inv: Inventory in town_stores():
+		if inv.remove_item(&"fish_oil", 1) == 1:
+			beam.add_fuel(LAMP_OIL_SEC)
+			_announce("%s filled the lighthouse lamp (%d hours of light)." % [who.def.name, int(beam.fuel_hours_left())])
+			return true
+	return false
+
+
+## Talking to the cook opens their pantry orders.
+func open_cook_orders(npc: DrifterNPC) -> void:
+	if orders_ui == null:
+		orders_ui = CookOrdersUI.new()
+		orders_ui.name = "CookOrdersUI"
+		main.add_child(orders_ui)
+	orders_ui.open(self, npc.def.name)
 
 
 func _activity(npc: DrifterNPC) -> int:
@@ -503,7 +710,9 @@ func _work_spot(npc: DrifterNPC) -> Vector3i:
 			var r_pos := Vector2i(hut.x, hut.z) + side * 12 + fwd * 6
 			return Vector3i(r_pos.x, hut.y, r_pos.y)
 		DrifterDef.Profession.SMOKER_CHEF:
-			return _entity_cell([&"campfire", &"hearth_pot"], hut) + Vector3i(1, 0, 0)
+			if _cook_station.has(npc.idx):
+				return _cook_station[npc.idx] + Vector3i(1, 0, 0)
+			return _entity_cell([&"hearth_pot", &"campfire", &"smokehouse", &"saltery", &"brewery"], hut) + Vector3i(1, 0, 0)
 		DrifterDef.Profession.LAMPLIGHTER:
 			var l := dock + side * 5
 			return Vector3i(l.x, dy, l.y)
@@ -732,6 +941,9 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _talk(npc: DrifterNPC) -> void:
+	if main.player != null:
+		npc.face_player(main.player.position)
+
 	if main.quests != null and main.player != null:
 		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, npc.def.id)
 		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, StringName(npc.def.name))
@@ -745,12 +957,69 @@ func _talk(npc: DrifterNPC) -> void:
 			_refresh_npc_markers()
 			return
 
-	var routine: String = ["sleeping", "working", "having a meal", "chatting in the square"][clampi(int(npc.def.current_routine), 0, 3)]
-	var home := "no home yet"
-	var bed := _home_bed(npc)
-	if bed != Vector3i(-1, -1, -1):
-		home = "home quality %d" % int(main.village.rooms[npc.def.assigned_room_id].get("quality", 0))
-	main.hud.show_toast("%s (%s): %s - morale %d%%, %s" % [npc.def.name, npc.profession_name(), routine, int(npc.def.morale * 100), home])
+	# High Morale Daily Gratitude Gift
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if npc.recruited and npc.def.morale >= 0.75 and (now - npc.def.last_gift_time > 180.0) and main.player != null and main.player.inventory != null:
+		npc.def.last_gift_time = now
+		var gift_item: StringName = &"silver_mackerel"
+		var gift_count: int = 1
+		match npc.def.profession:
+			DrifterDef.Profession.FISHER:
+				gift_item = &"silver_mackerel"; gift_count = 1
+			DrifterDef.Profession.FARMER:
+				gift_item = &"shore_wheat"; gift_count = 2
+			DrifterDef.Profession.CARPENTER:
+				gift_item = &"wood_plank"; gift_count = 2
+			DrifterDef.Profession.SMOKER_CHEF:
+				gift_item = &"smoked_fish_ration"; gift_count = 1
+			DrifterDef.Profession.LAMPLIGHTER:
+				gift_item = &"fish_oil"; gift_count = 1
+			DrifterDef.Profession.TRADER:
+				gift_item = &"brass_guilder"; gift_count = 2
+			DrifterDef.Profession.RANCHER:
+				gift_item = &"salt_milk" if randf() < 0.5 else &"sea_egg"; gift_count = 1
+			DrifterDef.Profession.BUILDER:
+				gift_item = &"cobblestone"; gift_count = 2
+		main.player.inventory.add_item(gift_item, gift_count)
+		var iname := TradeManager._item_name(gift_item)
+		main.hud.show_toast("%s the %s: \"Here, captain—fresh %s (%d) from today's work! Our village is thriving.\"" % [
+			npc.def.name, npc.profession_name(), iname, gift_count
+		])
+		return
+
+	if npc.def.profession == DrifterDef.Profession.SMOKER_CHEF:
+		open_cook_orders(npc)
+		return
+
+	# Contextual immersion dialogue
+	var line := ""
+	match npc.def.current_routine:
+		DrifterDef.Routine.SLEEP:
+			line = "*Zzz... resting up for tomorrow's low tide...*"
+		DrifterDef.Routine.EAT:
+			line = "Nothing beats a warm meal by the hearth after a long shift!"
+		DrifterDef.Routine.SOCIALIZE:
+			line = "Good company and the sound of waves—a fine evening in the Hollow."
+		DrifterDef.Routine.WORK:
+			match npc.def.profession:
+				DrifterDef.Profession.FISHER:
+					line = "Tides are running sweet today. The mackerel are biting near the outer stacks!"
+				DrifterDef.Profession.FARMER:
+					line = "The sweet-soil beds are thriving! Brackish rye is shooting up nicely."
+				DrifterDef.Profession.CARPENTER:
+					line = "Splitting driftwood planks at the sawhorse. Shipshape timber for our harbor!"
+				DrifterDef.Profession.SMOKER_CHEF:
+					line = "Got the smokehouse stoked with dry beech. These cured rations will keep for months!"
+				DrifterDef.Profession.LAMPLIGHTER:
+					line = "Wicks trimmed and lanterns filled with fish oil. The beacon burns through the thickest fog."
+				DrifterDef.Profession.TRADER:
+					line = "Fair winds and full holds! Visiting merchant ships always look for our cured goods."
+				DrifterDef.Profession.RANCHER:
+					line = "The salt-goats are grazing peacefully. Just sheared a fresh bundle of shore wool!"
+				DrifterDef.Profession.BUILDER:
+					line = "Cobblestone and timber squared away. Building up Brine's Hollow stone by stone!"
+
+	main.hud.show_toast("%s the %s: \"%s\"" % [npc.def.name, npc.profession_name(), line])
 
 
 func _get_available_quest_for_npc(npc: DrifterNPC) -> QuestDef:
@@ -809,13 +1078,22 @@ func _try_recruit(npc_idx: int, peer: int) -> void:
 
 func _set_recruited(npc_idx: int) -> void:
 	var npc := npcs[npc_idx]
-	if not npc.recruited and main.player != null and main.player.recipes != null:
-		main.player.recipes.on_drifter_recruited(int(npc.def.profession))   # they teach their trade
+	if not npc.recruited and main != null:
+		if main.player != null and main.player.recipes != null:
+			main.player.recipes.on_drifter_recruited(int(npc.def.profession))   # they teach their trade
+		if main.quests != null:
+			var inv: Inventory = main.player.inventory if main.player != null else null
+			main.quests.notify_event(QuestDef.ObjectiveType.TALK_TO, &"drifter_recruit", 1, inv)
+		if main.player != null:
+			main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, &"drifter_recruit")
 	npc.recruited = true
 	npc.refresh_label()
 	var wreck := npc.get_node_or_null("Wreck")
 	if wreck != null:
 		wreck.queue_free()
+	var smoke := npc.get_node_or_null("SignalSmoke")
+	if smoke != null:
+		smoke.queue_free()
 	_refresh_npc_markers()
 
 

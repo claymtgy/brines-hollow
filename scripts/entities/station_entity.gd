@@ -30,6 +30,94 @@ func _init(
 	station = CraftingStation.new(station_tag, p_name, req_fuel)
 	if p_station_tag == &"campfire":
 		station.fuel_remaining_sec = INITIAL_CAMPFIRE_FUEL_SEC
+	station.craft_completed.connect(_on_dish_done)
+	station.station_halted.connect(func(reason: String) -> void:
+		if reason.begins_with("Fuel depleted"):
+			_notify_nearby("The fire under the %s went out. Add fuel to keep cooking." % entity_name))
+
+
+# ------------------------------------------------------------------ timed cooking
+
+func is_cooking_station() -> bool:
+	return CraftingStation.is_cooking_station(station_tag)
+
+
+func _local_player() -> Player:
+	if manager != null and manager.main != null and manager.main.get("player") != null:
+		var p: Player = manager.main.player
+		if p != null and is_instance_valid(p):
+			return p
+	return null
+
+
+## Toast only when the local player is close enough to care.
+func _notify_nearby(msg: String, radius: float = 24.0) -> void:
+	var p := _local_player()
+	if p != null and p.hud != null and is_inside_tree() and p.global_position.distance_to(global_position) <= radius:
+		p.hud.show_toast(msg)
+
+
+func _on_dish_done(_recipe_id: StringName, _out_id: StringName, _count: int) -> void:
+	if manager != null:
+		manager.push_state(self)
+	if not station.queue.is_empty():
+		return   # more in the queue; one message when the whole order is done
+	if _cook_claims():
+		return   # the village cook's dish: they carry it to the pantry
+	var n := station.output_count()
+	if n > 0:
+		_notify_nearby("Ready at the %s: %s" % [entity_name, tray_text()])
+		if is_inside_tree():
+			CombatAudio.play_sound("tame_chime", global_position, -6.0)
+
+
+## The village cook is tending this fire (their dishes go straight to the town's stores).
+func _cook_claims() -> bool:
+	if manager == null or manager.main == null or manager.main.get("village") == null:
+		return false
+	var v: SettlementManager = manager.main.village
+	return v != null and v.cook_orders.pending.has(CookOrders.key_for(grid_coord))
+
+
+## "3 Fish Stew, 1 Kelp Tea" for what's sitting in the tray.
+func tray_text() -> String:
+	var parts: Array[String] = []
+	for item_id: StringName in station.output:
+		var d: ItemDef = ItemDB.get_item(item_id)
+		parts.append("%d %s" % [int(station.output[item_id]), d.name if d != null else String(item_id)])
+	return ", ".join(parts)
+
+
+## Moves finished dishes into the player's bag. Returns how many items were taken.
+func collect_output(player: Player) -> int:
+	if player == null or player.inventory == null or station.output.is_empty():
+		return 0
+	var batches_before: Dictionary = station.output_batches.duplicate()
+	var taken := station.take_output(player.inventory)
+	var total := 0
+	var parts: Array[String] = []
+	for item_id: StringName in taken:
+		var n: int = taken[item_id]
+		total += n
+		var d: ItemDef = ItemDB.get_item(item_id)
+		parts.append("%d %s" % [n, d.name if d != null else String(item_id)])
+		# Quest credit once per cook, given when the dish actually reaches the player.
+		var cooks: int = int(batches_before.get(item_id, 1))
+		if not station.output.has(item_id):
+			station.output_batches.erase(item_id)
+		else:
+			cooks = 0   # partly collected (bag full): credit when the rest is taken
+		for i in cooks:
+			player.quest_event(QuestDef.ObjectiveType.CRAFT_ITEM, item_id)
+	if player.hud != null:
+		if total > 0:
+			player.hud.show_toast("Collected %s from the %s" % [", ".join(parts), entity_name]
+				+ ("  (bag full, the rest is still here)" if not station.output.is_empty() else ""))
+		else:
+			player.hud.show_toast("Your bag is full.")
+	if total > 0 and manager != null:
+		manager.push_state(self)
+	return total
 
 
 func is_fire_station() -> bool:
@@ -227,11 +315,29 @@ func _update_fire_visuals(delta: float) -> void:
 		_fire_light.light_energy = base_e * fuel_factor * pulse
 
 
-func get_interaction_prompt(player: Player) -> String:
-	if station.is_active and station.active_recipe != null:
-		var sec_rem: int = int(ceil(maxf(0.0, station.total_cook_time - station.cook_timer)))
-		return "F  %s: Crafting %s (%ds left)" % [entity_name, station.active_recipe.name, sec_rem]
+## What's on the fire, for the end of the prompt ("" when idle).
+func cooking_text() -> String:
+	if not station.is_active or station.active_recipe == null:
+		return ""
+	var t := "cooking %s" % station.active_recipe.name
+	if station.is_paused():
+		t += ", fire is out"
+	else:
+		t += ", %ds" % int(ceil(station.seconds_left()))
+	if not station.queue.is_empty():
+		t += " (+%d queued)" % station.queue.size()
+	return t
 
+
+func get_interaction_prompt(player: Player) -> String:
+	if not station.output.is_empty():
+		return "F  Collect %s" % tray_text()
+	var base := _base_prompt(player)
+	var cooking := cooking_text()
+	return base if cooking == "" else "%s  ·  %s" % [base, cooking]
+
+
+func _base_prompt(player: Player) -> String:
 	if station.requires_fuel:
 		var held_fuel := _get_active_fuel_item(player)
 		var fuel_sec := int(ceil(station.fuel_remaining_sec))
@@ -244,7 +350,7 @@ func get_interaction_prompt(player: Player) -> String:
 		else:
 			return "F  Use %s (Lit: %ds fuel — Shift+F or Hold Wood to Recharge)" % [entity_name, fuel_sec]
 
-	if player != null and player.inventory_ui != null:
+	if player != null and player.crafting_ui != null:
 		var known := 0
 		for r: RecipeDef in RecipeDB.get_station_exclusive_recipes(station_tag):
 			if player.recipes == null or player.recipes.knows(r.id):
@@ -259,6 +365,10 @@ func get_interaction_prompt(player: Player) -> String:
 
 
 func client_interact(player: Player) -> void:
+	# Finished dishes first: one press of F empties the tray into your bag.
+	if player != null and not station.output.is_empty():
+		collect_output(player)
+		return
 	if player != null and station.requires_fuel:
 		var held_fuel := _get_active_fuel_item(player)
 		var shift_held := Input.is_key_pressed(KEY_SHIFT)
@@ -273,15 +383,18 @@ func client_interact(player: Player) -> void:
 			recharge_fire(player)
 			return
 
-	if player != null and player.inventory_ui != null:
-		player.inventory_ui.open_station(self)
+	if player != null and player.crafting_ui != null:
+		player.crafting_ui.open(self)
 		return
 	super.client_interact(player)
 
 
 func interact(player: Player) -> void:
 	super.interact(player)
-	if station.is_active:
+	if not station.output.is_empty():
+		collect_output(player)
+		return
+	if station.queue_full():
 		return
 
 	if station.requires_fuel and station.fuel_remaining_sec <= 0.0:
@@ -300,7 +413,7 @@ func interact(player: Player) -> void:
 	if success:
 		recipe_crafted.emit(recipe.id, 1)
 		if player.hud:
-			if recipe.craft_time_sec > 0.0:
+			if CraftingStation.is_timed(recipe):
 				player.hud.show_toast("Started cooking %s (%.0fs)..." % [recipe.name, recipe.craft_time_sec])
 			else:
 				player.hud.show_toast("Crafted %s at %s!" % [recipe.name, entity_name])
@@ -308,13 +421,14 @@ func interact(player: Player) -> void:
 
 func tick(delta: float) -> void:
 	if station.is_active:
-		station.tick(delta, null)
+		station.tick(delta, null)   # finished dishes wait in the tray
 	elif station_tag == &"campfire" and station.fuel_remaining_sec > 0.0:
 		station.fuel_remaining_sec = maxf(0.0, station.fuel_remaining_sec - delta)
 		if station.fuel_remaining_sec <= 0.0:
 			station.fuel_updated.emit(0.0)
 
 	_update_fire_visuals(delta)
+	_update_steam()
 
 	# Grant warmth / rested stamina regeneration when standing near a lit campfire
 	if station_tag == &"campfire" and is_lit() and is_inside_tree():
@@ -333,6 +447,7 @@ func serialize() -> Dictionary:
 	d["recipe_id"] = String(station.active_recipe.id) if station.active_recipe != null else ""
 	d["cook_timer"] = station.cook_timer
 	d["total_cook_time"] = station.total_cook_time
+	d["cooking"] = station.serialize_cooking()
 	return d
 
 
@@ -348,4 +463,48 @@ func deserialize(data: Dictionary) -> void:
 		station.active_recipe = RecipeDB.get_recipe(rec_id)
 	station.cook_timer = float(data.get("cook_timer", 0.0))
 	station.total_cook_time = float(data.get("total_cook_time", 0.0))
+	if station.is_active and station.active_recipe == null:
+		station.is_active = false   # recipe no longer exists
+	station.deserialize_cooking(data.get("cooking", {}))
 	_update_fire_visuals(0.0)
+
+
+# ------------------------------------------------------------------ steam
+
+var _steam: CPUParticles3D = null
+
+
+## A wisp of steam / smoke above any cooking station while a dish is on.
+func _update_steam() -> void:
+	if not is_cooking_station() or not is_inside_tree():
+		return
+	var on := station.is_active and not station.is_paused()
+	if _steam == null:
+		if not on:
+			return
+		_steam = CPUParticles3D.new()
+		_steam.amount = 10
+		_steam.lifetime = 2.2
+		var top := 14.0 if station_tag == &"smokehouse" else (9.0 if station_tag == &"brewery" else 7.0)
+		_steam.position = Vector3(0.0, top * U, 0.0)
+		var m := SphereMesh.new()
+		m.radius = 0.06
+		m.height = 0.12
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.85, 0.85, 0.82, 0.45) if station_tag != &"smokehouse" else Color(0.45, 0.43, 0.40, 0.5)
+		m.material = mat
+		_steam.mesh = m
+		_steam.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		_steam.emission_sphere_radius = 0.1
+		_steam.direction = Vector3.UP
+		_steam.spread = 12.0
+		_steam.gravity = Vector3(0.05, 0.25, 0.0)
+		_steam.initial_velocity_min = 0.15
+		_steam.initial_velocity_max = 0.35
+		_steam.scale_amount_min = 0.8
+		_steam.scale_amount_max = 1.8
+		add_child(_steam)
+	if _steam.emitting != on:
+		_steam.emitting = on

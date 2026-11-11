@@ -43,6 +43,7 @@ const SCHOONER_SAIL := 1.65     # powerful double-masted gaff rig
 
 var id := 0
 var kind := KIND_ROWBOAT
+var is_world_spawn: bool = false
 var half_beam := HALF_BEAM
 var half_len := HALF_LEN
 var yaw := 0.0
@@ -64,6 +65,7 @@ var _net_yaw := 0.0
 var _net_vel := Vector2.ZERO
 var _has_net := false
 var _wake: CPUParticles3D
+var _bow_spray: CPUParticles3D
 var _sail: Node3D               # skiff: the yard + sail, swung about the mast
 var sail_angle := 0.0           # skiff: boom angle the sail has swung to (radians)
 var hold: Inventory = null      # barge: the cargo hold (authority's copy is the truth)
@@ -561,7 +563,27 @@ func get_hull_percent() -> float:
 func scout_surroundings() -> String:
 	if not has_sea_hawk:
 		return ""
-	return "Sea-Hawk takes flight and circles overhead, keeping vigilant watch over the brine."
+	var info := "Sea-Hawk takes flight and circles overhead, keeping vigilant watch over the brine."
+	var m = get_parent().get_parent() if get_parent() != null else null
+	if m != null and "world" in m and m.world != null and m.world.gen != null:
+		var nearest_wreck_dist := INF
+		var nearest_wreck_dir := "Ahead"
+		for w in m.world.gen.wrecks:
+			var wp := Vector2(w.chest.x * VoxelWorld.VS, w.chest.z * VoxelWorld.VS)
+			var bp := Vector2(position.x, position.z)
+			var d := bp.distance_to(wp)
+			if d < nearest_wreck_dist:
+				nearest_wreck_dist = d
+				var diff := wp - bp
+				var ang := rad_to_deg(atan2(diff.y, diff.x))
+				if ang >= -45 and ang <= 45: nearest_wreck_dir = "East"
+				elif ang > 45 and ang < 135: nearest_wreck_dir = "South"
+				elif ang >= 135 or ang <= -135: nearest_wreck_dir = "West"
+				else: nearest_wreck_dir = "North"
+		if nearest_wreck_dist < 450.0:
+			info = "🦅 Sea-Hawk screeches! Spots a shipwreck %.0fm to the %s!" % [nearest_wreck_dist, nearest_wreck_dir]
+	return info
+
 
 
 func serialize_fixtures() -> Array:
@@ -862,6 +884,30 @@ func _build_wake() -> void:
 	_wake.scale_amount_min = 0.5
 	_wake.scale_amount_max = 1.0
 	visual.add_child(_wake)
+
+	# Foaming bow spray cutting through waves at speed
+	_bow_spray = CPUParticles3D.new()
+	_bow_spray.amount = 28
+	_bow_spray.lifetime = 0.8
+	_bow_spray.emitting = false
+	var spm := BoxMesh.new()
+	spm.size = Vector3.ONE * VS * 0.28
+	var sp_mat := StandardMaterial3D.new()
+	sp_mat.albedo_color = Color(0.92, 0.98, 1.0, 0.9)
+	sp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	spm.material = sp_mat
+	_bow_spray.mesh = spm
+	_bow_spray.position = Vector3(0, 0.08, half_len - 0.1)
+	_bow_spray.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_bow_spray.emission_box_extents = Vector3(minf(half_beam * 0.45, 0.4), 0.02, 0.15)
+	_bow_spray.direction = Vector3(0, 0.65, 0.8)
+	_bow_spray.spread = 45.0
+	_bow_spray.initial_velocity_min = 1.8
+	_bow_spray.initial_velocity_max = 3.6
+	_bow_spray.gravity = Vector3(0, -5.5, 0)
+	_bow_spray.scale_amount_min = 0.4
+	_bow_spray.scale_amount_max = 0.85
+	visual.add_child(_bow_spray)
 
 
 func _make_oar(mesh: Mesh, u: float, side: float) -> Node3D:
@@ -1240,6 +1286,8 @@ func _process(delta: float) -> void:
 			_sail.scale = Vector3(1, maxf(0.08, row_power), 1)   # furled down to the yard
 			_sail.visible = row_power > 0.02
 		_wake.emitting = speed > 0.6 and not grounded
+		if _bow_spray != null:
+			_bow_spray.emitting = speed > 2.4 and not grounded
 		return
 	# Oars: sweep fore/aft on the stroke, lift the blade on the recovery.
 	for o: Node3D in [_oar_l, _oar_r]:
@@ -1250,6 +1298,8 @@ func _process(delta: float) -> void:
 		var ry := -sweep + rest
 		o.rotation = Vector3(0, ry if side > 0 else PI - ry, -0.38 + lift - (1.0 - row_power) * 0.1)
 	_wake.emitting = speed > 0.6 and not grounded
+	if _bow_spray != null:
+		_bow_spray.emitting = speed > 2.4 and not grounded
 
 
 func _tick_diving_winches() -> void:

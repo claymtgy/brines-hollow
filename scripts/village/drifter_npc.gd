@@ -6,7 +6,8 @@ extends Node3D
 
 const VS := VoxelWorld.VS
 const WALK_SPEED := 1.5          # m/s
-const PROFESSION_NAMES := ["Fisher", "Farmer", "Carpenter", "Smoker & Cook", "Lamplighter", "Trader", "Rancher"]
+## One per DrifterDef.Profession, in the same order.
+const PROFESSION_NAMES := ["Fisher", "Farmer", "Carpenter", "Smoker & Cook", "Lamplighter", "Trader", "Rancher", "Builder"]
 
 var idx := 0                      # roster index (stable across peers)
 var def: DrifterDef
@@ -214,16 +215,37 @@ func apply_net(pos: Vector3, yaw: float, spd: float, act: int) -> void:
 	_has_net = true
 
 
+var talk_look_t := 0.0
+
+
+func face_player(player_pos: Vector3) -> void:
+	var to := player_pos - position
+	if to.length_squared() > 0.01:
+		facing = atan2(to.x, to.z)
+		talk_look_t = 5.0
+
+
 func _process(delta: float) -> void:
-	if _has_net:
+	if talk_look_t > 0.0:
+		talk_look_t -= delta
+	elif _has_net:
 		position = position.lerp(_net_pos, 1.0 - exp(-delta * 10.0))
 		facing = lerp_angle(facing, _net_yaw, 1.0 - exp(-delta * 10.0))
 	model.rotation.y = facing
-	# rod / hoe / hammer / none / lantern / ledger-plan / shears-hoe while working, empty hands otherwise
-	model.set_tool([3, 4, 1, -1, 8, 2, 4][clampi(int(def.profession), 0, 6)] if activity == 2 else -1)
+	# Fisher: rod(3), Farmer: hoe(4), Carpenter: hammer(1), Cook: cutlass/knife(5),
+	# Lamplighter: lantern(8), Trader: ledger(2), Rancher: shears/axe(9), Builder: hammer(1)
+	var tool_by_prof := [3, 4, 1, 5, 8, 2, 9, 1]
+	model.set_tool(tool_by_prof[clampi(int(def.profession), 0, tool_by_prof.size() - 1)] if activity == 2 else -1)
 	model.animate(delta, speed, true, false)
 	if activity == 2 and fmod(Time.get_ticks_msec() / 1000.0 + idx * 0.37, 2.2) < delta:
 		model.swing()   # busy at work
 	if marker != null and marker.text != "":
 		marker.position.y = 2.65 + sin(Time.get_ticks_msec() / 1000.0 * 3.0 + idx) * 0.06
-	model.position.y = -0.25 if activity == 3 else 0.0   # settled into bed
+	# Evening tavern dance / social sway when happy
+	if activity == 1 and def.morale >= 0.5:
+		var dance_phase := Time.get_ticks_msec() / 1000.0 * 2.8 + idx * 1.2
+		model.rotation.z = sin(dance_phase) * 0.08
+		model.position.y = absf(sin(dance_phase)) * 0.04
+	else:
+		model.rotation.z = 0.0
+		model.position.y = -0.25 if activity == 3 else 0.0   # settled into bed

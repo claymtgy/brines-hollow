@@ -7,11 +7,15 @@ enum Profession {
 	FARMER,       ## Cultivates crops and salt pans
 	CARPENTER,    ## Refines logs into lumber and planks
 	SMOKER_CHEF,  ## Smokes fish and cooks hearty meals
-	LAMPLIGHTER,  ## Lights beacons at dusk, tolls alarm bell
+	LAMPLIGHTER,  ## Renders fish into lamp oil and keeps the lighthouse lamp filled
 	TRADER,       ## Sells town surplus to visiting merchant boats
 	RANCHER,      ## Tends livestock and gathers milk, wool, and eggs
 	BUILDER       ## Hauls materials from Community Chest and erects requested buildings
 }
+
+const LAMP_OIL_STOCK := 6   ## the lamplighter stops rendering fish once the depot holds this much oil
+## [fish, how many make 1 Refined Fish Oil], same as the hand recipes
+const OIL_FISH := [[&"cliff_salmon", 1], [&"silver_mackerel", 2], [&"tidepool_flounder", 2]]
 
 enum Routine {
 	SLEEP,        ## Resting in assigned room (night)
@@ -27,6 +31,7 @@ enum Routine {
 @export var assigned_room_id: int = -1  ## Index of assigned validated room, or -1 if homeless
 var current_routine: Routine = Routine.WORK
 var work_progress_sec: float = 0.0
+var last_gift_time: float = -9999.0
 
 
 func _init(
@@ -106,10 +111,15 @@ func tick_work(delta_sec: float, town_depot: StorageContainer) -> Dictionary:
 				produced[&"smoked_fish_ration"] = 2
 
 		Profession.LAMPLIGHTER:
-			# Generates refined glow fuel from harvested kelp
-			if town_depot.inventory.has_item(&"kelp_frond", 2):
-				town_depot.withdraw(&"kelp_frond", 2)
-				produced[&"kelp_fuel"] = 1
+			# Renders fish from the depot into lamp oil, keeping a small stock for the lighthouse
+			# (VillageManager has them pour it into the lamp).
+			if town_depot.inventory.get_item_count(&"fish_oil") < LAMP_OIL_STOCK:
+				for src: Array in OIL_FISH:
+					if town_depot.inventory.has_item(src[0], src[1]):
+						town_depot.withdraw(src[0], src[1])
+						town_depot.deposit(&"fish_oil", 1)
+						produced[&"fish_oil"] = 1
+						break
 
 		Profession.TRADER:
 			# Converts surplus cured fish into trade currency

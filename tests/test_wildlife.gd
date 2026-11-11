@@ -363,7 +363,14 @@ func _init() -> void:
 			and not StationEntity.new(&"workbench", "Workbench").emits_light(), "lanterns and fires count as light, workbenches don't")
 	check(Placeables.build_cost(&"lantern_post").size() > 0 and Placeables.build_cost(&"pen_gate").size() > 0
 			and Placeables.build_cost(&"live_trap").size() > 0, "lantern post, pen gate and live trap are buildable")
-	check(Prefabs.all()[Prefabs.count() - 1].name == "Pen Fence", "Pen Fence blueprint exists")
+	# Blueprint ids are saved in worlds, so existing ones must keep their slot (new ones append after).
+	check(Prefabs.count() > 12 and Prefabs.all()[12].name == "Pen Fence", "Pen Fence blueprint exists at its saved id (12)")
+	var saved_ids := ["Plank Wall", "Window Wall", "Door Wall", "Deck Floor", "Stairs", "Fisher's Hut", "Dock",
+		"Lamp Post", "Fence", "Stone Arch", "Drying Rack", "Rowboat", "Pen Fence"]
+	var ids_ok := Prefabs.count() >= saved_ids.size()
+	for i in saved_ids.size():
+		ids_ok = ids_ok and Prefabs.all()[i].name == saved_ids[i]
+	check(ids_ok, "existing blueprint ids unchanged (new blueprints only appended)")
 
 	print("-- polish: merchant visits survive a reload, gamepad dodge/sneak")
 	var tm := TradeManager.new()

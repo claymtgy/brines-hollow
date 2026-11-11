@@ -453,6 +453,7 @@ func generate(seed_value: int) -> void:
 		gen.plan_sunken_ruins()
 		gen.plan_frost_shoals()
 		gen.plan_maelstrom_spire()
+		gen.plan_calamity_galleons()
 	store.set_generator(gen.native)
 	for p: Vector3i in gen.stamp_lights:
 		_add_light(p, Palette.LANTERN)
@@ -1141,16 +1142,23 @@ func apply_prefab(id: int, origin: Vector3i, rot: int, _mark := true) -> void:
 	invalidate_water()
 	# Foundations so prefabs sit nicely on uneven ground.
 	match pf.foundation:
-		"solid":
+		"solid", "solid_stone":
 			for z in s.z:
 				for x in s.x:
 					var m := data[x + s.x * z]
 					if m == 0 or m == Palette.CLEAR:
 						continue
-					store.fill_down(base.x + x, base.y - 1, base.z + z, Palette.COBBLE, 24)
+					store.fill_down(base.x + x, base.y - 1, base.z + z, Palette.COBBLE, 36)
+		"solid_timber", "solid_wood":
+			for z in s.z:
+				for x in s.x:
+					var m := data[x + s.x * z]
+					if m == 0 or m == Palette.CLEAR:
+						continue
+					store.fill_down(base.x + x, base.y - 1, base.z + z, Palette.DARK_WOOD, 36)
 		"posts":
 			for c: Vector2i in [Vector2i(0, 0), Vector2i(s.x - 1, 0), Vector2i(0, s.z - 1), Vector2i(s.x - 1, s.z - 1)]:
-				store.fill_down(base.x + c.x, base.y - 1, base.z + c.y, Palette.DARK_WOOD, 24)
+				store.fill_down(base.x + c.x, base.y - 1, base.z + c.y, Palette.DARK_WOOD, 36)
 	for l: Vector3i in pf.lights:
 		_add_light(base + l, Palette.LANTERN)
 

@@ -368,6 +368,7 @@ func interact(player: Node) -> Dictionary:
 				var suggested := get_suggested_name()
 				animal_name = suggested
 				pop_emote("♥ ♥ ♥", Color(1.0, 0.88, 0.35))
+				CombatAudio.play_sound("tame_chime", global_position if is_inside_tree() else position)
 				return {"ok": true, "tamed": true, "suggested_name": suggested, "msg": "Tamed! Named %s! (Suggested: %s)" % [suggested, suggested]}
 		else:
 			return {"ok": false, "msg": "%s is skittish. Hold wheat or kale to earn its trust!" % animal_name}
@@ -383,6 +384,7 @@ func interact(player: Node) -> Dictionary:
 			player.inventory.add_item(&"sea_wool", count)
 			happiness = minf(100.0, happiness + 10.0)
 			pop_emote("✂ ♥", Color(0.85, 0.95, 1.0))
+			CombatAudio.play_sound("shears_snip", global_position if is_inside_tree() else position)
 			return {"ok": true, "msg": "Sheared %s! Obtained %d Shore-Sheep Wool." % [animal_name, count]}
 		else:
 			return {"ok": false, "msg": "%s has not regrown its wool yet." % animal_name}
@@ -395,6 +397,7 @@ func interact(player: Node) -> Dictionary:
 			player.inventory.add_item(&"salt_milk", 1)
 			happiness = minf(100.0, happiness + 15.0)
 			pop_emote("🥛 ♥", Color(1.0, 1.0, 0.8))
+			CombatAudio.play_sound("bucket_slosh", global_position if is_inside_tree() else position)
 			return {"ok": true, "msg": "Milked %s! Obtained Salt-Goat Milk." % animal_name}
 		else:
 			return {"ok": false, "msg": "%s is not ready for milking yet." % animal_name}

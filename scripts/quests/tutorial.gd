@@ -92,10 +92,10 @@ const MISSIONS := [
 	},
 	{
 		"id": &"tut_7_sea", "title": "Beyond the Shallows",
-		"intro": "Last lesson. There's a rowboat at the pier. Climb in with {interact} and row out a little. Other islands are waiting, and the chart I gave you fills in as you go.",
+		"intro": "Last lesson. There's a rowboat at the pier. Climb in with {interact} and row out a little. Other islands are waiting, and the chart I gave you fills in as you go. Keep that old stone lighthouse on the bluff in mind if you sail late—a lit beacon brings you safely back.",
 		"objectives": [["Take a rowboat out", QuestDef.ObjectiveType.BOARD_BOAT, &"", 1]],
 		"hint": "Walk up to the rowboat and press {interact}",
-		"done": "You'll do just fine. Folk wash up on these beaches all the time; give them a roof and a bed and they'll stay. Brenda and Corin in the villages have asked after help, so I've written their requests in your journal. I'll be on my way. Look for me on the pier when the merchants come in.",
+		"done": "You'll do just fine out on the water. Folk wash up along these shores all the time; build them a proper roof, bed, and doorway and they'll settle right here in your haven.\n\nElder Brenda and Old Corin sent word across the water with requests—I've jotted both in your journal ({quest_log_toggle}). You don't need to sail searching for them first; you can gather the timber, raise your first hearth, and harvest salt right here on your own sands.\n\nAnd keep an eye on that old stone lighthouse up on the bluff! If you feed its lantern with fish oil, its beam will cut through the night and fog to guide you home when you're out on the dark water.\n\nI'll be on my way now. Look for me on the pier when the merchant vessels come in.",
 		"rewards": {"items": [["brass_guilder", 30]], "recipes": [&"craft_parchment_chart"]},
 	},
 ]
@@ -210,7 +210,7 @@ func current() -> int:
 
 ## Replaces {action} tokens with that action's key or button on the current device.
 func _fmt(text: String) -> String:
-	var c: Variant = main.get("controller")
+	var c: Variant = main.get("controller") if main != null else null
 	for a in ["use", "alt_use", "interact", "dodge", "inventory_toggle", "build_menu_toggle", "quest_log_toggle"]:
 		var key := "{%s}" % a
 		if text.contains(key):
@@ -608,7 +608,7 @@ func talk() -> void:
 		return
 	var i := current()
 	if i < 0:
-		dialogue.say(NPC_NAME, "Fair winds! Build something worth sailing home to.")
+		dialogue.say(NPC_NAME, "Fair winds! Build something worth sailing home to, and keep that lighthouse lantern lit.")
 		return
 	if _ready_to_turn_in(i):
 		var qd: QuestDef = _q().active_quests[MISSIONS[i].id]
@@ -655,12 +655,12 @@ func _on_quest_completed(qd: QuestDef) -> void:
 	var reward := ("\n\nReceived: " + ", ".join(gifts)) if not gifts.is_empty() else ""
 	_refresh_tracker()
 	if i + 1 < MISSIONS.size():
-		dialogue.say(NPC_NAME, m.done + reward, [["Next lesson", func() -> void: _offer(i + 1)], ["Later", dialogue.close]])
+		dialogue.say(NPC_NAME, _fmt(m.done) + reward, [["Next lesson", func() -> void: _offer(i + 1)], ["Later", dialogue.close]])
 		if not _q().is_quest_active(MISSIONS[i + 1].id):
 			_start(i + 1)   # accepted either way; "Later" just closes the window
 	else:
 		start_story()
-		dialogue.say(NPC_NAME, m.done + reward, [["Farewell, Wren", func() -> void:
+		dialogue.say(NPC_NAME, _fmt(m.done) + reward, [["Farewell, Wren", func() -> void:
 			dialogue.close()
 			_leaving = true]])
 
@@ -699,6 +699,18 @@ func _hint_for(qd: QuestDef, step_idx: int) -> String:
 		if qd.steps[step_idx].type == QuestDef.ObjectiveType.TALK_TO:
 			return "Wren is waiting on the pier"
 		return _fmt(MISSIONS[i].get("hint", ""))
+	if qd.id == &"story_first_hearth":
+		if step_idx == 0:
+			return "Pickaxe [1]: dig driftwood logs along your shore"
+		elif step_idx == 1:
+			return "Hammer [2]: walls, roof, door, bed, and light to found your haven"
+		elif step_idx == 2:
+			return "Follow the signal smoke or circling gulls along the beach to invite a drifter [F]"
+	elif qd.id == &"story_tide_tackle":
+		if step_idx == 0:
+			return "Rod [3]: cast into deep water during high tide"
+		elif step_idx == 1:
+			return _fmt("Salt Pan: place on wet sand ({use}); dry in the sun")
 	return ""
 
 
@@ -839,7 +851,7 @@ func _run_check() -> void:
 		p.inventory.add_item(&"silver_mackerel", 1)
 		await get_tree().create_timer(0.5).timeout
 		await _grab(dir + "/tut_3_tracker.png")
-		main.inventory_ui.open()
+		main.crafting_ui.open()
 		await _grab(dir + "/tut_4_crafting.png")
 		get_tree().quit()
 		return

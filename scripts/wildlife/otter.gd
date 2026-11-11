@@ -9,11 +9,12 @@ const SHY_RANGE := 5.0
 const SWIM_SPEED := 1.8
 const FOLLOW_SPEED := 3.6
 const GIFT_EVERY := 150.0
-const GIFTS := [[&"kelp_frond", 2], [&"sea_glass", 1], [&"shore_crab", 1], [&"kelp_frond", 3], [&"abyssal_pearl", 1], [&"sea_salt", 2]]
+const GIFTS := [[&"kelp_frond", 2], [&"sea_glass", 1], [&"shore_crab", 1], [&"kelp_frond", 3], [&"abyssal_pearl", 1], [&"sea_salt", 2], [&"brine_oyster", 2], [&"hearty_clam", 2]]
 
 var body: Node3D
 var paws: Node3D
 var friend_id := 0            # player id who befriended this otter (0 = wild)
+var pet_name: String = "Pip"
 var _gift_t := 60.0
 var _dive_t := 0.0
 var _phase := 0.0
@@ -64,6 +65,8 @@ func is_friend() -> bool:
 ## Host: player `pid` offers a fish.
 func befriend(pid: int) -> void:
 	friend_id = pid
+	var names := ["Pip", "Barnaby", "Kelp", "Bubbles", "Finley"]
+	pet_name = names[rng.randi() % names.size()] if rng != null else "Pip"
 	_gift_t = 45.0
 	set_state(State.LURED)
 
@@ -152,4 +155,13 @@ func animate(dt: float) -> void:
 	_phase += dt
 	visible = state != State.FLEE
 	body.rotation.z = sin(_phase * 0.8) * 0.12
-	paws.rotation.x = sin(_phase * 6.0) * 0.4 if state == State.IDLE else 0.0   # crack, crack
+	# Playful water porpoising when moving fast or following friends
+	if is_friend() and state != State.IDLE:
+		body.position.y = sin(_phase * 4.5) * 0.08
+		body.rotation.x = sin(_phase * 4.5) * 0.14
+		paws.rotation.x = 0.0
+	else:
+		body.position.y = 0.0
+		body.rotation.x = 0.0
+		paws.rotation.x = sin(_phase * 6.0) * 0.4 if state == State.IDLE else 0.0   # crack, crack
+

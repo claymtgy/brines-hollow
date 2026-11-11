@@ -499,6 +499,21 @@ func set_offhand_lantern_visible(is_visible: bool) -> void:
 		offhand_lantern.visible = is_visible
 
 
+## Shows worn gear on the model (backpack, diving helmet, shield / lantern).
+## One mapping for the player in the world and the Pack page preview.
+func apply_equipment(inv: Inventory) -> void:
+	if inv == null:
+		return
+	var pack: ItemSlot = inv.equipment.get(&"backpack", null)
+	set_backpack_visible(pack != null and not pack.is_empty())
+	var head: ItemSlot = inv.equipment.get(&"head", null)
+	set_diving_helmet_visible(head != null and (head.item_id == &"deep_diving_helmet" or head.item_id == &"diving_rebreather"))
+	var acc: ItemSlot = inv.equipment.get(&"accessory", null)
+	var acc_def: ItemDef = ItemDB.get_item(acc.item_id) if acc != null and not acc.is_empty() else null
+	set_shield_visible(acc_def != null and acc_def.has_tag("shield"))
+	set_offhand_lantern_visible(acc_def != null and acc_def.has_tag("light"))
+
+
 func animate_bow_draw(charge: float) -> void:
 	if charge < 0.0:
 		return

@@ -233,8 +233,9 @@ static func _build() -> void:
 	g.box(2, 2, 12, 5, 2, 12, Palette.DRIFTWOOD)
 	_add("Rowboat", g, Vector3i(4, 0, 10))
 
-	# 13: Pen Fence (appended last: prefab ids are saved in commands): boards right down to the ground (a rail fence lets ducks, foxes and stoats
-	# slip under its bottom rail; this one holds every pen animal and keeps raiders out).
+	# Blueprint ids are their position in this list and are saved in build commands and worlds:
+	# only ever APPEND new blueprints at the end; never insert, reorder or remove.
+	# 12: Pen Fence (boards right down to the ground: holds pen animals and keeps raiders out).
 	g = Grid.new(WALL_W, RAIL_H + 1, 1)
 	g.box(0, 0, 0, WALL_W - 1, 2, 0, Palette.PLANK)
 	g.box(0, RAIL_H - 1, 0, WALL_W - 1, RAIL_H - 1, 0, Palette.DRIFTWOOD)
@@ -242,6 +243,47 @@ static func _build() -> void:
 	for x in [0, WALL_W / 2, WALL_W - 1]:
 		g.box(x, 0, 0, x, RAIL_H, 0, Palette.DARK_WOOD)
 	_add("Pen Fence", g, Vector3i(WALL_W / 2, 0, 0))
+
+	# 13: Stone Foundation (flat top, solid cobblestone filling beneath down to terrain)
+	g = Grid.new(WALL_W, 2, WALL_W)
+	g.box(0, 0, 0, WALL_W - 1, 0, WALL_W - 1, Palette.COBBLE)
+	g.box(0, 1, 0, WALL_W - 1, 1, WALL_W - 1, Palette.COBBLE)
+	for x in WALL_W:
+		g.setv(x, 1, 0, Palette.STONE)
+		g.setv(x, 1, WALL_W - 1, Palette.STONE)
+	for z in WALL_W:
+		g.setv(0, 1, z, Palette.STONE)
+		g.setv(WALL_W - 1, 1, z, Palette.STONE)
+	_add("Stone Foundation", g, Vector3i(WALL_W / 2, 1, WALL_W / 2), [], "solid_stone")
+
+	# 14: Timber Foundation (flat plank top, solid timber filling beneath down to terrain)
+	g = Grid.new(WALL_W, 2, WALL_W)
+	g.box(0, 0, 0, WALL_W - 1, 0, WALL_W - 1, Palette.DARK_WOOD)
+	for z in WALL_W:
+		var m := Palette.PLANK if z % 2 == 0 else Palette.DRIFTWOOD
+		g.box(1, 1, z, WALL_W - 2, 1, z, m)
+	for x in WALL_W:
+		g.setv(x, 1, 0, Palette.DARK_WOOD)
+		g.setv(x, 1, WALL_W - 1, Palette.DARK_WOOD)
+	for z in WALL_W:
+		g.setv(0, 1, z, Palette.DARK_WOOD)
+		g.setv(WALL_W - 1, 1, z, Palette.DARK_WOOD)
+	_add("Timber Foundation", g, Vector3i(WALL_W / 2, 1, WALL_W / 2), [], "solid_timber")
+
+	# 15: Large Stone Foundation (24x24 flat platform for full houses or plazas)
+	const FW := 24
+	g = Grid.new(FW, 2, FW)
+	g.box(0, 0, 0, FW - 1, 0, FW - 1, Palette.COBBLE)
+	g.box(0, 1, 0, FW - 1, 1, FW - 1, Palette.COBBLE)
+	for x in FW:
+		g.setv(x, 1, 0, Palette.STONE)
+		g.setv(x, 1, FW - 1, Palette.STONE)
+		g.setv(x, 1, FW / 2, Palette.STONE)
+	for z in FW:
+		g.setv(0, 1, z, Palette.STONE)
+		g.setv(FW - 1, 1, z, Palette.STONE)
+		g.setv(FW / 2, 1, z, Palette.STONE)
+	_add("Large Stone Foundation", g, Vector3i(FW / 2, 1, FW / 2), [], "solid_stone")
 
 
 static func _build_hut() -> void:

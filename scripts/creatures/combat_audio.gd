@@ -74,6 +74,13 @@ static func init_audio(force: bool = false) -> void:
 	_sounds["flintlock_shot"] = _bake_sound(0.38, _gen_flintlock_shot)
 	_sounds["dry_click"] = _bake_sound(0.08, _gen_dry_click)
 	_sounds["shield_block"] = _bake_sound(0.22, _gen_shield_block)
+	_sounds["shears_snip"] = _bake_sound(0.15, _gen_shears_snip)
+	_sounds["bucket_slosh"] = _bake_sound(0.25, _gen_bucket_slosh)
+	_sounds["oil_refuel"] = _bake_sound(0.30, _gen_oil_refuel)
+	_sounds["flatten_scrape"] = _bake_sound(0.24, _gen_flatten_scrape)
+	_sounds["animal_whistle"] = _bake_sound(0.32, _gen_animal_whistle)
+	_sounds["tame_chime"] = _bake_sound(0.45, _gen_tame_chime)
+	_sounds["saw_wood"] = _bake_sound(0.28, _gen_saw_wood)
 
 
 static func play_sound(sound_key: String, origin: Vector3 = Vector3.ZERO, volume_db: float = 0.0, pitch_var: float = 0.08) -> void:
@@ -344,4 +351,80 @@ static func _gen_shield_block(i: int, n: int) -> float:
 	var thud := sin(TAU * t * lerpf(280.0, 90.0, prog)) * exp(-prog * 10.0) * 0.8
 	var wood_crack := randf_range(-0.8, 0.8) * exp(-prog * 18.0) * 0.5
 	return (thud + wood_crack) * 0.85
+
+
+# Shearing snip: metallic blades snipping wool
+static func _gen_shears_snip(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var click := sin(TAU * t * 3200.0) * exp(-prog * 30.0)
+	var scrape := randf_range(-1.0, 1.0) * exp(-prog * 15.0) * 0.4
+	var ring := sin(TAU * t * 1850.0) * exp(-prog * 10.0) * 0.35
+	return (click * 0.5 + scrape + ring) * 0.8
+
+
+# Wooden bucket liquid slosh
+static func _gen_bucket_slosh(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var thud := sin(TAU * t * lerpf(240.0, 80.0, prog)) * exp(-prog * 8.0) * 0.5
+	var splash := randf_range(-1.0, 1.0) * exp(-prog * 10.0) * 0.4
+	var bubble := sin(TAU * t * 520.0 + sin(t * 160.0) * 5.0) * exp(-prog * 9.0) * 0.4
+	return (thud + splash + bubble) * 0.85
+
+
+# Warm oil refuel: hissing sizzle + liquid glug
+static func _gen_oil_refuel(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var glug := sin(TAU * t * lerpf(180.0, 320.0, prog)) * exp(-prog * 6.0) * 0.45
+	var sizzle := randf_range(-1.0, 1.0) * sin(prog * PI) * 0.35
+	var hum := sin(TAU * t * 120.0) * exp(-prog * 4.0) * 0.3
+	return (glug + sizzle + hum) * 0.85
+
+
+# Flatten earth/stone scrape
+static func _gen_flatten_scrape(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var rumble := sin(TAU * t * lerpf(140.0, 50.0, prog)) * exp(-prog * 7.0) * 0.6
+	var grit := randf_range(-1.0, 1.0) * exp(-prog * 12.0) * 0.5
+	return (rumble + grit) * 0.85
+
+
+# Shepherd's maritime pea whistle chime
+static func _gen_animal_whistle(i: int, _n: int) -> float:
+	var t := float(i) / RATE
+	var tone1 := sin(TAU * t * 2400.0) * (0.8 + 0.2 * sin(t * 70.0))
+	var tone2 := sin(TAU * t * 2880.0) * (0.6 + 0.2 * sin(t * 85.0))
+	var air := randf_range(-0.3, 0.3)
+	var env := pow(sin(clampf(t / 0.32, 0.0, 1.0) * PI), 0.6)
+	return (tone1 * 0.55 + tone2 * 0.35 + air * 0.2) * env * 0.8
+
+
+# Ascending 3-note harmonic tame chime (C5 -> E5 -> G5)
+static func _gen_tame_chime(i: int, _n: int) -> float:
+	var t := float(i) / RATE
+	var freq := 523.25
+	var sub_t := t
+	if t >= 0.28:
+		freq = 783.99
+		sub_t = t - 0.28
+	elif t >= 0.14:
+		freq = 659.25
+		sub_t = t - 0.14
+	var env := exp(-sub_t * 6.0)
+	var sine := sin(TAU * t * freq)
+	var chime := sin(TAU * t * freq * 2.0) * 0.3
+	return (sine + chime) * env * 0.7
+
+
+# Rhythmic saw rasp on timber
+static func _gen_saw_wood(i: int, n: int) -> float:
+	var t := float(i) / RATE
+	var prog := float(i) / n
+	var rasp := randf_range(-1.0, 1.0) * (0.6 + 0.4 * sin(t * 60.0))
+	var tone := sin(TAU * t * 380.0) * 0.3
+	var env := sin(prog * PI)
+	return (rasp * 0.7 + tone) * env * 0.75
 

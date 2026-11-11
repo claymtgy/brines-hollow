@@ -24,6 +24,7 @@ func _init_storyline_catalogue() -> void:
 	q1.storyline_act = 1
 	q1.add_step("Collect 10 Driftwood (dig old stumps and logs)", QuestDef.ObjectiveType.GATHER_ITEM, &"driftwood", 10)
 	q1.add_step("Make a home: walls, a roof, a door, a light and a bed", QuestDef.ObjectiveType.BUILD_ROOM, &"shelter", 1)
+	q1.add_step("Invite a stranded drifter from the beach into your settlement", QuestDef.ObjectiveType.TALK_TO, &"drifter_recruit", 1)
 	q1.rewards["brass_guilder"] = 25
 	q1.rewards["items"] = [{"id": "seed_shore_wheat", "count": 5}]
 	register_available_quest(q1)

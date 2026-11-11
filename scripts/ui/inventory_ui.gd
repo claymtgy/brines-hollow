@@ -1,14 +1,16 @@
 class_name InventoryUI
 extends CanvasLayer
-## Full-screen Inventory, Hotbar Configuration, Equipment Paperdoll, Hand-Crafting & Container UI
-## (inspired by Minecraft, Valheim, and Necesse).
+## The Pack page (I / Tab): gear on a live figure, stats, hotbar, backpack and item details.
+## Crafting has its own page (CraftingUI, K); this page links to it. Chests have their
+## own screen too (ChestUI): open(chest) hands over to it.
 ##
-## Controls:
-##   I / Tab          Open / close inventory
-##   Left-click       Pick up / place / swap / merge stack
-##   Shift + Click    Quick-transfer between Backpack and Hotbar (or active Storage Container)
-##   Keys 1-8         Assign hovered or selected inventory slot directly to Hotbar slot 1-8
-##   Right-click      Equip gear / move tool to hotbar / eat food / split stack in half
+## Mouse:
+##   Left-click       Pick up / place / swap / merge a stack
+##   Shift + Click    Quick-move between Backpack and Hotbar
+##   Right-click      Equip gear / eat food / move to hotbar / split a stack
+##   Keys 1-8         Put the hovered (or selected) item on that hotbar slot
+##   Q / Delete       Drop one (Shift: the whole stack)
+## Pad: D-pad moves between slots, A = left-click, X = right-click, RB = Crafting page.
 
 signal inventory_closed
 
@@ -22,40 +24,56 @@ const EQUIP_SLOTS := [
 	[&"accessory", "Accessory"],
 	[&"map", "Sea Chart"],
 ]
+const GEAR_LEFT := [&"head", &"body", &"legs", &"boots"]
+const GEAR_RIGHT := [&"main_hand", &"accessory", &"backpack", &"map"]
+const STAT_ROWS := [
+	["defense", "Defense"],
+	["cold", "Cold protection"],
+	["depth", "Safe dive depth"],
+	["breath", "Extra breath"],
+	["swim", "Swim speed"],
+	["capacity", "Bag slots"],
+]
+const CATEGORY_NAMES := ["Material", "Food", "Tool", "Equipment", "Blueprint", "Special"]
+const COL_UP := Color8(60, 125, 60)
+const COL_DOWN := Color8(165, 60, 45)
+const COL_MUTED := Color8(120, 92, 70)
+const SLOT_PX := 44.0
+const SLOT_PAD := 5.0
 
 var main: Node
 var player: Player
-var active_container: ChestEntity = null
-var active_station: StationEntity = null
-var _station_tab: StringName = &"none"
-var _station_tabs_box: HFlowContainer
+## The Chest screen, made the first time a chest is opened.
+var chest_ui: ChestUI
+
+var _held_slot_idx: int = -1
+var _selected_slot_idx: int = 0
+var _selected_equip: StringName = &""
+var _hovered_slot_idx: int = -1
+var _hovered_equip: StringName = &""
+var _pad_input := false
+var _built_capacity := -1
 
 var _root: Control
 var _title_label: Label
-var _equip_grid: GridContainer
-var _stats_label: Label
-var _hotbar_grid: GridContainer
-var _backpack_label: Label
-var _backpack_grid: GridContainer
-var _inspect_icon: TextureRect
-var _inspect_title: Label
-var _inspect_desc: Label
-var _inspect_actions: HBoxContainer
+var _hotbar_row: HBoxContainer
+var _bag_grid: GridContainer
+var _bag_label: Label
+var _slot_views: Array[ItemSlotView] = []      ## index = inventory slot index
+var _equip_views: Dictionary = {}               ## slot name -> ItemSlotView
+var _stat_values: Dictionary = {}               ## stat key -> Label
+var _stat_deltas: Dictionary = {}               ## stat key -> Label
+var _preview_vp: SubViewport
+var _preview_model: CharacterModel
+var _detail: VBoxContainer
 var _right_sub_title: Label
-var _craft_list: VBoxContainer
-var _container_scroll: ScrollContainer
-var _container_grid: GridContainer
+var _craft_card: VBoxContainer
+var _craft_card_lbl: Label
 var _cursor_floater: Control
 var _cursor_icon: TextureRect
 var _cursor_count: Label
 var _hover_panel: PanelContainer
-var _hover_title: Label
-var _hover_sub: Label
-
-var _held_slot_idx: int = -1
-var _selected_slot_idx: int = 0
-var _hovered_slot_idx: int = -1
-var _field_station: CraftingStation = CraftingStation.new(&"none", "Field Crafting")
+var _hover_box: VBoxContainer
 
 
 func _ready() -> void:
@@ -68,71 +86,75 @@ func setup(p_main: Node) -> void:
 	main = p_main
 
 
+## True while the Pack page or the Chest screen is up (they never show together).
 func is_open() -> bool:
-	return visible
+	return visible or is_chest_open()
+
+
+func is_chest_open() -> bool:
+	return chest_ui != null and chest_ui.is_open()
 
 
 func toggle(container_entity: ChestEntity = null) -> void:
-	if visible:
+	if is_open():
 		close()
 	else:
 		open(container_entity)
 
 
+## Opens the Pack page, or the Chest screen when given a chest.
 func open(container_entity: ChestEntity = null) -> void:
-	if main != null and main.player != null:
+	if main != null and main.get("player") != null:
 		player = main.player
 	if player == null or player.inventory == null:
 		return
-	active_container = container_entity
-	active_station = null
-	var nearby := _get_nearby_stations()
-	if not nearby.is_empty():
-		active_station = nearby[0]
-		_station_tab = active_station.station_tag
-	else:
-		_station_tab = &"none"
-	_held_slot_idx = -1
-	_selected_slot_idx = player.inventory.active_hotbar_index
-	visible = true
-	_bind_inventory_signals()
-	refresh()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	player.input_enabled = false
-
-
-func open_station(station_entity: StationEntity) -> void:
-	if main != null and main.player != null:
-		player = main.player
-	if player == null or player.inventory == null:
+	if container_entity != null:
+		_open_chest(container_entity)
 		return
-	active_container = null
-	active_station = station_entity
-	_station_tab = station_entity.station_tag if station_entity != null else &"none"
+	if is_chest_open():
+		chest_ui.close()
 	_held_slot_idx = -1
+	_selected_equip = &""
 	_selected_slot_idx = player.inventory.active_hotbar_index
 	visible = true
 	_bind_inventory_signals()
+	_ensure_preview()
+	if _preview_vp != null:
+		_preview_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	refresh()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.input_enabled = false
+	_focus_slot(_selected_slot_idx)
+
+
+func _open_chest(c: ChestEntity) -> void:
+	if visible:
+		close()
+	if chest_ui == null:
+		chest_ui = ChestUI.new()
+		chest_ui.name = "ChestUI"
+		var host: Node = get_parent() if get_parent() != null else get_tree().root
+		host.add_child(chest_ui)
+		chest_ui.closed.connect(func() -> void: inventory_closed.emit())
+	chest_ui.open(player, c, main)
 
 
 func close() -> void:
+	if is_chest_open():
+		chest_ui.close()
 	if not visible:
 		return
 	visible = false
 	_held_slot_idx = -1
-	active_container = null
-	active_station = null
 	if _cursor_floater != null:
 		_cursor_floater.visible = false
-	if _hover_panel != null:
-		_hover_panel.visible = false
+	_hide_hover_label()
+	if _preview_vp != null:
+		_preview_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if player != null:
 		player.input_enabled = true
 		player._sync_tool_from_hotbar()
-	if main == null or (main.settings_menu == null or not main.settings_menu.is_open()):
+	if main == null or not main.has_method("is_any_menu_open") or not main.is_any_menu_open():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	inventory_closed.emit()
 
@@ -164,55 +186,80 @@ func _on_inv_resized(_new_cap: int) -> void:
 		refresh()
 
 
+func _go_page(page: StringName) -> void:
+	if main != null and main.has_method("switch_page"):
+		main.switch_page(page)
+
+
+# -------------------------------------------------------------------------
+# Input
+# -------------------------------------------------------------------------
+
 func _process(_delta: float) -> void:
 	if not visible or _cursor_floater == null:
 		return
-	if _hover_panel != null and _hover_panel.visible:
-		var mp := get_viewport().get_mouse_position()
+	var anchor := _pointer_pos()
+	if _hover_panel.visible:
 		var vp_sz := get_viewport().get_visible_rect().size
 		var ps := _hover_panel.size
 		_hover_panel.position = Vector2(
-			clampf(mp.x + 18.0, 8.0, maxf(8.0, vp_sz.x - ps.x - 8.0)),
-			clampf(mp.y + 18.0, 8.0, maxf(8.0, vp_sz.y - ps.y - 8.0))
-		)
+			clampf(anchor.x + 18.0, 8.0, maxf(8.0, vp_sz.x - ps.x - 8.0)),
+			clampf(anchor.y + 18.0, 8.0, maxf(8.0, vp_sz.y - ps.y - 8.0)))
 	if _held_slot_idx >= 0 and player != null and _held_slot_idx < player.inventory.capacity:
 		var s: ItemSlot = player.inventory.slots[_held_slot_idx]
 		if not s.is_empty():
 			_cursor_floater.visible = true
-			_cursor_floater.position = get_viewport().get_mouse_position() + Vector2(14, 14)
+			_cursor_floater.position = anchor + Vector2(14, 14)
 			_cursor_icon.texture = ItemIcons.for_item(s.item_id)
 			_cursor_count.text = str(s.count) if s.count > 1 else ""
 			return
-	_held_slot_idx = -1
+	if _held_slot_idx >= 0:
+		_held_slot_idx = -1
+		_refresh_slots()
 	_cursor_floater.visible = false
+
+
+## Mouse position, or the focused slot when playing on a pad.
+func _pointer_pos() -> Vector2:
+	if _pad_input:
+		var f := get_viewport().gui_get_focus_owner()
+		if f != null and _root.is_ancestor_of(f):
+			return f.get_global_rect().get_center()
+	return get_viewport().get_mouse_position()
 
 
 func _input(e: InputEvent) -> void:
 	if not visible:
 		return
-	if e.is_action_pressed("inventory_toggle") or e.is_action_pressed("menu_toggle"):
+	if e is InputEventJoypadButton or e is InputEventJoypadMotion:
+		_pad_input = true
+	elif e is InputEventMouseMotion or e is InputEventMouseButton:
+		_pad_input = false
+	if e.is_action_pressed("inventory_toggle") or e.is_action_pressed("menu_toggle") \
+			or (e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_B and _held_slot_idx < 0):
 		get_viewport().set_input_as_handled()
 		close()
 		return
-	# Number keys 1-8 assign hovered (or selected) slot directly to Hotbar 0-7
+	if e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_B:
+		get_viewport().set_input_as_handled()   # B with a stack in hand: put it down
+		_held_slot_idx = -1
+		refresh()
+		return
+	if e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_RIGHT_SHOULDER:
+		get_viewport().set_input_as_handled()
+		_go_page(&"crafting")
+		return
 	if e is InputEventKey and e.pressed and not e.echo:
 		var kc: int = e.physical_keycode if e.physical_keycode != 0 else e.keycode
 		if kc == KEY_Q or kc == KEY_DELETE:
-			var target_slot: int = -1
-			if _held_slot_idx >= 0:
-				target_slot = _held_slot_idx
-			elif _hovered_slot_idx >= 0:
-				target_slot = _hovered_slot_idx
-			elif _selected_slot_idx >= 0:
-				target_slot = _selected_slot_idx
+			var target_slot: int = _held_slot_idx
+			if target_slot < 0:
+				target_slot = _hovered_slot_idx if _hovered_slot_idx >= 0 else _selected_slot_idx
 			if target_slot >= 0 and player != null:
 				var drop_cnt := -1 if Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL) else 1
 				player.drop_item_from_inventory(target_slot, drop_cnt)
-				if player.inventory.slots[target_slot].is_empty():
-					if _held_slot_idx == target_slot:
-						_held_slot_idx = -1
-					if _selected_slot_idx == target_slot:
-						_selected_slot_idx = -1
+				if player.inventory.slots[target_slot].is_empty() and _held_slot_idx == target_slot:
+					_held_slot_idx = -1
 				refresh()
 				get_viewport().set_input_as_handled()
 				return
@@ -228,8 +275,102 @@ func _input(e: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 
+## Left-click (or pad A) on bag / hotbar slot `idx`.
+func _slot_primary(idx: int, shift: bool) -> void:
+	var inv: Inventory = player.inventory
+	_selected_slot_idx = idx
+	_selected_equip = &""
+	if shift:
+		inv.quick_transfer_slot(idx)
+		_held_slot_idx = -1
+		player._sync_tool_from_hotbar()
+		refresh()
+		return
+	if _held_slot_idx < 0:
+		if not inv.slots[idx].is_empty():
+			_held_slot_idx = idx
+		if idx < Inventory.MAX_HOTBAR_SLOTS:
+			player.select_hotbar_slot(idx)
+	else:
+		if _held_slot_idx != idx:
+			inv.swap_or_merge_slots(_held_slot_idx, idx)
+			if idx < Inventory.MAX_HOTBAR_SLOTS:
+				player.select_hotbar_slot(idx)
+			elif _held_slot_idx < Inventory.MAX_HOTBAR_SLOTS:
+				player._sync_tool_from_hotbar()
+		_held_slot_idx = -1
+	refresh()
+
+
+## Right-click (or pad X): equip / eat / to hotbar / split.
+func _slot_secondary(idx: int) -> void:
+	var inv: Inventory = player.inventory
+	var slot: ItemSlot = inv.slots[idx]
+	_selected_slot_idx = idx
+	_selected_equip = &""
+	if _held_slot_idx >= 0 and _held_slot_idx != idx and slot.is_empty():
+		var src: ItemSlot = inv.slots[_held_slot_idx]
+		if src.count > 1:
+			inv.split_stack(_held_slot_idx, idx, maxi(1, src.count / 2))
+			_held_slot_idx = -1
+			refresh()
+			return
+	_held_slot_idx = -1
+	if slot.is_empty():
+		refresh()
+		return
+	var def: ItemDef = ItemDB.get_item(slot.item_id)
+	if def != null:
+		if def.equip_slot != &"":
+			inv.equip_item_from_slot(idx)
+		elif def.category == ItemDef.Category.FOOD and player.vitality.is_full_of(def.id):
+			_toast("Still full of %s. Try another dish." % def.name)
+		elif def.category == ItemDef.Category.FOOD and player.vitality.can_eat_food(def.id):
+			player.vitality.eat_food(def.id, inv)
+			_toast("Ate %s" % def.name)
+		elif idx >= Inventory.MAX_HOTBAR_SLOTS:
+			inv.move_to_hotbar(idx)
+			player._sync_tool_from_hotbar()
+		elif slot.count > 1:
+			for empty_i in range(Inventory.MAX_HOTBAR_SLOTS, inv.capacity):
+				if inv.slots[empty_i].is_empty():
+					inv.split_stack(idx, empty_i, maxi(1, slot.count / 2))
+					break
+	refresh()
+
+
+func _on_equip_clicked(slot_key: StringName, secondary: bool) -> void:
+	if player == null or player.inventory == null:
+		return
+	var inv: Inventory = player.inventory
+	# A held item that belongs in this slot goes on.
+	if not secondary and _held_slot_idx >= 0 and _held_slot_idx < inv.capacity:
+		var held: ItemSlot = inv.slots[_held_slot_idx]
+		var def: ItemDef = ItemDB.get_item(held.item_id) if not held.is_empty() else null
+		if def != null and (def.equip_slot == slot_key or (def.equip_slot == &"chest" and slot_key == &"body")):
+			inv.equip_item_from_slot(_held_slot_idx)
+			_held_slot_idx = -1
+			_selected_equip = slot_key
+			refresh()
+			return
+	var worn: ItemSlot = inv.equipment.get(slot_key, null)
+	if secondary and worn != null and not worn.is_empty():
+		if not inv.unequip_item(slot_key):
+			_toast("No room in your bag.")
+		refresh()
+		return
+	_selected_equip = slot_key
+	_selected_slot_idx = -1
+	refresh()
+
+
+func _toast(msg: String) -> void:
+	if player != null and player.hud != null:
+		player.hud.show_toast(msg)
+
+
 # -------------------------------------------------------------------------
-# UI Construction
+# Build
 # -------------------------------------------------------------------------
 
 func _build() -> void:
@@ -243,18 +384,18 @@ func _build() -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed:
+		# Clicking outside the window with a stack in hand drops it (right-click: one).
+		if ev is InputEventMouseButton and ev.pressed and _held_slot_idx >= 0 and player != null:
 			var mb := ev as InputEventMouseButton
-			if _held_slot_idx >= 0 and player != null:
-				if mb.button_index == MOUSE_BUTTON_LEFT:
-					player.drop_item_from_inventory(_held_slot_idx, -1)
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				player.drop_item_from_inventory(_held_slot_idx, -1)
+				_held_slot_idx = -1
+				refresh()
+			elif mb.button_index == MOUSE_BUTTON_RIGHT:
+				player.drop_item_from_inventory(_held_slot_idx, 1)
+				if player.inventory.slots[_held_slot_idx].is_empty():
 					_held_slot_idx = -1
-					refresh()
-				elif mb.button_index == MOUSE_BUTTON_RIGHT:
-					player.drop_item_from_inventory(_held_slot_idx, 1)
-					if player.inventory.slots[_held_slot_idx].is_empty():
-						_held_slot_idx = -1
-					refresh()
+				refresh()
 	)
 	_root.add_child(dim)
 
@@ -264,216 +405,64 @@ func _build() -> void:
 	_root.add_child(center)
 
 	var outer := PanelContainer.new()
-	outer.custom_minimum_size = Vector2(1040, 610)
+	outer.custom_minimum_size = Vector2(1180, 640)
 	center.add_child(outer)
 	UiTheme.keep_on_screen(outer)
 
-	var main_v := VBoxContainer.new()
-	main_v.add_theme_constant_override("separation", 10)
-	outer.add_child(main_v)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	outer.add_child(v)
 
-	# --- Top Header Bar
+	# --- header: same tab strip as the Crafting and Quests pages
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 12)
-	main_v.add_child(head)
-
+	head.add_theme_constant_override("separation", 10)
+	v.add_child(head)
 	_title_label = Label.new()
-	_title_label.text = "Inventory & Gear"
+	_title_label.text = "Pack"
 	_title_label.theme_type_variation = &"Header"
 	_title_label.add_theme_font_size_override("font_size", 28)
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_label.clip_text = true
 	head.add_child(_title_label)
-
-	# Mouse hints live in a footer under the pages, so the header never sets the panel width.
-	var hint_lbl := Label.new()
-	hint_lbl.text = "Click: Move/Swap  ·  Shift+Click: Transfer  ·  Q: Drop  ·  Keys 1-8: Hotbar  ·  RMB: Use"
-	hint_lbl.theme_type_variation = &"Small"
-	hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_lbl.custom_minimum_size = Vector2(200, 0)
-
-	var quest_btn := Button.new()
-	quest_btn.text = "Quests (J)"
-	quest_btn.pressed.connect(func() -> void:
-		if main != null and "quest_log_ui" in main and main.quest_log_ui != null:
-			close()
-			main.quest_log_ui.open()
-	)
-	head.add_child(quest_btn)
-
-	var sort_btn := Button.new()
-	sort_btn.text = "Sort Bag"
-	sort_btn.pressed.connect(func() -> void:
-		if player and player.inventory:
-			player.inventory.quick_sort(true)
-			refresh()
-	)
-	head.add_child(sort_btn)
-
+	for t: Array in [["Pack (I)", &"pack"], ["Crafting (K)", &"crafting"], ["Quests (J)", &"quests"]]:
+		var tb := Button.new()
+		tb.text = t[0]
+		tb.toggle_mode = true
+		tb.button_pressed = t[1] == &"pack"
+		tb.focus_mode = Control.FOCUS_NONE
+		var page: StringName = t[1]
+		tb.pressed.connect(func() -> void:
+			tb.button_pressed = page == &"pack"
+			if page != &"pack":
+				_go_page(page)
+		)
+		head.add_child(tb)
 	var close_btn := Button.new()
-	close_btn.text = "Close (I)"
+	close_btn.text = "Close"
+	close_btn.focus_mode = Control.FOCUS_NONE
 	close_btn.pressed.connect(close)
 	head.add_child(close_btn)
 
-	# --- 3-Column Body
 	var cols := HBoxContainer.new()
 	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cols.add_theme_constant_override("separation", 12)
-	main_v.add_child(cols)
-	main_v.add_child(hint_lbl)   # footer: after the pages
+	v.add_child(cols)
 
-	# 1. Left Column: Equipment Paperdoll + Stats
-	var left_page := PanelContainer.new()
-	left_page.theme_type_variation = &"Parchment"
-	left_page.custom_minimum_size = Vector2(235, 0)
-	cols.add_child(left_page)
-	var left_v := VBoxContainer.new()
-	left_v.add_theme_constant_override("separation", 8)
-	left_page.add_child(left_v)
+	_build_gear(_page(cols, 312))
+	_build_bag(_page(cols, 0, true))
+	_build_right(_page(cols, 286))
 
-	var eq_head := Label.new()
-	eq_head.text = "Equipment"
-	eq_head.theme_type_variation = &"InkLabel"
-	eq_head.add_theme_font_override("font", UiTheme.font(800))
-	eq_head.add_theme_font_size_override("font_size", 20)
-	left_v.add_child(eq_head)
+	var foot := Label.new()
+	foot.theme_type_variation = &"Small"
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.text = "Click: pick up / place  ·  Shift+Click: quick move  ·  Right-click: use / equip  ·  1-8: to hotbar  ·  Q: drop"
+	v.add_child(foot)
 
-	_equip_grid = GridContainer.new()
-	_equip_grid.columns = 2
-	_equip_grid.add_theme_constant_override("h_separation", 8)
-	_equip_grid.add_theme_constant_override("v_separation", 6)
-	left_v.add_child(_equip_grid)
-
-	left_v.add_child(HSeparator.new())
-
-	var st_head := Label.new()
-	st_head.text = "Mariners' Stats"
-	st_head.theme_type_variation = &"InkLabel"
-	st_head.add_theme_font_override("font", UiTheme.font(800))
-	st_head.add_theme_font_size_override("font_size", 18)
-	left_v.add_child(st_head)
-
-	_stats_label = Label.new()
-	_stats_label.theme_type_variation = &"InkLabel"
-	_stats_label.add_theme_font_size_override("font_size", 14)
-	_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	left_v.add_child(_stats_label)
-
-	# 2. Center Column: Configurable Hotbar (0..7) + Backpack Grid (8..N)
-	var center_page := PanelContainer.new()
-	center_page.theme_type_variation = &"Parchment"
-	center_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cols.add_child(center_page)
-	var center_v := VBoxContainer.new()
-	center_v.add_theme_constant_override("separation", 8)
-	center_page.add_child(center_v)
-
-	var hb_title := Label.new()
-	hb_title.text = "Hotbar (Keys 1-8) — Put tools, weapons, blocks & items here"
-	hb_title.theme_type_variation = &"InkLabel"
-	hb_title.add_theme_font_override("font", UiTheme.font(800))
-	hb_title.add_theme_font_size_override("font_size", 18)
-	center_v.add_child(hb_title)
-
-	_hotbar_grid = GridContainer.new()
-	_hotbar_grid.columns = Inventory.MAX_HOTBAR_SLOTS
-	_hotbar_grid.add_theme_constant_override("h_separation", 6)
-	_hotbar_grid.add_theme_constant_override("v_separation", 6)
-	center_v.add_child(_hotbar_grid)
-
-	center_v.add_child(HSeparator.new())
-
-	_backpack_label = Label.new()
-	_backpack_label.text = "Backpack"
-	_backpack_label.theme_type_variation = &"InkLabel"
-	_backpack_label.add_theme_font_override("font", UiTheme.font(800))
-	_backpack_label.add_theme_font_size_override("font_size", 18)
-	center_v.add_child(_backpack_label)
-
-	var bag_scroll := ScrollContainer.new()
-	bag_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	bag_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	center_v.add_child(bag_scroll)
-
-	_backpack_grid = GridContainer.new()
-	_backpack_grid.columns = 8
-	_backpack_grid.add_theme_constant_override("h_separation", 6)
-	_backpack_grid.add_theme_constant_override("v_separation", 6)
-	bag_scroll.add_child(_backpack_grid)
-
-	# 3. Right Column: Selected Item Inspector + Field Crafting / Storage Container
-	var right_page := PanelContainer.new()
-	right_page.theme_type_variation = &"Parchment"
-	right_page.custom_minimum_size = Vector2(275, 0)
-	cols.add_child(right_page)
-	var right_v := VBoxContainer.new()
-	right_v.add_theme_constant_override("separation", 8)
-	right_page.add_child(right_v)
-
-	var insp_head := HBoxContainer.new()
-	insp_head.add_theme_constant_override("separation", 8)
-	right_v.add_child(insp_head)
-	_inspect_icon = UiTheme.icon(null, 40)
-	insp_head.add_child(_inspect_icon)
-	_inspect_title = Label.new()
-	_inspect_title.theme_type_variation = &"InkLabel"
-	_inspect_title.add_theme_font_override("font", UiTheme.font(800))
-	_inspect_title.add_theme_font_size_override("font_size", 18)
-	_inspect_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_inspect_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	insp_head.add_child(_inspect_title)
-
-	_inspect_desc = Label.new()
-	_inspect_desc.theme_type_variation = &"InkLabel"
-	_inspect_desc.add_theme_font_size_override("font_size", 14)
-	_inspect_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_inspect_desc.custom_minimum_size = Vector2(0, 58)
-	right_v.add_child(_inspect_desc)
-
-	_inspect_actions = HBoxContainer.new()
-	_inspect_actions.add_theme_constant_override("separation", 6)
-	right_v.add_child(_inspect_actions)
-
-	right_v.add_child(HSeparator.new())
-
-	_right_sub_title = Label.new()
-	_right_sub_title.text = "Hand Crafting"
-	_right_sub_title.theme_type_variation = &"InkLabel"
-	_right_sub_title.add_theme_font_override("font", UiTheme.font(800))
-	_right_sub_title.add_theme_font_size_override("font_size", 18)
-	right_v.add_child(_right_sub_title)
-
-	_station_tabs_box = HFlowContainer.new()
-	_station_tabs_box.add_theme_constant_override("h_separation", 4)
-	_station_tabs_box.add_theme_constant_override("v_separation", 4)
-	right_v.add_child(_station_tabs_box)
-
-	var craft_scroll := ScrollContainer.new()
-	craft_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	craft_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right_v.add_child(craft_scroll)
-
-	_craft_list = VBoxContainer.new()
-	_craft_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_craft_list.add_theme_constant_override("separation", 6)
-	craft_scroll.add_child(_craft_list)
-
-	_container_scroll = ScrollContainer.new()
-	_container_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_container_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_container_scroll.visible = false
-	right_v.add_child(_container_scroll)
-
-	_container_grid = GridContainer.new()
-	_container_grid.columns = 4
-	_container_grid.add_theme_constant_override("h_separation", 6)
-	_container_grid.add_theme_constant_override("v_separation", 6)
-	_container_scroll.add_child(_container_grid)
-
-	# Floating cursor icon when dragging/moving a stack
+	# Stack following the cursor while you move it
 	_cursor_floater = Control.new()
 	_cursor_floater.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cursor_floater.visible = false
+	_cursor_floater.z_index = 40
 	_root.add_child(_cursor_floater)
 	_cursor_icon = UiTheme.icon(null, 44)
 	_cursor_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -484,750 +473,673 @@ func _build() -> void:
 	_cursor_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cursor_floater.add_child(_cursor_count)
 
-	# Floating hover tooltip label when hovering over any slot
+	# Hover card
 	_hover_panel = PanelContainer.new()
-	_hover_panel.theme_type_variation = &"Toast"
+	_hover_panel.theme_type_variation = &"Plaque"
 	_hover_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hover_panel.visible = false
 	_hover_panel.z_index = 50
 	_root.add_child(_hover_panel)
-	var hv := VBoxContainer.new()
-	hv.add_theme_constant_override("separation", 2)
-	hv.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hover_panel.add_child(hv)
-	_hover_title = Label.new()
-	_hover_title.add_theme_font_override("font", UiTheme.font(800))
-	_hover_title.add_theme_font_size_override("font_size", 15)
-	_hover_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hv.add_child(_hover_title)
-	_hover_sub = Label.new()
-	_hover_sub.theme_type_variation = &"Small"
-	_hover_sub.add_theme_font_size_override("font_size", 14)
-	_hover_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hv.add_child(_hover_sub)
+	_hover_box = VBoxContainer.new()
+	_hover_box.add_theme_constant_override("separation", 1)
+	_hover_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hover_panel.add_child(_hover_box)
 
 
-func _show_hover_label(item_id: StringName, count: int, prefix: String = "") -> void:
-	if _hover_panel == null:
-		return
-	if item_id == &"":
-		_hover_panel.visible = false
-		return
-	var def: ItemDef = ItemDB.get_item(item_id)
-	var title_txt := def.name if def != null else String(item_id)
-	if count > 1:
-		title_txt += " (x%d)" % count
-	if prefix != "":
-		title_txt = "%s: %s" % [prefix, title_txt]
-	_hover_title.text = title_txt
+func _page(parent: Control, width: float, expand := false) -> VBoxContainer:
+	var p := PanelContainer.new()
+	p.theme_type_variation = &"Parchment"
+	if width > 0.0:
+		p.custom_minimum_size = Vector2(width, 0)
+	if expand:
+		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	p.add_child(v)
+	return v
 
-	var sub_parts: Array[String] = []
-	if def != null:
-		var cat_names := ["Material", "Food", "Tool", "Equipment", "Blueprint", "Special"]
-		var cat_str: String = cat_names[clampi(def.category, 0, cat_names.size() - 1)]
-		var tier_val: int = int(def.tool_data.get("tier", 0))
-		if tier_val > 0:
-			sub_parts.append("Tier %d %s" % [tier_val, cat_str])
+
+func _ink(text: String, fsize: int = 14, bold := false, col := Color(0, 0, 0, 0)) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.theme_type_variation = &"InkLabel"
+	l.add_theme_font_size_override("font_size", fsize)
+	if bold:
+		l.add_theme_font_override("font", UiTheme.font(800))
+	if col.a > 0.0:
+		l.add_theme_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func _build_gear(col: VBoxContainer) -> void:
+	col.add_child(_ink("Gear", 20, true))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(row)
+	row.add_child(_gear_column(GEAR_LEFT))
+
+	# Live figure wearing your gear (drag to turn).
+	var vpc := SubViewportContainer.new()
+	vpc.custom_minimum_size = Vector2(128, 250)
+	vpc.stretch = true
+	vpc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vpc.tooltip_text = "Drag to turn"
+	vpc.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseMotion and (ev.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0 and _preview_model != null:
+			_preview_model.rotation.y += ev.relative.x * 0.012
+	)
+	row.add_child(vpc)
+	_preview_vp = SubViewport.new()
+	_preview_vp.size = Vector2i(128, 250)
+	_preview_vp.own_world_3d = true
+	_preview_vp.transparent_bg = true
+	_preview_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	vpc.add_child(_preview_vp)
+	var cam := Camera3D.new()
+	cam.position = Vector3(0.0, 0.82, 3.8)
+	cam.rotation = Vector3(-0.04, 0.0, 0.0)
+	cam.fov = 36.0
+	_preview_vp.add_child(cam)
+	var sun := DirectionalLight3D.new()
+	sun.rotation = Vector3(-0.6, 0.45, 0.0)
+	sun.light_energy = 1.3
+	_preview_vp.add_child(sun)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_CLEAR_COLOR
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.85, 0.8, 0.72)
+	env.environment.ambient_light_energy = 0.6
+	_preview_vp.add_child(env)
+
+	row.add_child(_gear_column(GEAR_RIGHT))
+
+	col.add_child(HSeparator.new())
+	col.add_child(_ink("Stats", 18, true))
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 1)
+	col.add_child(grid)
+	for s: Array in STAT_ROWS:
+		var name_l := _ink(s[1], 14, false, COL_MUTED)
+		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(name_l)
+		var val := _ink("", 14, true)
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		grid.add_child(val)
+		var delta := _ink("", 14, true)
+		delta.custom_minimum_size = Vector2(54, 0)
+		grid.add_child(delta)
+		_stat_values[s[0]] = val
+		_stat_deltas[s[0]] = delta
+
+
+func _gear_column(keys: Array) -> VBoxContainer:
+	var c := VBoxContainer.new()
+	c.add_theme_constant_override("separation", 3)
+	for k: StringName in keys:
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 0)
+		c.add_child(cell)
+		var view := ItemSlotView.new(40).set_padding(SLOT_PAD)
+		view.focus_mode = Control.FOCUS_ALL
+		view.mouse_filter = Control.MOUSE_FILTER_STOP
+		view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		cell.add_child(view)
+		var lbl := _ink(_equip_label(k), 12, false, COL_MUTED)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cell.add_child(lbl)
+		_equip_views[k] = view
+		view.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed:
+				_on_equip_clicked(k, ev.button_index == MOUSE_BUTTON_RIGHT)
+				view.accept_event()
+			elif ev.is_action_pressed("ui_accept"):
+				_on_equip_clicked(k, false)
+				view.accept_event()
+			elif ev is InputEventJoypadButton and ev.pressed and ev.button_index == JOY_BUTTON_X:
+				_on_equip_clicked(k, true)
+				view.accept_event()
+		)
+		var enter := func() -> void:
+			_hovered_equip = k
+			_hovered_slot_idx = -1
+			view.self_modulate = Color(1.1, 1.06, 0.95)
+			var worn: ItemSlot = player.inventory.equipment.get(k, null) if player != null else null
+			if worn != null and not worn.is_empty():
+				_show_hover_label(worn.item_id, 1, _equip_label(k), true)
+			else:
+				_show_hover_text(_equip_label(k), "Empty - drop gear here or right-click it in your bag")
+			_update_stats({})
+		var leave := func() -> void:
+			view.self_modulate = Color.WHITE
+			if _hovered_equip == k:
+				_hovered_equip = &""
+				_hide_hover_label()
+		view.mouse_entered.connect(enter)
+		view.mouse_exited.connect(leave)
+		view.focus_entered.connect(func() -> void:
+			if _pad_input:
+				enter.call())
+		view.focus_exited.connect(leave)
+	return c
+
+
+static func _equip_label(k: StringName) -> String:
+	for pair: Array in EQUIP_SLOTS:
+		if pair[0] == k:
+			return pair[1]
+	return String(k).capitalize()
+
+
+func _build_bag(col: VBoxContainer) -> void:
+	col.add_child(_ink("Hotbar", 18, true))
+	_hotbar_row = HBoxContainer.new()
+	_hotbar_row.add_theme_constant_override("separation", 4)
+	col.add_child(_hotbar_row)
+	col.add_child(HSeparator.new())
+	var bag_head := HBoxContainer.new()
+	col.add_child(bag_head)
+	_bag_label = _ink("Backpack", 18, true)
+	_bag_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bag_head.add_child(_bag_label)
+	var sort_btn := Button.new()
+	sort_btn.text = "Sort"
+	sort_btn.focus_mode = Control.FOCUS_NONE
+	sort_btn.add_theme_font_size_override("font_size", 15)
+	sort_btn.tooltip_text = "Sort the backpack (the hotbar stays as it is)"
+	sort_btn.pressed.connect(func() -> void:
+		if player and player.inventory:
+			player.inventory.quick_sort(true)
+			refresh()
+	)
+	bag_head.add_child(sort_btn)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	col.add_child(scroll)
+	_bag_grid = GridContainer.new()
+	_bag_grid.columns = Inventory.MAX_HOTBAR_SLOTS
+	_bag_grid.add_theme_constant_override("h_separation", 4)
+	_bag_grid.add_theme_constant_override("v_separation", 4)
+	scroll.add_child(_bag_grid)
+
+
+func _build_right(col: VBoxContainer) -> void:
+	_detail = VBoxContainer.new()
+	_detail.add_theme_constant_override("separation", 6)
+	col.add_child(_detail)
+	col.add_child(HSeparator.new())
+	_right_sub_title = _ink("Crafting", 18, true)
+	col.add_child(_right_sub_title)
+
+	# Crafting has its own page; this card says what's ready and links there.
+	_craft_card = VBoxContainer.new()
+	_craft_card.add_theme_constant_override("separation", 8)
+	_craft_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(_craft_card)
+	_craft_card_lbl = _ink("", 14)
+	_craft_card_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_craft_card.add_child(_craft_card_lbl)
+	var craft_btn := Button.new()
+	craft_btn.text = "Open Crafting (K)"
+	craft_btn.focus_mode = Control.FOCUS_NONE
+	craft_btn.add_theme_font_size_override("font_size", 16)
+	craft_btn.pressed.connect(func() -> void: _go_page(&"crafting"))
+	_craft_card.add_child(craft_btn)
+
+
+## Builds bag + hotbar slot views once per capacity.
+func _build_slots(cap: int) -> void:
+	for c in _hotbar_row.get_children():
+		_hotbar_row.remove_child(c)
+		c.queue_free()
+	for c in _bag_grid.get_children():
+		_bag_grid.remove_child(c)
+		c.queue_free()
+	_slot_views.clear()
+	for i in cap:
+		var view := ItemSlotView.new(SLOT_PX).set_padding(SLOT_PAD)
+		view.focus_mode = Control.FOCUS_ALL
+		view.mouse_filter = Control.MOUSE_FILTER_STOP
+		if i < Inventory.MAX_HOTBAR_SLOTS:
+			var key := Label.new()
+			key.text = str(i + 1)
+			key.theme_type_variation = &"KeyLabel"
+			key.add_theme_font_size_override("font_size", 12)
+			key.position = Vector2(-3, -5)
+			key.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			view.get_child(0).add_child(key)
+			_hotbar_row.add_child(view)
 		else:
-			sub_parts.append(cat_str)
-		if def.has_tag("pickaxe"):
-			sub_parts.append("Mines stone & ores")
-		elif def.has_tag("axe"):
-			sub_parts.append("Fells whole trees, chops wood fast, more logs per tree")
-		elif def.has_tag("shovel"):
-			sub_parts.append("Excavates dirt, sand & gravel")
-		elif def.has_tag("hammer"):
-			sub_parts.append("Opens Build Menu (Prefabs & Blocks)")
-		elif def.has_tag("hoe"):
-			sub_parts.append("Tills soil & harvests crops")
-		elif def.has_tag("fishing_rod"):
-			sub_parts.append("Casts line into tidal waters")
-		elif not def.weapon_data.is_empty():
-			sub_parts.append("%d DMG" % int(def.weapon_data.get("damage", 10)))
-		elif not def.armor_data.is_empty():
-			sub_parts.append("+%d Defense" % int(def.armor_data.get("defense", 0)))
-		elif not def.food_data.is_empty():
-			sub_parts.append("+%d HP / +%d Stamina" % [int(def.food_data.get("hp_bonus", 0)), int(def.food_data.get("stamina_bonus", 0))])
-		elif def.is_voxel():
-			sub_parts.append("Placeable Block")
-	_hover_sub.text = "  ·  ".join(sub_parts)
-	_hover_sub.visible = not sub_parts.is_empty()
-	_hover_panel.reset_size()
-	_hover_panel.visible = true
-	var mp := get_viewport().get_mouse_position()
-	_hover_panel.position = mp + Vector2(18.0, 18.0)
+			_bag_grid.add_child(view)
+		_slot_views.append(view)
+		_wire_slot(view, i)
+	_built_capacity = cap
 
 
-func _hide_hover_label() -> void:
-	if _hover_panel != null:
-		_hover_panel.visible = false
+func _wire_slot(view: ItemSlotView, idx: int) -> void:
+	view.gui_input.connect(func(ev: InputEvent) -> void:
+		if player == null:
+			return
+		if ev is InputEventMouseButton and ev.pressed:
+			if ev.button_index == MOUSE_BUTTON_LEFT:
+				_slot_primary(idx, Input.is_key_pressed(KEY_SHIFT))
+				view.accept_event()
+			elif ev.button_index == MOUSE_BUTTON_RIGHT:
+				_slot_secondary(idx)
+				view.accept_event()
+		elif ev.is_action_pressed("ui_accept"):
+			_slot_primary(idx, false)
+			view.accept_event()
+		elif ev is InputEventJoypadButton and ev.pressed and ev.button_index == JOY_BUTTON_X:
+			_slot_secondary(idx)
+			view.accept_event()
+	)
+	var enter := func() -> void:
+		_hovered_slot_idx = idx
+		_hovered_equip = &""
+		view.self_modulate = Color(1.1, 1.06, 0.95)
+		if player == null or idx >= player.inventory.capacity:
+			return
+		var s: ItemSlot = player.inventory.slots[idx]
+		if s.is_empty():
+			_hide_hover_label()
+			_update_stats({})
+		else:
+			_show_hover_label(s.item_id, s.count)
+			_update_stats(player.inventory.preview_stats(s.item_id))
+	var leave := func() -> void:
+		view.self_modulate = Color.WHITE
+		if _hovered_slot_idx == idx:
+			_hovered_slot_idx = -1
+			_hide_hover_label()
+			_update_stats({})
+	view.mouse_entered.connect(enter)
+	view.mouse_exited.connect(leave)
+	view.focus_entered.connect(func() -> void:
+		if _pad_input:
+			enter.call())
+	view.focus_exited.connect(leave)
+
+
+func _focus_slot(idx: int) -> void:
+	await get_tree().process_frame
+	if visible and idx >= 0 and idx < _slot_views.size():
+		_slot_views[idx].grab_focus()
 
 
 # -------------------------------------------------------------------------
-# Refresh & Slot Rendering
+# Refresh
 # -------------------------------------------------------------------------
+
+## Swim speed as a bonus over normal ("Normal", "+20%", "-10%").
+static func swim_speed_text(mult: float) -> String:
+	var bonus := roundi((mult - 1.0) * 100.0)
+	return "Normal" if bonus == 0 else "%+d%%" % bonus
+
+
+static func stat_text(key: String, v: float) -> String:
+	match key:
+		"cold":
+			return "%d%%" % roundi(v * 100.0)
+		"depth":
+			return "%d m" % roundi(v)
+		"breath":
+			return "+%d s" % roundi(v)
+		"swim":
+			return swim_speed_text(v)
+	return str(roundi(v))
+
+
+## "+3", "-15%", "" when unchanged. Every stat here is better when higher.
+static func stat_delta_text(key: String, before: float, after: float) -> String:
+	var d := after - before
+	match key:
+		"cold", "swim":
+			var pct := roundi(d * 100.0)
+			return "" if pct == 0 else "%+d%%" % pct
+		"depth":
+			return "" if roundi(d) == 0 else "%+d m" % roundi(d)
+		"breath":
+			return "" if roundi(d) == 0 else "%+d s" % roundi(d)
+	return "" if roundi(d) == 0 else "%+d" % roundi(d)
+
 
 func refresh() -> void:
 	if player == null or player.inventory == null:
 		return
 	var inv: Inventory = player.inventory
-	_title_label.text = ("Inventory  ·  %s" % active_container.entity_name) if active_container != null else "Inventory & Gear"
+	if _built_capacity != inv.capacity:
+		_build_slots(inv.capacity)
+	_refresh_slots()
+	_refresh_gear()
+	var hover_preview: Dictionary = {}
+	if _hovered_slot_idx >= 0 and _hovered_slot_idx < inv.capacity and not inv.slots[_hovered_slot_idx].is_empty():
+		hover_preview = inv.preview_stats(inv.slots[_hovered_slot_idx].item_id)
+	_update_stats(hover_preview)
+	_refresh_detail()
 
-	# 1. Equipment slots
-	for c in _equip_grid.get_children():
-		c.queue_free()
-	for pair: Array in EQUIP_SLOTS:
-		var slot_key: StringName = pair[0]
-		var slot_label: String = pair[1]
-		var eq_slot: ItemSlot = inv.equipment.get(slot_key, ItemSlot.new())
-		_equip_grid.add_child(_make_equip_cell(slot_key, slot_label, eq_slot))
-
-	# 2. Character stats
-	_stats_label.text = (
-		"Defense: %d\n" % inv.get_total_defense() +
-		"Cold Protection: %d%%\n" % int(round(inv.get_cold_protection() * 100.0)) +
-		"Safe Dive Depth: %.0f m\n" % inv.get_max_safe_depth() +
-		"Bonus Breath: +%.0f s\n" % inv.get_extra_breath() +
-		"Swim Speed: %.0f%%\n" % int(round(inv.get_swim_speed_multiplier() * 100.0)) +
-		"Capacity: %d slots" % inv.capacity
-	)
-
-	# 3. Hotbar (0..7)
-	for c in _hotbar_grid.get_children():
-		c.queue_free()
-	for i in Inventory.MAX_HOTBAR_SLOTS:
-		_hotbar_grid.add_child(_make_inv_slot(i, inv.slots[i], true))
-
-	# 4. Backpack (8..capacity-1)
-	for c in _backpack_grid.get_children():
-		c.queue_free()
-	var used_bag := 0
-	for i in range(Inventory.MAX_HOTBAR_SLOTS, inv.capacity):
-		if not inv.slots[i].is_empty():
-			used_bag += 1
-		_backpack_grid.add_child(_make_inv_slot(i, inv.slots[i], false))
-	_backpack_label.text = "Backpack (%d / %d slots used)" % [used_bag, inv.capacity - Inventory.MAX_HOTBAR_SLOTS]
-
-	# 5. Inspector
-	_refresh_inspector(inv)
-
-	# 6. Hand-crafting OR Container view
-	var has_cont := active_container != null and is_instance_valid(active_container)
-	_craft_list.get_parent().visible = not has_cont
-	_container_scroll.visible = has_cont
-	if has_cont:
-		if _station_tabs_box != null:
-			_station_tabs_box.visible = false
-		_right_sub_title.text = active_container.entity_name
-		_refresh_container()
-	else:
-		_right_sub_title.text = "Hand Crafting"
-		_refresh_hand_crafting(inv)
+	_refresh_craft_card(inv)
 
 
-func _make_inv_slot(idx: int, slot: ItemSlot, is_hotbar: bool) -> PanelContainer:
-	var p := PanelContainer.new()
-	var is_sel := (idx == _held_slot_idx) or (is_hotbar and idx == player.inventory.active_hotbar_index) or (idx == _selected_slot_idx)
-	p.theme_type_variation = &"SlotSelected" if is_sel else &"Slot"
-	p.custom_minimum_size = Vector2(56, 56)
-	p.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var box := Control.new()
-	box.custom_minimum_size = Vector2(44, 44)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(box)
-
-	if not slot.is_empty():
-		var ic := UiTheme.icon(ItemIcons.for_item(slot.item_id), 42)
-		ic.position = Vector2(1, 1)
-		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(ic)
-		var def: ItemDef = ItemDB.get_item(slot.item_id)
-		p.tooltip_text = "%s (x%d)" % [def.name if def else String(slot.item_id), slot.count]
-		if slot.count > 1:
-			var cnt := Label.new()
-			cnt.text = str(slot.count)
-			cnt.theme_type_variation = &"KeyLabel"
-			cnt.add_theme_font_size_override("font_size", 13)
-			cnt.position = Vector2(20, 26)
-			cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			box.add_child(cnt)
-	else:
-		p.tooltip_text = "Hotbar %d (Empty)" % (idx + 1) if is_hotbar else "Backpack Slot (Empty)"
-
-	if is_hotbar:
-		var key_lbl := Label.new()
-		key_lbl.text = str(idx + 1)
-		key_lbl.theme_type_variation = &"KeyLabel"
-		key_lbl.add_theme_font_size_override("font_size", 12)
-		key_lbl.position = Vector2(-4, -6)
-		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(key_lbl)
-
-	p.mouse_entered.connect(func() -> void:
-		_hovered_slot_idx = idx
-		p.theme_type_variation = &"SlotSelected"
-		p.self_modulate = Color(1.08, 1.04, 0.94)
-		if not slot.is_empty():
-			_show_hover_label(slot.item_id, slot.count)
-		else:
-			_hide_hover_label()
-	)
-	p.mouse_exited.connect(func() -> void:
-		p.theme_type_variation = &"SlotSelected" if is_sel else &"Slot"
-		p.self_modulate = Color.WHITE
-		if _hovered_slot_idx == idx:
-			_hovered_slot_idx = -1
-			_hide_hover_label()
-	)
-	p.gui_input.connect(func(ev: InputEvent) -> void:
-		_on_slot_gui_input(ev, idx)
-	)
-	return p
-
-
-func _make_equip_cell(slot_key: StringName, label_text: String, slot: ItemSlot) -> PanelContainer:
-	var p := PanelContainer.new()
-	p.theme_type_variation = &"SlotSelected" if not slot.is_empty() else &"Slot"
-	p.custom_minimum_size = Vector2(96, 54)
-	p.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 6)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(h)
-
-	var ic := UiTheme.icon(ItemIcons.for_item(slot.item_id) if not slot.is_empty() else null, 34)
-	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(ic)
-
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 1)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(v)
-
-	var cat := Label.new()
-	cat.text = label_text
-	cat.theme_type_variation = &"Small"
-	cat.add_theme_font_size_override("font_size", 14)
-	cat.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(cat)
-
-	var item_lbl := Label.new()
-	var def: ItemDef = ItemDB.get_item(slot.item_id) if not slot.is_empty() else null
-	item_lbl.text = def.name if def != null else "Empty"
-	item_lbl.add_theme_font_size_override("font_size", 14)
-	item_lbl.clip_text = true
-	item_lbl.custom_minimum_size = Vector2(44, 16)
-	item_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(item_lbl)
-
-	p.tooltip_text = ("%s: %s (Click to unequip)" % [label_text, def.name]) if def else ("%s Slot (Empty)" % label_text)
-	p.mouse_entered.connect(func() -> void:
-		p.theme_type_variation = &"SlotSelected"
-		p.self_modulate = Color(1.08, 1.04, 0.94)
-		if not slot.is_empty():
-			_show_hover_label(slot.item_id, 1, label_text)
-		else:
-			_hide_hover_label()
-	)
-	p.mouse_exited.connect(func() -> void:
-		p.theme_type_variation = &"SlotSelected" if not slot.is_empty() else &"Slot"
-		p.self_modulate = Color.WHITE
-		_hide_hover_label()
-	)
-	p.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed:
-			_on_equip_slot_clicked(slot_key)
-	)
-	return p
-
-
-func _on_equip_slot_clicked(slot_key: StringName) -> void:
-	if player == null or player.inventory == null:
+func _refresh_slots() -> void:
+	if player == null:
 		return
 	var inv: Inventory = player.inventory
-	# If holding an item on the cursor that equips to this slot, equip it
-	if _held_slot_idx >= 0 and _held_slot_idx < inv.capacity:
-		var held: ItemSlot = inv.slots[_held_slot_idx]
-		if not held.is_empty():
-			var def: ItemDef = ItemDB.get_item(held.item_id)
-			if def != null and (def.equip_slot == slot_key or (def.equip_slot == &"chest" and slot_key == &"body")):
-				inv.equip_item_from_slot(_held_slot_idx)
-				_held_slot_idx = -1
-				refresh()
-				return
-	# Otherwise unequip occupied slot back to inventory
-	if inv.equipment.has(slot_key) and not (inv.equipment[slot_key] as ItemSlot).is_empty():
-		inv.unequip_item(slot_key)
-		refresh()
+	var used := 0
+	for i in mini(_slot_views.size(), inv.capacity):
+		var s: ItemSlot = inv.slots[i]
+		var view := _slot_views[i]
+		view.show_item(s.item_id if not s.is_empty() else &"", s.count)
+		view.tooltip_text = ""
+		var sel := i == _held_slot_idx or i == _selected_slot_idx or (i < Inventory.MAX_HOTBAR_SLOTS and i == inv.active_hotbar_index)
+		view.set_selected(sel)
+		view.modulate = Color(1, 1, 1, 0.35) if i == _held_slot_idx else Color.WHITE
+		if i >= Inventory.MAX_HOTBAR_SLOTS and not s.is_empty():
+			used += 1
+	_bag_label.text = "Backpack  ·  %d / %d" % [used, inv.capacity - Inventory.MAX_HOTBAR_SLOTS]
 
 
-func _on_slot_gui_input(ev: InputEvent, idx: int) -> void:
-	if not (ev is InputEventMouseButton) or not ev.pressed:
-		return
-	var mb := ev as InputEventMouseButton
+func _refresh_gear() -> void:
 	var inv: Inventory = player.inventory
-	_selected_slot_idx = idx
-
-	if mb.button_index == MOUSE_BUTTON_LEFT:
-		if Input.is_key_pressed(KEY_SHIFT):
-			# Shift-Click: transfer to/from open container, or between Hotbar (0..7) and Backpack (8..N)
-			if active_container != null and is_instance_valid(active_container):
-				_deposit_slot_to_container(idx)
-			else:
-				inv.quick_transfer_slot(idx)
-			_held_slot_idx = -1
-			player._sync_tool_from_hotbar()
-			refresh()
-			return
-
-		if _held_slot_idx < 0:
-			if not inv.slots[idx].is_empty():
-				_held_slot_idx = idx
-			if idx < Inventory.MAX_HOTBAR_SLOTS:
-				player.select_hotbar_slot(idx)
-		else:
-			if _held_slot_idx != idx:
-				inv.swap_or_merge_slots(_held_slot_idx, idx)
-				if idx < Inventory.MAX_HOTBAR_SLOTS:
-					player.select_hotbar_slot(idx)
-				elif _held_slot_idx < Inventory.MAX_HOTBAR_SLOTS:
-					player._sync_tool_from_hotbar()
-			_held_slot_idx = -1
-		refresh()
-
-	elif mb.button_index == MOUSE_BUTTON_RIGHT:
-		var slot: ItemSlot = inv.slots[idx]
-		# If holding a stack on cursor and right-clicking an empty slot -> split half
-		if _held_slot_idx >= 0 and _held_slot_idx != idx and slot.is_empty():
-			var src: ItemSlot = inv.slots[_held_slot_idx]
-			if src.count > 1:
-				inv.split_stack(_held_slot_idx, idx, maxi(1, src.count / 2))
-				_held_slot_idx = -1
-				refresh()
-				return
-		_held_slot_idx = -1
-		if slot.is_empty():
-			refresh()
-			return
-		var def: ItemDef = ItemDB.get_item(slot.item_id)
-		if def != null:
-			if def.equip_slot != &"":
-				inv.equip_item_from_slot(idx)
-			elif def.category == ItemDef.Category.FOOD and player.vitality.is_full_of(def.id):
-				if player.hud:
-					player.hud.show_toast("Still full of %s. Try another dish." % def.name)
-			elif def.category == ItemDef.Category.FOOD and player.vitality.can_eat_food(def.id):
-				player.vitality.eat_food(def.id, inv)
-				if player.hud:
-					player.hud.show_toast("Ate %s" % def.name)
-			elif idx >= Inventory.MAX_HOTBAR_SLOTS:
-				# Right-clicking a tool/item in the backpack moves it into the hotbar
-				inv.move_to_hotbar(idx)
-				player._sync_tool_from_hotbar()
-			elif slot.count > 1:
-				# Split stack into first empty slot
-				for empty_i in range(Inventory.MAX_HOTBAR_SLOTS, inv.capacity):
-					if inv.slots[empty_i].is_empty():
-						inv.split_stack(idx, empty_i, maxi(1, slot.count / 2))
-						break
-		refresh()
+	for k: StringName in _equip_views:
+		var view: ItemSlotView = _equip_views[k]
+		var worn: ItemSlot = inv.equipment.get(k, null)
+		var has := worn != null and not worn.is_empty()
+		view.show_item(worn.item_id if has else &"", 1)
+		view.tooltip_text = ""
+		view.set_selected(k == _selected_equip)
+		view.modulate = Color.WHITE if has else Color(1, 1, 1, 0.7)
+	if _preview_model != null:
+		_preview_model.apply_equipment(inv)
 
 
-func _refresh_inspector(inv: Inventory) -> void:
-	for c in _inspect_actions.get_children():
-		c.queue_free()
-	if _selected_slot_idx < 0 or _selected_slot_idx >= inv.capacity:
-		_inspect_icon.texture = null
-		_inspect_title.text = "Select an item"
-		_inspect_desc.text = "Click any slot to inspect, move to hotbar, or equip."
+func _ensure_preview() -> void:
+	if _preview_model != null or _preview_vp == null or player == null:
+		if _preview_model != null and player != null and player.get("customizer") != null:
+			_preview_model.apply_customizer(player.customizer)
 		return
-	var slot: ItemSlot = inv.slots[_selected_slot_idx]
-	if slot.is_empty():
-		_inspect_icon.texture = null
-		_inspect_title.text = ("Hotbar Slot %d (Empty)" % (_selected_slot_idx + 1)) if _selected_slot_idx < Inventory.MAX_HOTBAR_SLOTS else "Empty Slot"
-		_inspect_desc.text = "Click an item and click here, or press 1-8 while hovering an item to assign it to the hotbar."
+	_preview_model = CharacterModel.new()
+	_preview_model.rotation.y = 0.45
+	_preview_vp.add_child(_preview_model)
+	var cust: CharacterCustomizer = player.get("customizer")
+	_preview_model.setup(Palette.COAT_A, Palette.HAT_A, cust)
+
+
+## Fills the stats table; `preview` (from Inventory.preview_stats) adds green/red changes.
+func _update_stats(preview: Dictionary) -> void:
+	if player == null or _stat_values.is_empty():
 		return
-
-	var def: ItemDef = ItemDB.get_item(slot.item_id)
-	_inspect_icon.texture = ItemIcons.for_item(slot.item_id)
-	_inspect_title.text = "%s (x%d)" % [def.name if def else String(slot.item_id), slot.count]
-
-	var lines: Array[String] = []
-	if def != null:
-		var cat_names := ["Material", "Food", "Tool / Weapon", "Equipment", "Blueprint", "Special"]
-		lines.append("Category: %s" % cat_names[clampi(def.category, 0, cat_names.size() - 1)])
-		if def.has_tag("hammer"):
-			lines.append("Equippable in Hotbar · Unlocks Hammer Build Menu")
-		elif def.has_tag("pickaxe"):
-			lines.append("Harvest Tool: Excavates terrain voxels and ores.")
-		elif def.has_tag("fishing_rod"):
-			lines.append("Angling Tool: Cast into tidal waters to catch fish.")
-		elif def.has_tag("hoe"):
-			lines.append("Farming Tool: Tills soil, waters crops, and harvests plots.")
-		elif not def.weapon_data.is_empty():
-			lines.append("Damage: %d  ·  Reach: %.1fm" % [int(def.weapon_data.get("damage", 10)), float(def.weapon_data.get("reach_m", 2.0))])
-		elif not def.armor_data.is_empty():
-			lines.append("Slot: %s  ·  Defense: +%d" % [String(def.equip_slot).capitalize(), int(def.armor_data.get("defense", 0))])
-		elif not def.food_data.is_empty():
-			lines.append("Nourishment: +%d HP, +%d Stamina" % [int(def.food_data.get("hp_bonus", 0)), int(def.food_data.get("stamina_bonus", 0))])
-		elif def.is_voxel():
-			lines.append("Buildable Block: Place directly from hotbar or via Hammer.")
-	_inspect_desc.text = "\n".join(lines)
-
-	# Action buttons for selected slot
-	if _selected_slot_idx >= Inventory.MAX_HOTBAR_SLOTS:
-		var hb_btn := Button.new()
-		hb_btn.text = "To Hotbar"
-		hb_btn.pressed.connect(func() -> void:
-			inv.move_to_hotbar(_selected_slot_idx)
-			player._sync_tool_from_hotbar()
-			refresh()
-		)
-		_inspect_actions.add_child(hb_btn)
-	else:
-		var bag_btn := Button.new()
-		bag_btn.text = "To Bag"
-		bag_btn.pressed.connect(func() -> void:
-			inv.quick_transfer_slot(_selected_slot_idx)
-			player._sync_tool_from_hotbar()
-			refresh()
-		)
-		_inspect_actions.add_child(bag_btn)
-
-	if def != null and def.equip_slot != &"":
-		var eq_btn := Button.new()
-		eq_btn.text = "Equip"
-		eq_btn.pressed.connect(func() -> void:
-			inv.equip_item_from_slot(_selected_slot_idx)
-			refresh()
-		)
-		_inspect_actions.add_child(eq_btn)
-
-	if def != null and def.category == ItemDef.Category.FOOD:
-		var eat_btn := Button.new()
-		eat_btn.text = "Eat"
-		eat_btn.disabled = not player.vitality.can_eat_food(def.id)
-		if player.vitality.is_full_of(def.id):
-			eat_btn.text = "Full · %d min" % maxi(1, ceili(player.vitality.reeat_wait_sec(def.id) / 60.0))
-		eat_btn.pressed.connect(func() -> void:
-			if player.vitality.eat_food(def.id, inv):
-				if player.hud:
-					player.hud.show_toast("Ate %s" % def.name)
-				refresh()
-		)
-		_inspect_actions.add_child(eat_btn)
-
-	# Drop buttons
-	var drop_row := HBoxContainer.new()
-	drop_row.add_theme_constant_override("separation", 6)
-	_inspect_actions.add_child(drop_row)
-
-	var drop_one_btn := Button.new()
-	drop_one_btn.text = "Drop 1"
-	drop_one_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	drop_one_btn.pressed.connect(func() -> void:
-		if player != null and _selected_slot_idx >= 0:
-			player.drop_item_from_inventory(_selected_slot_idx, 1)
-			if _selected_slot_idx >= inv.capacity or inv.slots[_selected_slot_idx].is_empty():
-				_selected_slot_idx = -1
-			refresh()
-	)
-	drop_row.add_child(drop_one_btn)
-
-	var drop_all_btn := Button.new()
-	drop_all_btn.text = "Drop All"
-	drop_all_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	drop_all_btn.pressed.connect(func() -> void:
-		if player != null and _selected_slot_idx >= 0:
-			player.drop_item_from_inventory(_selected_slot_idx, -1)
-			_selected_slot_idx = -1
-			refresh()
-	)
-	drop_row.add_child(drop_all_btn)
+	var now: Dictionary = player.inventory.gear_stats()
+	var after: Dictionary = preview.get("after", {})
+	for s: Array in STAT_ROWS:
+		var key: String = s[0]
+		(_stat_values[key] as Label).text = stat_text(key, float(now[key]))
+		var dl: Label = _stat_deltas[key]
+		dl.text = ""
+		if not after.is_empty():
+			var txt := stat_delta_text(key, float(now[key]), float(after[key]))
+			dl.text = txt
+			dl.add_theme_color_override("font_color", COL_UP if float(after[key]) > float(now[key]) else COL_DOWN)
 
 
-func _get_nearby_stations() -> Array[StationEntity]:
-	var out: Array[StationEntity] = []
-	if active_station != null and is_instance_valid(active_station):
-		out.append(active_station)
-	if player != null and player.entities != null:
-		for ent in player.entities.entities.values():
-			if ent is StationEntity and is_instance_valid(ent) and not out.has(ent):
-				if ent.global_position.distance_to(player.global_position) <= 4.8:
-					out.append(ent)
+## Lines comparing an item to what's worn in its slot: [[text, better?], ...].
+func compare_lines(item_id: StringName) -> Array:
+	var pv := player.inventory.preview_stats(item_id) if player != null else {}
+	var out: Array = []
+	if pv.is_empty():
+		return out
+	var before: Dictionary = pv["before"]
+	var after: Dictionary = pv["after"]
+	for s: Array in STAT_ROWS:
+		var key: String = s[0]
+		var txt := stat_delta_text(key, float(before[key]), float(after[key]))
+		if txt != "":
+			out.append(["%s %s" % [s[1], txt], float(after[key]) > float(before[key])])
 	return out
 
 
-func _refresh_hand_crafting(inv: Inventory) -> void:
-	for c in _craft_list.get_children():
+## Short fact lines about an item (damage, defense, food...).
+static func item_facts(def: ItemDef) -> Array[String]:
+	var out: Array[String] = []
+	if def == null:
+		return out
+	var tier := int(def.tool_data.get("tier", 0))
+	if def.has_tag("pickaxe"):
+		out.append("Mines stone and ores")
+	elif def.has_tag("axe"):
+		out.append("Fells trees, more logs per tree")
+	elif def.has_tag("shovel"):
+		out.append("Digs dirt, sand and gravel")
+	elif def.has_tag("hammer"):
+		out.append("Opens the build menu")
+	elif def.has_tag("hoe"):
+		out.append("Tills soil and harvests crops")
+	elif def.has_tag("fishing_rod"):
+		out.append("Cast into open water to fish")
+	if tier > 0:
+		out.append("Tier %d" % tier)
+	if not def.weapon_data.is_empty():
+		out.append("Damage %d  ·  reach %.1f m" % [int(def.weapon_data.get("damage", 10)),
+			float(def.weapon_data.get("reach_m", def.weapon_data.get("reach", 2.0)))])
+	var a := def.armor_data
+	if a.has("defense"):
+		out.append("Defense +%d" % int(a["defense"]))
+	if a.has("cold_protection"):
+		out.append("Cold protection +%d%%" % roundi(float(a["cold_protection"]) * 100.0))
+	if a.has("max_safe_depth_m"):
+		out.append("Safe to %d m deep" % roundi(float(a["max_safe_depth_m"])))
+	if a.has("extra_breath_sec"):
+		out.append("+%d s breath" % roundi(float(a["extra_breath_sec"])))
+	if a.has("swim_speed_mult"):
+		out.append("Swim speed %s" % swim_speed_text(float(a["swim_speed_mult"])))
+	if def.equip_slot == &"backpack" and def.tool_data.has("capacity"):
+		out.append("%d bag slots" % int(def.tool_data["capacity"]))
+	if not def.food_data.is_empty():
+		var hp := int(def.food_data.get("hp_bonus", 0))
+		var st := int(def.food_data.get("stamina_bonus", 0))
+		if hp > 0 or st > 0:
+			out.append("+%d health, +%d stamina" % [hp, st])
+	if def.is_voxel():
+		out.append("Placeable block")
+	return out
+
+
+static func category_line(def: ItemDef) -> String:
+	var cat: String = CATEGORY_NAMES[clampi(def.category, 0, CATEGORY_NAMES.size() - 1)]
+	if def.equip_slot != &"":
+		cat += "  ·  worn on %s" % _equip_label(&"body" if def.equip_slot == &"chest" else def.equip_slot).to_lower()
+	return cat
+
+
+func _clear(node: Node) -> void:
+	for c in node.get_children():
+		node.remove_child(c)
 		c.queue_free()
-	if _station_tabs_box != null:
-		_station_tabs_box.visible = true
-		for c in _station_tabs_box.get_children():
-			c.queue_free()
 
-	var nearby_stations := _get_nearby_stations()
-	var nearby_tags: Dictionary = {&"none": true}
-	for st: StationEntity in nearby_stations:
-		nearby_tags[st.station_tag] = st
 
-	# Station selector tabs: Hand Craft + any nearby stations + All Stations
-	var tab_defs: Array = [[&"none", "Hand Craft"]]
-	var seen_tags: Dictionary = {&"none": true}
-	for st: StationEntity in nearby_stations:
-		if not seen_tags.has(st.station_tag):
-			seen_tags[st.station_tag] = true
-			var sname: String = RecipeDB.STATION_NAMES.get(st.station_tag, st.entity_name)
-			tab_defs.append([st.station_tag, sname])
-	tab_defs.append([&"all", "All Stations"])
+func _refresh_detail() -> void:
+	_clear(_detail)
+	var inv: Inventory = player.inventory
+	var item_id: StringName = &""
+	var count := 0
+	var worn := false
+	if _selected_equip != &"":
+		var es: ItemSlot = inv.equipment.get(_selected_equip, null)
+		if es != null and not es.is_empty():
+			item_id = es.item_id
+			count = 1
+			worn = true
+	elif _selected_slot_idx >= 0 and _selected_slot_idx < inv.capacity and not inv.slots[_selected_slot_idx].is_empty():
+		item_id = inv.slots[_selected_slot_idx].item_id
+		count = inv.slots[_selected_slot_idx].count
+	if item_id == &"":
+		_detail.add_child(_ink("Nothing selected", 18, true))
+		var hint := _ink("Click an item to see what it does. Hover gear to compare it with what you're wearing.", 14, false, COL_MUTED)
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(hint)
+		return
+	var def: ItemDef = ItemDB.get_item(item_id)
 
-	if _station_tab != &"all" and not seen_tags.has(_station_tab):
-		_station_tab = &"none"
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	_detail.add_child(head)
+	var icon := ItemSlotView.new(44).set_padding(SLOT_PAD).show_item(item_id, count)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(icon)
+	var hv := VBoxContainer.new()
+	hv.add_theme_constant_override("separation", -2)
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hv)
+	var title := _ink(ItemSlotView.item_name(item_id), 18, true)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hv.add_child(title)
+	if def != null:
+		hv.add_child(_ink(("Worn  ·  " if worn else "") + category_line(def), 12, false, COL_MUTED))
 
-	if _station_tabs_box != null:
-		for pair: Array in tab_defs:
-			var tag: StringName = pair[0]
-			var label_txt: String = pair[1]
-			var b := Button.new()
-			b.text = label_txt
-			b.toggle_mode = true
-			b.button_pressed = (_station_tab == tag)
-			b.add_theme_font_size_override("font_size", 14)
-			b.pressed.connect(func() -> void:
-				_station_tab = tag
-				refresh()
-			)
-			_station_tabs_box.add_child(b)
+	if def != null and def.description != "":
+		var d := _ink(def.description, 13)
+		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(d)
+	var facts := item_facts(def)
+	if not facts.is_empty():
+		var fl := _ink("\n".join(facts), 13)
+		fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(fl)
 
-	if _station_tab == &"all":
-		_right_sub_title.text = "All Crafting Stations"
+	# Compared with what you wear now (skipped when the slot is empty: the facts above say it all).
+	var vs: StringName = inv.preview_stats(item_id).get("worn", &"") if (not worn and def != null) else &""
+	if vs != &"":
+		var lines := compare_lines(item_id)
+		_detail.add_child(_ink("Instead of your %s:" % ItemSlotView.item_name(vs), 13, true, COL_MUTED))
+		if lines.is_empty():
+			_detail.add_child(_ink("No change to your stats", 13, false, COL_MUTED))
+		for ln: Array in lines:
+			_detail.add_child(_ink(ln[0], 13, true, COL_UP if ln[1] else COL_DOWN))
+
+	var acts := HFlowContainer.new()
+	acts.add_theme_constant_override("h_separation", 4)
+	acts.add_theme_constant_override("v_separation", 4)
+	_detail.add_child(acts)
+	if worn:
+		_action(acts, "Unequip", func() -> void:
+			if not inv.unequip_item(_selected_equip):
+				_toast("No room in your bag.")
+			_selected_equip = &""
+			refresh())
+		return
+	var idx := _selected_slot_idx
+	if def != null and def.equip_slot != &"":
+		_action(acts, "Equip", func() -> void:
+			inv.equip_item_from_slot(idx)
+			refresh())
+	if def != null and def.category == ItemDef.Category.FOOD:
+		var full: bool = player.vitality.is_full_of(def.id)
+		var b := _action(acts, ("Full · %d min" % maxi(1, ceili(player.vitality.reeat_wait_sec(def.id) / 60.0))) if full else "Eat",
+			func() -> void:
+				if player.vitality.eat_food(def.id, inv):
+					_toast("Ate %s" % def.name)
+				refresh())
+		b.disabled = not player.vitality.can_eat_food(def.id)
+	if idx >= Inventory.MAX_HOTBAR_SLOTS:
+		_action(acts, "To hotbar", func() -> void:
+			inv.move_to_hotbar(idx)
+			player._sync_tool_from_hotbar()
+			refresh())
 	else:
-		_right_sub_title.text = String(RecipeDB.STATION_NAMES.get(_station_tab, "Crafting"))
+		_action(acts, "To bag", func() -> void:
+			inv.quick_transfer_slot(idx)
+			player._sync_tool_from_hotbar()
+			refresh())
+	_action(acts, "Drop 1", func() -> void:
+		player.drop_item_from_inventory(idx, 1)
+		refresh())
+	if count > 1:
+		_action(acts, "Drop all", func() -> void:
+			player.drop_item_from_inventory(idx, -1)
+			refresh())
 
-	var recipes: Array[RecipeDef] = []
-	if _station_tab == &"all":
-		recipes = RecipeDB.get_all_recipes()
+
+func _action(parent: Control, text: String, cb: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 15)
+	b.pressed.connect(cb)
+	parent.add_child(b)
+	return b
+
+
+## "N things you can make" summary that links to the Crafting page.
+func _refresh_craft_card(inv: Inventory) -> void:
+	var ready_n := 0
+	var names: Array[String] = []
+	for r: RecipeDef in RecipeDB.get_station_exclusive_recipes(&"none"):
+		if (player.recipes == null or player.recipes.knows(r.id)) and r.can_craft_with(inv):
+			ready_n += 1
+			if names.size() < 3:
+				names.append(r.name)
+	if ready_n == 0:
+		_craft_card_lbl.text = "Nothing to make by hand with what you're carrying. Stations like the workbench and campfire have more."
 	else:
-		recipes = RecipeDB.get_station_exclusive_recipes(_station_tab)
-
-	# Recipe unlocks (RecipeBook): only show what this player has learned.
-	var hidden_count := 0
-	if player != null and player.recipes != null:
-		var known_only: Array[RecipeDef] = []
-		for rr: RecipeDef in recipes:
-			if player.recipes.knows(rr.id):
-				known_only.append(rr)
-			else:
-				hidden_count += 1
-		recipes = known_only
-
-	var active_st_ent: StationEntity = nearby_tags.get(_station_tab, null) if _station_tab != &"none" and _station_tab != &"all" else null
-	if active_st_ent != null and active_st_ent.is_fire_station():
-		var fuel_box := HBoxContainer.new()
-		fuel_box.add_theme_constant_override("separation", 8)
-		_craft_list.add_child(fuel_box)
-
-		var fuel_lbl := Label.new()
-		fuel_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var rem_sec := int(ceil(active_st_ent.station.fuel_remaining_sec))
-		if rem_sec > 0:
-			fuel_lbl.text = "Fire Lit: %ds / %ds charge" % [rem_sec, int(CraftingStation.MAX_FUEL_SEC)]
-			fuel_lbl.add_theme_color_override("font_color", Color(0.85, 0.35, 0.08))
-		else:
-			fuel_lbl.text = "Fire Out — Recharge with wood to cook"
-			fuel_lbl.add_theme_color_override("font_color", Color(0.65, 0.18, 0.15))
-		fuel_lbl.add_theme_font_size_override("font_size", 14)
-		fuel_box.add_child(fuel_lbl)
-
-		var stoke_btn := Button.new()
-		stoke_btn.text = "Recharge Fire (+Wood)"
-		stoke_btn.disabled = not CraftingStation.has_any_fuel(inv) or active_st_ent.station.fuel_remaining_sec >= CraftingStation.MAX_FUEL_SEC - 1.0
-		stoke_btn.pressed.connect(func() -> void:
-			active_st_ent.recharge_fire(player)
-			refresh()
-		)
-		fuel_box.add_child(stoke_btn)
-
-		var sep := HSeparator.new()
-		_craft_list.add_child(sep)
-
-	for r: RecipeDef in recipes:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		_craft_list.add_child(row)
-
-		var ic := UiTheme.icon(ItemIcons.for_item(r.output_item_id), 32)
-		row.add_child(ic)
-
-		var info_v := VBoxContainer.new()
-		info_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info_v.add_theme_constant_override("separation", 1)
-		row.add_child(info_v)
-
-		var title := Label.new()
-		title.text = "%s%s" % [r.name, (" x%d" % r.output_count) if r.output_count > 1 else ""]
-		title.theme_type_variation = &"InkLabel"
-		title.add_theme_font_size_override("font_size", 14)
-		info_v.add_child(title)
-
-		var cost_parts: Array[String] = []
-		for inp: Dictionary in r.inputs:
-			var iid := StringName(inp["item_id"])
-			var req := int(inp["count"])
-			var idef := ItemDB.get_item(iid)
-			cost_parts.append("%d %s" % [req, idef.name if idef else String(iid)])
-		if _station_tab == &"all" and r.required_station != &"none":
-			var req_st_name: String = RecipeDB.STATION_NAMES.get(r.required_station, String(r.required_station))
-			cost_parts.append("[%s]" % req_st_name)
-		var sub := Label.new()
-		sub.text = ", ".join(cost_parts)
-		sub.theme_type_variation = &"InkLabel"
-		sub.add_theme_font_size_override("font_size", 14)
-		info_v.add_child(sub)
-
-		var st_for_rec: StationEntity = nearby_tags.get(r.required_station, null) if r.required_station != &"none" else null
-		var station_available: bool = (r.required_station == &"none") or (st_for_rec != null)
-		var fuel_ok: bool = (st_for_rec == null) or st_for_rec.station.is_fueled()
-		var can_make := station_available and fuel_ok and r.can_craft_with(inv)
-		var btn := Button.new()
-		if not station_available:
-			btn.text = "Need Station"
-		elif not fuel_ok:
-			btn.text = "Need Fuel"
-		else:
-			btn.text = "Craft"
-		btn.disabled = not can_make
-		btn.pressed.connect(func() -> void:
-			_craft_station_recipe(r, inv, nearby_tags)
-		)
-		row.add_child(btn)
-
-	if hidden_count > 0:
-		var hint := Label.new()
-		hint.theme_type_variation = &"InkLabel"
-		hint.add_theme_font_size_override("font_size", 14)
-		hint.add_theme_color_override("font_color", Color8(120, 92, 70))
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-		hint.text = "%d more recipe%s to discover: find new ingredients, recruit drifters, finish quests, or buy recipe scrolls." % [
-			hidden_count, "" if hidden_count == 1 else "s"]
-		_craft_list.add_child(hint)
+		_craft_card_lbl.text = "You can make %d thing%s by hand right now: %s%s" % [
+			ready_n, "" if ready_n == 1 else "s", ", ".join(names), " and more." if ready_n > names.size() else "."]
 
 
-func _craft_station_recipe(r: RecipeDef, inv: Inventory, nearby_tags: Dictionary) -> void:
-	if r.required_station == &"none":
-		if _field_station.craft_recipe(r.id, inv):
-			if player.hud:
-				player.hud.show_toast("Crafted %s!" % r.name)
-			player.quest_event(QuestDef.ObjectiveType.CRAFT_ITEM, r.output_item_id)
-			refresh()
+# -------------------------------------------------------------------------
+# Hover card
+# -------------------------------------------------------------------------
+
+func _show_hover_label(item_id: StringName, count: int, prefix: String = "", worn := false) -> void:
+	if _hover_panel == null or item_id == &"":
+		_hide_hover_label()
 		return
-	var st_ent: StationEntity = nearby_tags.get(r.required_station, null)
-	if st_ent == null:
-		return
-	if st_ent.station.requires_fuel and not st_ent.station.is_fueled():
-		if player.hud:
-			player.hud.show_toast("%s is out! Recharge the fire with wood first." % st_ent.entity_name)
-		refresh()
-		return
-	# Consume inputs and deliver output directly for responsive UI crafting
-	if not r.can_craft_with(inv):
-		return
-	for inp: Dictionary in r.inputs:
-		inv.remove_item(StringName(inp["item_id"]), int(inp["count"]))
-	inv.add_item(r.output_item_id, r.output_count)
-	if st_ent.station.requires_fuel:
-		st_ent.station.fuel_remaining_sec = maxf(0.0, st_ent.station.fuel_remaining_sec - minf(st_ent.station.fuel_remaining_sec, maxf(3.0, r.craft_time_sec * 0.5)))
-		st_ent._update_fire_visuals(0.0)
-	st_ent.recipe_crafted.emit(r.id, 1)
-	player.quest_event(QuestDef.ObjectiveType.CRAFT_ITEM, r.output_item_id)
-	if player.hud:
-		player.hud.show_toast("Crafted %s at %s!" % [r.name, st_ent.entity_name])
-	refresh()
+	var def: ItemDef = ItemDB.get_item(item_id)
+	var title := ItemSlotView.item_name(item_id) + ((" x%d" % count) if count > 1 else "")
+	if prefix != "":
+		title = "%s: %s" % [prefix, title]
+	var sub := ""
+	if def != null:
+		var facts := item_facts(def)
+		sub = category_line(def) + (("  ·  " + facts[0]) if not facts.is_empty() else "")
+	_fill_hover(title, sub, [] if worn else compare_lines(item_id))
 
 
-func _refresh_container() -> void:
-	for c in _container_grid.get_children():
-		c.queue_free()
-	if active_container == null or not is_instance_valid(active_container):
-		return
-	var cinv: Inventory = active_container.container.inventory
-	for i in cinv.capacity:
-		var slot: ItemSlot = cinv.slots[i]
-		var p := PanelContainer.new()
-		p.theme_type_variation = &"SlotSelected" if not slot.is_empty() else &"Slot"
-		p.custom_minimum_size = Vector2(52, 52)
-		p.mouse_filter = Control.MOUSE_FILTER_STOP
-		var box := Control.new()
-		box.custom_minimum_size = Vector2(40, 40)
-		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		p.add_child(box)
-		if not slot.is_empty():
-			var ic := UiTheme.icon(ItemIcons.for_item(slot.item_id), 38)
-			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			box.add_child(ic)
-			if slot.count > 1:
-				var cnt := Label.new()
-				cnt.text = str(slot.count)
-				cnt.theme_type_variation = &"KeyLabel"
-				cnt.add_theme_font_size_override("font_size", 12)
-				cnt.position = Vector2(18, 22)
-				cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				box.add_child(cnt)
-		p.gui_input.connect(func(ev: InputEvent) -> void:
-			if ev is InputEventMouseButton and ev.pressed and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-				_withdraw_from_container(i)
-		)
-		p.mouse_entered.connect(func() -> void:
-			p.theme_type_variation = &"SlotSelected"
-			p.self_modulate = Color(1.08, 1.04, 0.94)
-			if not slot.is_empty():
-				_show_hover_label(slot.item_id, slot.count)
-			else:
-				_hide_hover_label()
-		)
-		p.mouse_exited.connect(func() -> void:
-			p.theme_type_variation = &"SlotSelected" if not slot.is_empty() else &"Slot"
-			p.self_modulate = Color.WHITE
-			_hide_hover_label()
-		)
-		_container_grid.add_child(p)
+func _show_hover_text(title: String, sub: String) -> void:
+	_fill_hover(title, sub, [])
 
 
-func _deposit_slot_to_container(slot_idx: int) -> void:
-	if active_container == null or player == null:
-		return
-	var slot: ItemSlot = player.inventory.slots[slot_idx]
-	if slot.is_empty() or not active_container.container.can_accept_item(slot.item_id):
-		return
-	var item_id := slot.item_id
-	var count := slot.count
-	if active_container.manager != null:
-		var removed := player.inventory.remove_item(item_id, count)
-		if removed > 0:
-			active_container.manager.request_action(active_container, &"deposit", {"item": item_id, "n": removed})
-	else:
-		var rem := active_container.container.deposit(item_id, count)
-		var transferred := count - rem
-		if transferred > 0:
-			player.inventory.remove_item(item_id, transferred)
-	refresh()
+func _fill_hover(title: String, sub: String, lines: Array) -> void:
+	_clear(_hover_box)
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_override("font", UiTheme.font(800))
+	t.add_theme_font_size_override("font_size", 15)
+	_hover_box.add_child(t)
+	if sub != "":
+		var s := Label.new()
+		s.text = sub
+		s.theme_type_variation = &"Small"
+		s.add_theme_font_size_override("font_size", 13)
+		_hover_box.add_child(s)
+	for ln: Array in lines:
+		var l := Label.new()
+		l.text = ln[0]
+		l.add_theme_font_size_override("font_size", 13)
+		l.add_theme_color_override("font_color", Color8(150, 226, 160) if ln[1] else Color8(240, 130, 110))
+		_hover_box.add_child(l)
+	_hover_panel.reset_size()
+	_hover_panel.visible = true
+	var anchor := _pointer_pos()
+	_hover_panel.position = anchor + Vector2(18.0, 18.0)
 
 
-func _withdraw_from_container(cont_slot_idx: int) -> void:
-	if active_container == null or player == null:
-		return
-	var cslot: ItemSlot = active_container.container.inventory.slots[cont_slot_idx]
-	if cslot.is_empty():
-		return
-	if active_container.manager != null:
-		active_container.manager.request_action(active_container, &"take", {})
-	else:
-		var item_id := cslot.item_id
-		var amt := cslot.count
-		var rem := player.inventory.add_item(item_id, amt)
-		var taken := amt - rem
-		if taken > 0:
-			active_container.container.withdraw(item_id, taken)
-	refresh()
+func _hide_hover_label() -> void:
+	if _hover_panel != null:
+		_hover_panel.visible = false

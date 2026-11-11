@@ -28,6 +28,7 @@ var active_construction_site: ConstructionSiteEntity = null ## Active building p
 ## Town conditions, measured by VillageManager (authority) every few seconds:
 var food_kinds := 0                         ## distinct foods in the depot and pantry barrels
 var safety := 0.5                           ## 0..1: lanterns, the harbour bell
+var cook_orders := CookOrders.new()         ## meals the village cook keeps in store
 var _morale_t := 0.0
 
 
@@ -323,7 +324,8 @@ func serialize() -> Dictionary:
 		"safety": safety,
 		"rooms": r_data,
 		"drifters": d_data,
-		"depot": town_depot.serialize()
+		"depot": town_depot.serialize(),
+		"cook_orders": cook_orders.serialize()
 	}
 
 
@@ -349,3 +351,4 @@ func deserialize(data: Dictionary) -> void:
 
 	if data.has("depot"):
 		town_depot.deserialize(data["depot"])
+	cook_orders.deserialize(data.get("cook_orders", {}))

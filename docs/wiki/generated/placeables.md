@@ -54,6 +54,16 @@ Build these with the Blueprints tool (pays the cost from your pack) or craft the
 | Tidal Oyster Rack | 6 Wood Plank, 4 Kelp Fronds, 2 Limestone | between the tide lines |
 | Mangrove Beehive | 8 Wood Plank, 1 Marsh Honey, 4 Forest Foliage | on the ground |
 | Communal Banquet Table | 12 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | on the ground |
+| Community Stockpile Chest | 14 Wood Plank, 8 Driftwood, 2 Sea-Brass Ingot | on the ground |
+| House Construction Site | 4 Driftwood, 2 Wood Plank | on the ground |
+| Town Notice Board | 8 Wood Plank, 4 Driftwood, 1 Polished Sea Glass | on the ground |
+| Village Market Stall | 10 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | on the ground |
+| Farmer's Seed Stand | 4 Wood Plank, 2 Shore Wheat Seed | on the ground |
+| Rancher's Hitching Post | 4 Driftwood, 2 Wood Plank | on the ground |
+| Fisher's Tackle Bench | 4 Wood Plank, 2 Driftwood | on the ground |
+| Sawyer's Sawhorse | 4 Driftwood, 2 Wood Plank | on the ground |
+| Harbor Slipway Dry-Dock | 18 Wood Plank, 4 Iron Ingot, 8 Driftwood | between the tide lines |
+| Sea-Reaver Outpost Dock | 12 Wood Plank, 8 Driftwood, 1 Sea-Reaver War Crest | between the tide lines |
 
 ## Voxel blueprints
 
@@ -74,4 +84,7 @@ Prefab structures placed with the Blueprints tool. Size is in voxels (0.18 m).
 | Drying Rack | 13 x 15 x 3 |
 | Rowboat | 8 x 6 x 20 |
 | Pen Fence | 12 x 7 x 1 |
+| Stone Foundation | 12 x 2 x 12 |
+| Timber Foundation | 12 x 2 x 12 |
+| Large Stone Foundation | 24 x 2 x 24 |
 

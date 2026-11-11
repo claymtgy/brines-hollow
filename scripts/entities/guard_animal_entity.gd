@@ -211,18 +211,52 @@ func _process(dt: float) -> void:
 
 # ---------------------------------------------------------------- interaction
 
-func get_interaction_prompt(_player: Player) -> String:
+func get_interaction_prompt(player: Player) -> String:
 	var does := "keeps foxes, stoats and rats off" if is_dog() else "keeps rats out of the stores"
+	if player != null and player.inventory != null:
+		var slot := player.inventory.get_active_item()
+		if slot != null and not slot.is_empty():
+			var def := ItemDB.get_item(slot.item_id)
+			if def != null and def.has_tag("fish"):
+				return "F  Feed %s delicious %s  ·  hold F to pick up" % [pet_name, def.name]
 	return "F  Give %s a fuss (%s within %d m)  ·  hold F to pick up" % [pet_name, does, int(guard_radius())]
 
 
 func client_interact(player: Player) -> void:
 	interacted.emit(player)
-	if player != null and player.hud != null:
+	if player == null or player.hud == null:
+		return
+
+	# Feeding pet with fish in hand
+	var fed := false
+	if player.inventory != null:
+		var slot := player.inventory.get_active_item()
+		if slot != null and not slot.is_empty():
+			var def := ItemDB.get_item(slot.item_id)
+			if def != null and def.has_tag("fish"):
+				player.inventory.remove_item(slot.item_id, 1)
+				fed = true
+				if is_dog():
+					player.hud.show_toast("Fed %s! He chomps it down and barks happily. (+Stamina Regen)" % pet_name)
+					CombatAudio.play_sound("tame_chime", position)
+					if player.vitality != null:
+						player.vitality.current_stamina = player.vitality.get_max_stamina()
+				else:
+					player.hud.show_toast("Fed %s! She purrs deeply and rubs your shins. (+Cat's Grace)" % pet_name)
+					CombatAudio.play_sound("tame_chime", position)
+				# Boost village morale
+				var em := EntityManager.current
+				if em != null and em.main != null and em.main.get("village") != null:
+					var v = em.main.village
+					if v != null and v.has_method("add_morale"):
+						v.add_morale(10.0)
+
+	if not fed:
 		if is_dog():
-			player.hud.show_toast("%s thumps its tail and rolls over for a belly rub." % pet_name)
+			player.hud.show_toast("%s thumps its tail and rolls over for a belly rub. ♥" % pet_name)
 		else:
-			player.hud.show_toast("%s purrs and kneads the cushion." % pet_name)
+			player.hud.show_toast("%s purrs warmly and kneads the cushion. ♥" % pet_name)
+
 
 
 func serialize() -> Dictionary:

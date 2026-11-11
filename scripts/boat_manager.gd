@@ -74,9 +74,11 @@ func _spawn_initial() -> void:
 	for sp: Dictionary in spots:
 		var bid := _next_id
 		_next_id += 1
-		_create(bid, sp.pos, sp.yaw)
+		var kind: int = sp.get("kind", Boat.KIND_ROWBOAT)
+		var b := _create(bid, sp.pos, sp.yaw, kind)
+		b.is_world_spawn = true
 		if main.is_net:
-			spawn_boat.rpc(bid, sp.pos, sp.yaw)
+			spawn_boat.rpc(bid, sp.pos, sp.yaw, kind)
 	print("[boat] spawned %d boat(s)" % spots.size())
 	_spawn_saved()
 
@@ -125,7 +127,8 @@ func _create(bid: int, pos: Vector3, yaw: float, kind := Boat.KIND_ROWBOAT) -> B
 
 @rpc("authority", "call_remote", "reliable")
 func spawn_boat(bid: int, pos: Vector3, yaw: float, kind := 0) -> void:
-	_create(bid, pos, yaw, kind)
+	var b := _create(bid, pos, yaw, kind)
+	b.is_world_spawn = true
 
 
 # ---------------------------------------------------------------- launching a skiff
@@ -322,7 +325,7 @@ var _fleet_registered := false
 func _save_fleet() -> Variant:
 	var out: Array = []
 	for b: Boat in boats.values():
-		if b.kind == Boat.KIND_ROWBOAT:
+		if b.is_world_spawn or b.kind == Boat.KIND_ROWBOAT:
 			continue
 		out.append({
 			"kind": b.kind,

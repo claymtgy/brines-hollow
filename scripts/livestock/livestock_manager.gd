@@ -104,6 +104,7 @@ func spawn_starter_livestock() -> void:
 
 ## Called when the player sounds the Shepherd's Whistle
 func sound_whistle(origin: Vector3) -> int:
+	CombatAudio.play_sound("animal_whistle", origin)
 	var alerted := 0
 	for a in animals:
 		if a.position.distance_to(origin) <= WHISTLE_RANGE:

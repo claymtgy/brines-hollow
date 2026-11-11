@@ -19,6 +19,7 @@ const TEAL := Color8(150, 236, 220)
 const HEALTH := Color8(222, 92, 78)
 const STAMINA := Color8(240, 196, 70)
 const FOOD := Color8(150, 196, 110)
+const SELECTED_TINT := Color(1.3, 1.02, 0.55)
 
 static var _theme: Theme
 static var _font: FontFile
@@ -113,14 +114,18 @@ static func get_theme() -> Theme:
 	for kind in ["Button", "OptionButton", "MenuButton"]:
 		t.set_stylebox("normal", kind, box("button", 7, 22, 10))
 		t.set_stylebox("hover", kind, box("button_hover", 7, 22, 10))
-		t.set_stylebox("pressed", kind, box("button_pressed", 7, 22, 10))
+		# Pressed doubles as "selected" for toggle buttons (page tabs, filters): a warm
+		# brass tint and brass text so the current tab reads at a glance.
+		t.set_stylebox("pressed", kind, box("button_pressed", 7, 22, 10, SELECTED_TINT))
+		t.set_stylebox("hover_pressed", kind, box("button_pressed", 7, 22, 10, SELECTED_TINT.lightened(0.12)))
 		t.set_stylebox("disabled", kind, box("button_disabled", 7, 22, 10))
 		t.set_stylebox("focus", kind, box("focus", 7))
 		t.set_font(&"font", kind, font(700))
 		t.set_font_size("font_size", kind, 19)
 		t.set_color("font_color", kind, CREAM)
 		t.set_color("font_hover_color", kind, Color(1, 0.98, 0.9))
-		t.set_color("font_pressed_color", kind, CREAM_DIM)
+		t.set_color("font_pressed_color", kind, BRASS)
+		t.set_color("font_hover_pressed_color", kind, Color(1, 0.9, 0.62))
 		t.set_color("font_focus_color", kind, Color(1, 0.98, 0.9))
 		t.set_color("font_disabled_color", kind, Color(0.8, 0.78, 0.74, 0.7))
 		t.set_color("font_outline_color", kind, OUTLINE)

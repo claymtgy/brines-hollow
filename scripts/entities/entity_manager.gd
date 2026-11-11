@@ -44,6 +44,7 @@ var _scroll_deck: Array = []  # rare recipe scrolls still to deal out (RecipeBoo
 var hulk_stocked := false      # loose boulders above the Barnacled Hulk's strand
 var outposts_stocked := false  # a War Horn Totem and a strongbox in each Sea-Reaver outpost
 var under_stocked := false   # mine strongboxes, sump caches, springs, village wells (layout 2+)
+var calamity_stocked := false # strongboxes in sunken calamity galleons
 var sleeping_peers: Dictionary = {}  # peer_id (int) -> bed grid_coord (Vector3i)
 
 
@@ -461,7 +462,7 @@ func deserialize(data: Array) -> void:
 
 ## Session state hooks (saved in state.dat, sent to joining players).
 func save_state() -> Dictionary:
-	return {"list": serialize(), "starter_done": starter_done, "caves_stocked": caves_stocked, "camps_stocked": camps_stocked, "under_stocked": under_stocked, "wrecks_stocked": wrecks_stocked, "outposts_stocked": outposts_stocked, "hulk_stocked": hulk_stocked}
+	return {"list": serialize(), "starter_done": starter_done, "caves_stocked": caves_stocked, "camps_stocked": camps_stocked, "under_stocked": under_stocked, "wrecks_stocked": wrecks_stocked, "outposts_stocked": outposts_stocked, "hulk_stocked": hulk_stocked, "calamity_stocked": calamity_stocked}
 
 
 func load_state(d: Dictionary) -> void:
@@ -473,6 +474,7 @@ func load_state(d: Dictionary) -> void:
 	wrecks_stocked = bool(d.get("wrecks_stocked", false))
 	outposts_stocked = bool(d.get("outposts_stocked", false))
 	hulk_stocked = bool(d.get("hulk_stocked", false))
+	calamity_stocked = bool(d.get("calamity_stocked", false))
 
 
 ## Called by Main with the Session once both exist.
@@ -612,6 +614,28 @@ func _on_world_ready(_is_new: bool) -> void:
 		stock_outposts()
 	if is_authority() and not hulk_stocked:
 		stock_hulk()
+	if is_authority() and not calamity_stocked:
+		stock_calamity_galleons()
+
+
+## A captain's strongbox in each sunken calamity galleon on the deep seabed.
+func stock_calamity_galleons() -> void:
+	calamity_stocked = true
+	if main == null or main.world == null or main.world.gen == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(main.seed_value) ^ 0x7CA1
+	var placed := 0
+	for g: Dictionary in main.world.gen.calamity_galleons:
+		var ent := _place_at(&"barnacled_chest", g.chest as Vector3i, 0, 8)
+		if ent is ChestEntity:
+			(ent as ChestEntity).entity_name = "Calamity Armada Strongbox"
+			for it: Array in ChestEntity.calamity_galleon_loot(rng):
+				(ent as ChestEntity).container.inventory.add_item(it[0], it[1])
+			(ent as ChestEntity).container.inventory.add_item(_deal_scroll(), 1)
+			placed += 1
+	if not main.world.gen.calamity_galleons.is_empty():
+		print("[calamity] %d sunken galleons, %d strongboxes placed" % [main.world.gen.calamity_galleons.size(), placed])
 
 
 ## The loose boulders on the rocks above the Hulk's strand. Authority only, once.

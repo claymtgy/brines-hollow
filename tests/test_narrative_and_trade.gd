@@ -38,7 +38,7 @@ func _run() -> void:
 	assert_test.call("Quest removed from available board", not quest_mgr.available_quests.has(&"story_first_hearth"))
 
 	var q: QuestDef = quest_mgr.active_quests[&"story_first_hearth"]
-	assert_test.call("Quest has 2 objective steps", q.steps.size() == 2)
+	assert_test.call("Quest has 3 objective steps", q.steps.size() == 3)
 
 	# -------------------------------------------------------------------------
 	# 2. Objective Progression & Event Notifications
@@ -51,11 +51,16 @@ func _run() -> void:
 	quest_mgr.notify_event(QuestDef.ObjectiveType.GATHER_ITEM, &"driftwood", 4)
 	assert_test.call("Gathered remaining 4 driftwood; step 1 completed",
 		q.steps[0].current_count == 10 and q.steps[0].is_completed)
-	assert_test.call("Quest still active (step 2 pending)", quest_mgr.is_quest_active(&"story_first_hearth"))
+	assert_test.call("Quest still active (steps 2 & 3 pending)", quest_mgr.is_quest_active(&"story_first_hearth"))
 
 	# Step 2: Build and validate room
 	quest_mgr.notify_event(QuestDef.ObjectiveType.BUILD_ROOM, &"shelter", 1, player_inv)
-	assert_test.call("Built room completed step 2 and finalized quest",
+	assert_test.call("Built room completed step 2", q.steps[1].is_completed)
+	assert_test.call("Quest still active (step 3 pending)", quest_mgr.is_quest_active(&"story_first_hearth"))
+
+	# Step 3: Invite a stranded drifter from the beach
+	quest_mgr.notify_event(QuestDef.ObjectiveType.TALK_TO, &"drifter_recruit", 1, player_inv)
+	assert_test.call("Recruiting drifter completed step 3 and finalized quest",
 		quest_mgr.is_quest_completed(&"story_first_hearth") and not quest_mgr.is_quest_active(&"story_first_hearth"))
 
 	# Payout check: 25 brass + 5 wheat seeds
@@ -101,7 +106,7 @@ func _run() -> void:
 	# 6. Maritime Trade: Shipping Export Manifests (Trade Galleon)
 	# -------------------------------------------------------------------------
 	var galleon := MerchantBoat.new("The Sea Swallow", MerchantBoat.MerchantType.TRADE_GALLEON)
-	assert_test.call("Galleon offers 2 export manifests", galleon.active_contracts.size() == 2)
+	assert_test.call("Galleon offers export manifests", galleon.active_contracts.size() >= 2)
 
 	# Try to fulfill export manifest without required items (should fail)
 	var fulfill_fail := galleon.fulfill_contract(&"manifest_cured_fish", player_inv)

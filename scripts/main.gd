@@ -30,6 +30,7 @@ var tutorial: Tutorial        # Wren's starter missions
 var settings: GameSettings
 var settings_menu: SettingsMenu
 var inventory_ui: InventoryUI
+var crafting_ui: CraftingUI
 var build_menu_ui: BuildMenuUI
 var quest_log_ui: QuestLogUI
 var village_mgr: VillageManager
@@ -37,6 +38,8 @@ var trade: TradeManager
 var livestock_mgr: Node
 var npc_villages: NpcVillages
 var ambient_fish: AmbientFishManager = null
+const FloatingLanternManager = preload("res://scripts/festivals/floating_lanterns.gd")
+var floating_lanterns: Node3D = null
 var atlas := IslandAtlas.new()   # island names + which ones this player has found
 var _atlas_gen: Object = null
 var _atlas_t := 0.0
@@ -113,6 +116,16 @@ func _ready() -> void:
 	session.name = "Session"
 	add_child(session)
 	session.setup(self, _args)
+	session.register_state(&"lighthouse",
+		func() -> Variant:
+			return {"fuel": _beam.fuel_sec if _beam != null else (_saved_lighthouse_fuel if _saved_lighthouse_fuel >= 0.0 else 720.0)},
+		func(d: Variant) -> void:
+			if d is Dictionary:
+				var f := float(d.get("fuel", 720.0))
+				_saved_lighthouse_fuel = f
+				if _beam != null:
+					_beam.fuel_sec = f
+	)
 
 	# Entities (Agent A): created up front so the node exists on every peer before RPCs arrive.
 	# Saved/synced via Session.register_state; starter furniture spawns once per world.
@@ -155,6 +168,11 @@ func _ready() -> void:
 	inventory_ui.name = "InventoryUI"
 	add_child(inventory_ui)
 	inventory_ui.setup(self)
+
+	crafting_ui = CraftingUI.new()
+	crafting_ui.name = "CraftingUI"
+	add_child(crafting_ui)
+	crafting_ui.setup(self)
 
 	build_menu_ui = BuildMenuUI.new()
 	build_menu_ui.name = "BuildMenuUI"
@@ -352,6 +370,7 @@ func _begin_world() -> void:
 	player.entities = entities
 	player.controller = controller
 	player.inventory_ui = inventory_ui
+	player.crafting_ui = crafting_ui
 	player.build_menu_ui = build_menu_ui
 	add_child(player)
 	if session != null and not session.selected_customizer_data.is_empty():
@@ -385,6 +404,11 @@ func _begin_world() -> void:
 		ambient_fish.name = "AmbientFish"
 		add_child(ambient_fish)
 		ambient_fish.setup(world, sky, player)
+	if floating_lanterns == null:
+		floating_lanterns = FloatingLanternManager.new()
+		floating_lanterns.name = "FloatingLanterns"
+		add_child(floating_lanterns)
+		floating_lanterns.setup(world, sky, player)
 	hud.set_loading(false)
 	hud.show_hud(true)
 	hud.show_toast("You wash ashore beside a storm-battered hut." if chosen_spawn.get("id", 0) == 0 else "Washed ashore: %s" % chosen_spawn.get("name", "Starter Island"))
@@ -412,6 +436,7 @@ func _begin_world() -> void:
 
 ## Names the islands once the world exists, then announces each landfall.
 var _beam: LighthouseBeam = null
+var _saved_lighthouse_fuel: float = -1.0
 
 
 ## --lhcheck=DIR: look at the starter lighthouse by day and at night.
@@ -459,6 +484,8 @@ func _tick_lighthouse() -> void:
 	_beam = LighthouseBeam.new()
 	add_child(_beam)
 	_beam.setup(sky, (Vector3(c) + Vector3(0.5, 0.5, 0.5)) * VS)
+	if _saved_lighthouse_fuel >= 0.0:
+		_beam.fuel_sec = _saved_lighthouse_fuel
 	if world.get_voxel(c.x, c.y, c.z) != Palette.LANTERN:
 		_beam.set_process(false)   # no lighthouse here in this world
 		_beam.visible = false
@@ -570,20 +597,47 @@ var _pad_view_held := false
 
 
 func _toggle_quest_log() -> void:
-	if build_menu_ui != null and build_menu_ui.is_expanded():
-		build_menu_ui.close_catalogue()
-	if inventory_ui != null and inventory_ui.is_open():
-		inventory_ui.close()
-	if quest_log_ui != null:
-		quest_log_ui.toggle()
+	if quest_log_ui != null and quest_log_ui.is_open():
+		quest_log_ui.close()
+	else:
+		switch_page(&"quests")
 
 
 func _toggle_inventory() -> void:
+	if inventory_ui.is_open():
+		inventory_ui.close()
+	else:
+		switch_page(&"pack")
+
+
+func _toggle_crafting() -> void:
+	if crafting_ui != null and crafting_ui.is_open():
+		crafting_ui.close()
+	else:
+		switch_page(&"crafting")
+
+
+## The journal pages (Pack / Crafting / Quests) share one slot on screen:
+## opening one closes the others. Used by the hotkeys and the page tabs.
+func switch_page(page: StringName) -> void:
 	if build_menu_ui != null and build_menu_ui.is_expanded():
 		build_menu_ui.close_catalogue()
-	if quest_log_ui != null and quest_log_ui.is_open():
+	if page != &"quests" and quest_log_ui != null and quest_log_ui.is_open():
 		quest_log_ui.close()
-	inventory_ui.toggle()
+	if page != &"pack" and inventory_ui != null and inventory_ui.is_open():
+		inventory_ui.close()
+	if page != &"crafting" and crafting_ui != null and crafting_ui.is_open():
+		crafting_ui.close()
+	match page:
+		&"pack":
+			if not inventory_ui.is_open():
+				inventory_ui.open()
+		&"crafting":
+			if crafting_ui != null and not crafting_ui.is_open():
+				crafting_ui.open()
+		&"quests":
+			if quest_log_ui != null and not quest_log_ui.is_open():
+				quest_log_ui.open()
 
 
 func _tick_pad_view() -> void:
@@ -602,7 +656,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			inv.remove_item(&"fish_oil", 1)
 			_beam.add_fuel(720.0)
 			hud.show_toast("Refilled lighthouse with fish oil! Lantern burns bright (+24h).")
-			CombatAudio.play_sound("pickup", _beam.global_position)
+			CombatAudio.play_sound("oil_refuel", _beam.global_position)
 		elif inv != null:
 			hud.show_toast("Requires Refined Fish Oil to refuel the lighthouse lantern!")
 		get_viewport().set_input_as_handled()
@@ -630,12 +684,19 @@ func _unhandled_input(e: InputEvent) -> void:
 		_toggle_inventory()
 		get_viewport().set_input_as_handled()
 		return
+	if e.is_action_pressed("crafting_toggle") and player != null and not settings_menu.is_open():
+		_toggle_crafting()
+		get_viewport().set_input_as_handled()
+		return
 	if e.is_action_pressed("menu_toggle"):
 		if quest_log_ui != null and quest_log_ui.is_open():
 			quest_log_ui.close()
 			return
 		if inventory_ui != null and inventory_ui.is_open():
 			inventory_ui.close()
+			return
+		if crafting_ui != null and crafting_ui.is_open():
+			crafting_ui.close()
 			return
 		if build_menu_ui != null and build_menu_ui.is_expanded():
 			build_menu_ui.close_catalogue()
@@ -663,6 +724,8 @@ func is_any_menu_open() -> bool:
 		return true
 	if inventory_ui != null and inventory_ui.is_open():
 		return true
+	if crafting_ui != null and crafting_ui.is_open():
+		return true
 	if build_menu_ui != null and build_menu_ui.is_expanded():
 		return true
 	if trade != null and trade.ui != null and trade.ui.is_open():
@@ -670,6 +733,8 @@ func is_any_menu_open() -> bool:
 	if npc_villages != null and npc_villages.dialogue != null and npc_villages.dialogue.is_open():
 		return true
 	if tutorial != null and tutorial.dialogue != null and tutorial.dialogue.is_open():
+		return true
+	if village_mgr != null and village_mgr.orders_ui != null and village_mgr.orders_ui.is_open():
 		return true
 	return false
 

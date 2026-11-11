@@ -45,6 +45,7 @@ var camps: Array = []
 var sunken_ruins: Dictionary = {}
 var frost_shoals: Dictionary = {}
 var maelstrom_spire: Dictionary = {}
+var calamity_galleons: Array = []
 
 
 ## `layout` holds the native layout parameters (VoxelWorld.layout_params); empty = layout 1.
@@ -1314,6 +1315,7 @@ var outposts: Array = []
 ## after plan_wrecks (so older worlds keep their camps, mines and wrecks where they were).
 func plan_outposts(max_out := 2) -> void:
 	outposts.clear()
+	boat_spawns = boat_spawns.filter(func(sp: Dictionary) -> bool: return sp.get("outpost", -1) == -1)
 	if starter.is_empty():
 		return
 	var hut := Vector2(starter.hut.x, starter.hut.z)
@@ -1484,17 +1486,67 @@ func _build_outpost(site: Dictionary, island_idx: int, rng: RandomNumberGenerato
 		stamp_lights.append(Vector3i(c.x + qx - o, fy + 11, c.y + qz - o))
 	native.add_stamp(grid.data, Vector3i(n, OUT_H, n), Vector3i(c.x - o, fy, c.y - o), 1)
 	native.add_tree_clear(c.x, c.y, R + 14)
+	var dock_info := _build_outpost_dock(c, g, R, island_idx)
 	var feet := func(v: Vector2) -> Vector3: return Vector3(c.x + v.x + 0.5, fy + 1, c.y + v.y + 0.5)
 	var posts: Array = [feet.call(g * (R - 4) + side * 4.0), feet.call(g * (R - 4) - side * 4.0),
 		feet.call(-side * 14.0), feet.call(-g * 12.0 + side * 8.0), feet.call(g * 8.0 - side * 9.0),
 		feet.call(-g * 6.0 - side * 12.0), feet.call(side * 3.0), feet.call(-g * 3.0 - side * 3.0)]
+	if dock_info.has("dock_end"):
+		posts.append(dock_info.dock_end)
 	var tv := -g * 15.0
 	var cv := -g * 12.0 + side * 6.0
 	return {"island": island_idx, "center": Vector3(c.x + 0.5, fy + 1, c.y + 0.5), "gate": g,
 		"totem": Vector3i(c.x + roundi(tv.x), fy + 1, c.y + roundi(tv.y)),
 		"chest": Vector3i(c.x + roundi(cv.x), fy + 1, c.y + roundi(cv.y)),
 		"bunk": tents[1] if tents.size() > 1 else Vector3i(c.x, fy + 1, c.y),
-		"posts": posts, "tower": tower}
+		"posts": posts, "tower": tower,
+		"dock_o": dock_info.dock_o, "dock_d": dock_info.dock_d, "dock_end": dock_info.dock_end,
+		"mooring": dock_info.mooring}
+
+
+## Builds a wooden pier extending to the waterline with a moored pirate skiff at the outpost cove.
+func _build_outpost_dock(c: Vector2i, g: Vector2, R: int, island_idx: int) -> Dictionary:
+	var card_order: Array = _DIRS4.duplicate()
+	card_order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return Vector2(a.x, a.y).dot(g) > Vector2(b.x, b.y).dot(g))
+	var best_d: Vector2i = card_order[0]
+	var best_s0 := -1
+	for d: Vector2i in card_order:
+		for s in range(R + 2, R + 130):
+			if col_h(c.x + d.x * s, c.y + d.y * s) <= sea_high:
+				best_d = d
+				best_s0 = s
+				break
+		if best_s0 != -1:
+			break
+	if best_s0 == -1:
+		best_s0 = R + 18
+
+	var d: Vector2i = best_d
+	var s0: int = best_s0
+	var dock_r: int = {Vector2i(0, 1): 0, Vector2i(-1, 0): 1, Vector2i(0, -1): 2, Vector2i(1, 0): 3}[d]
+	var dock_o := c + d * (s0 - 2)
+	_stamp(PREFAB_DOCK, Vector3i(dock_o.x, sea_high + 3, dock_o.y), dock_r, false)
+	var dock_side := Vector2i(-d.y, d.x)
+	var dock_lamp := dock_o + dock_side * 7
+	_stamp(PREFAB_LAMP, Vector3i(dock_lamp.x, col_h(dock_lamp.x, dock_lamp.y) + 1, dock_lamp.y), 0)
+
+	# Boardwalk / trail connecting outpost palisade gate to the dock:
+	for s in range(R + 1, s0 - 2):
+		var p := c + d * s
+		var ph: int = col_h(p.x, p.y)
+		if ph >= sea_high + 1:
+			for w in range(-1, 2):
+				var wp := p + dock_side * w
+				var wph: int = col_h(wp.x, wp.y)
+				native.add_stamp(PackedByteArray([Palette.PLANK]), Vector3i(1, 1, 1), Vector3i(wp.x, wph, wp.y), 0)
+
+	var mooring: Dictionary = _find_mooring(dock_o, d, dock_side)
+	mooring["kind"] = Boat.KIND_SKIFF
+	mooring["outpost"] = island_idx
+	boat_spawns.append(mooring)
+	var dock_end := Vector3(dock_o.x + d.x * 26 + 0.5, sea_high + 4, dock_o.y + d.y * 26 + 0.5)
+	return {"dock_o": dock_o, "dock_d": d, "dock_end": dock_end, "mooring": mooring}
 
 
 # ---------------------------------------------------------------- the Barnacled Hulk's strand
@@ -1650,6 +1702,45 @@ func plan_maelstrom_spire() -> void:
 		]
 	}
 	print("[gen] The Maelstrom Spire planned at world center %s" % maelstrom_spire.center)
+
+
+## Plan Sunken Calamity Galleons: deep-water warships lying submerged on outer seafloor shelves
+func plan_calamity_galleons(max_galleons := 2) -> void:
+	calamity_galleons.clear()
+	if starter.is_empty():
+		return
+	var hut := Vector2(starter.hut.x, starter.hut.z)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value * 8831 + 43
+	for attempt in 800:
+		if calamity_galleons.size() >= max_galleons:
+			break
+		var i := rng.randi_range(1, islands.size() - 1) if islands.size() > 1 else 0
+		var isl: Dictionary = islands[i]
+		var hc: Vector2 = isl.center
+		var hr: float = float(isl.radius)
+		var ang := rng.randf() * TAU
+		var rad := rng.randf_range(1.15, 1.7) * hr
+		var x := int(hc.x + cos(ang) * rad)
+		var z := int(hc.y + sin(ang) * rad)
+		if Vector2(x, z).distance_to(hut) < 550.0:
+			continue
+		var h0 := col_h(x, z)
+		if h0 > sea_low - 8 or h0 < sea_low - 32:
+			continue
+		var g_pos := Vector3i(x, h0, z)
+		var dir := Vector2i(round(cos(ang)), round(sin(ang)))
+		if dir == Vector2i.ZERO: dir = Vector2i(1, 0)
+		calamity_galleons.append({
+			"name": "Sunken Calamity Galleon",
+			"island": i,
+			"center": g_pos,
+			"pos": Vector3(g_pos) * VoxelWorld.VS,
+			"dir": dir,
+			"chest": g_pos + Vector3i(dir.x * 3, 2, dir.y * 3),
+			"air_vent": Vector3(g_pos + Vector3i(-dir.x * 4, 1, -dir.y * 4)) * VoxelWorld.VS,
+		})
+	print("[gen] %d Sunken Calamity Galleons planned" % calamity_galleons.size())
 
 
 ## Plan the Barnacled Hulk's strand: a low beach (below half tide, so it floods and drains)

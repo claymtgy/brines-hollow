@@ -19,6 +19,7 @@ const STYLE_SUFFIX := {
 	2: ["Downs", "Knolls", "Rise"],         # rolling hills
 	3: ["Crags", "Tors", "Scar"],           # rocky crags
 	4: ["Table", "Bluff", "Mesa"],          # cliff mesa
+	5: ["Estuary", "Mangrove", "Channels"], # mangrove estuary
 }
 const ISLET_SUFFIX := ["Skerry", "Rock", "Eyot", "Stack", "Islet"]
 const TYPE_HOME := 0

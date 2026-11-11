@@ -60,7 +60,8 @@ func close() -> void:
 	if player != null:
 		player.input_enabled = true
 	var settings_open: bool = (main != null and main.get("settings_menu") != null and main.settings_menu.is_open())
-	var inv_open: bool = (main != null and main.get("inventory_ui") != null and main.inventory_ui.is_open())
+	var inv_open: bool = (main != null and main.get("inventory_ui") != null and main.inventory_ui.is_open()) \
+		or (main != null and main.get("crafting_ui") != null and main.crafting_ui.is_open())
 	if not settings_open and not inv_open:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -75,9 +76,22 @@ func toggle() -> void:
 func _input(e: InputEvent) -> void:
 	if not _open:
 		return
-	if e.is_action_pressed("menu_toggle") or e.is_action_pressed("inventory_toggle"):
+	if e.is_action_pressed("menu_toggle"):
 		get_viewport().set_input_as_handled()
 		close()
+		return
+	# Page hotkeys / LB hop straight to the other journal pages.
+	var to_page: StringName = &""
+	if e.is_action_pressed("inventory_toggle"):
+		to_page = &"pack"
+	elif e.is_action_pressed("crafting_toggle") or (e is InputEventJoypadButton and e.pressed and e.button_index == JOY_BUTTON_LEFT_SHOULDER):
+		to_page = &"crafting"
+	if to_page != &"":
+		get_viewport().set_input_as_handled()
+		if main != null and main.has_method("switch_page"):
+			main.switch_page(to_page)
+		else:
+			close()
 		return
 	if e is InputEventKey and e.pressed and not e.echo:
 		var kc: int = e.physical_keycode if e.physical_keycode != 0 else e.keycode
@@ -686,9 +700,9 @@ func _get_lore_for_quest(qd: QuestDef) -> String:
 				return m.intro + "\n\nWren: \"" + m.done + "\""
 			return m.intro
 	if qd.id == &"story_first_hearth":
-		return "Elder Brenda of the settlement needs shelter built before the high tides and harsh weather sweep over the coastal flats."
+		return "Elder Brenda sent word across the water: establish your haven by gathering driftwood, building a sheltered room (walls, roof, door, bed, light), and following the signal smoke along the shore to invite a stranded drifter into your settlement."
 	elif qd.id == &"story_tide_tackle":
-		return "Old Man Corin watches the tides. Harvest salt and catch fresh mackerel to replenish the coastal stores."
+		return "Old Man Corin sent word asking to learn the tidal rhythm: catch silver mackerel at high tide and harvest sea salt from evaporation pans on your beach to earn the Tide Mill blueprint."
 	elif qd.id == &"chore_winter_kale":
 		return "Town Cook Barnaby needs fresh Tide Kale harvested from shore plots for the communal kettle."
 	return ""

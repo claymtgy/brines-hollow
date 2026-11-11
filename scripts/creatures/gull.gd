@@ -133,20 +133,21 @@ func simulate(dt: float, ctx: Dictionary) -> void:
 			elif state_t > 2.5:
 				set_state(State.FLEE)
 			return
-	# Natural coastal soaring and gliding path: wide sweeping loops, banking, and thermals
-	_flight_phase += (CIRCLE_SPEED * 0.75) * dt
+	# Natural coastal soaring and gliding path: sweeping figure-8s, shoreline wander, banking, and thermals
+	_flight_phase += (CIRCLE_SPEED * 0.65) * dt
 	angle = _flight_phase
-	var r_x := circle_r * (1.0 + sin(_flight_phase * 0.45) * 0.35)
-	var r_z := (circle_r * 0.8) * (1.0 + cos(_flight_phase * 0.6) * 0.3)
-	var alt_thermal := sin(_flight_phase * 1.4) * 0.9 + cos(_flight_phase * 0.6) * 0.6
+	# Multi-frequency Lissajous sweeping path (replaces tight circular orbit with realistic soaring figure-8)
+	var x_sweep := sin(_flight_phase) * circle_r * 1.35 + sin(_flight_phase * 0.33) * 6.0
+	var z_sweep := sin(_flight_phase * 2.0) * (circle_r * 0.75) + cos(_flight_phase * 0.27) * 7.5
+	var alt_thermal := sin(_flight_phase * 1.3) * 1.4 + cos(_flight_phase * 0.55) * 0.8
 	var want := flock_center + Vector3(
-		cos(_flight_phase) * r_x + sin(_flight_phase * 0.5) * 3.0,
+		x_sweep,
 		altitude + alt_thermal,
-		sin(_flight_phase) * r_z + cos(_flight_phase * 0.35) * 2.5
+		z_sweep
 	)
 	var to := want - position
-	var flight_spd: float = 6.5 if state == State.RETURN else (4.2 + sin(_flight_phase * 1.2) * 1.1)
-	position += to.limit_length(flight_spd * dt) if state == State.RETURN else to * (1.0 - exp(-dt * 2.6))
+	var flight_spd: float = 6.5 if state == State.RETURN else (4.4 + sin(_flight_phase * 1.1) * 1.2)
+	position += to.limit_length(flight_spd * dt) if state == State.RETURN else to * (1.0 - exp(-dt * 2.4))
 	var aim_dir := to.normalized() if to.length_squared() > 0.04 else facing()
 	turn_toward(aim_dir, 3.8, dt)
 

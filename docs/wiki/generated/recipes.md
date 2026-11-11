@@ -4,7 +4,7 @@
 
 Every recipe, by station. **Known from the start** unless an unlock is listed: then you learn it by finding the ingredient, recruiting a villager, finishing one of Wren's lessons, or reading a recipe scroll.
 
-## Hand craft (28)
+## Hand craft (32)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -16,6 +16,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Copper Pickaxe | 2 Pine Wood, 3 Sea-Brass Ingot | 1 Copper Pickaxe | anywhere | instant | locked |
 | Driftwood Hoe | 2 Driftwood, 1 Wood Plank | 1 Driftwood Hoe | anywhere | instant | known |
 | Driftwood Pickaxe | 2 Driftwood, 2 Wood Plank | 1 Driftwood Pickaxe | anywhere | instant | known |
+| Flint Hunting Arrows (x8) | 2 Driftwood, 2 Limestone | 8 Flint Hunting Arrow | anywhere | 2 s | known |
 | Iron Hatchet | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hatchet | anywhere | instant | locked |
 | Iron Hoe | 2 Tarred Wood, 2 Iron Ingot | 1 Iron Hoe | anywhere | instant | locked |
 | Iron Pickaxe | 2 Tarred Wood, 3 Iron Ingot | 1 Iron Pickaxe | anywhere | instant | locked |
@@ -24,6 +25,9 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Pine Sapling | 2 Forest Foliage, 1 Pine Wood | 2 Pine Sapling | anywhere | instant | locked |
 | Pine Sapling (Driftwood) | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | anywhere | instant | known |
 | Pine Wood Planks | 1 Pine Wood | 4 Wood Plank | anywhere | instant | locked |
+| Refined Fish Oil (Flounder) | 2 Tidepool Flounder | 1 Refined Fish Oil | anywhere | instant | locked |
+| Refined Fish Oil (Mackerel) | 2 Silver Mackerel | 1 Refined Fish Oil | anywhere | instant | locked |
+| Refined Fish Oil (Salmon) | 1 Cliff Salmon | 1 Refined Fish Oil | anywhere | instant | locked |
 | Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | anywhere | instant | locked |
 | Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | anywhere | instant | locked |
 | Smelting Furnace | 8 Limestone, 4 Driftwood | 1 Smelting Furnace | anywhere | instant | known |
@@ -37,18 +41,19 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Wooden Hatchet | 2 Driftwood, 1 Wood Plank | 1 Wooden Hatchet | anywhere | instant | known |
 | Wooden Shovel | 1 Driftwood, 2 Wood Plank | 1 Wooden Shovel | anywhere | instant | known |
 
-## Workbench (78)
+## Workbench (96)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
 | Ancient Tide Regulator | 20 Cobblestone, 2 Ancient Weapon Fragment | 1 Ancient Tide Regulator | Workbench | 2 s | locked |
 | Architect's Drafting Desk | 8 Wood Plank, 4 Driftwood, 1 Sea-Brass Ingot | 1 Architect's Drafting Desk | Workbench | 2 s | locked |
-| Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 6 s | locked |
 | Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 2 s | locked |
+| Automated Grain Mill | 12 Limestone, 8 Wood Plank, 2 Sea-Brass Ingot | 1 Automated Grain Mill | Workbench | 6 s | locked |
 | Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 6 s | locked |
 | Automated Sawmill | 12 Wood Plank, 6 Iron Ingot, 2 Sea-Brass Ingot | 1 Automated Sawmill | Workbench | 2 s | locked |
 | Barber's Looking Glass | 3 Wood Plank, 2 Polished Sea Glass | 1 Barber's Looking Glass | Workbench | 2 s | recruit a Carpenter; merchant scroll; rare scroll (wrecks, sumps, caves) |
 | Bayberry & Honey Candle | 2 Natural Beeswax, 1 Marsh Honey | 2 Bayberry & Honey Candle | Workbench | instant | locked |
+| Black Powder (x2) | 2 Sea Salt, 1 Limestone | 2 Black Powder | Workbench | 3 s | locked |
 | Blacksmith's Anvil | 2 Iron Ingot, 4 Limestone | 1 Blacksmith's Anvil | Workbench | 2 s | locked |
 | Brine Saltery | 6 Wood Plank, 4 Limestone | 1 Brine Saltery | Workbench | 2 s | find Sea Salt |
 | Campfire | 4 Driftwood, 4 Limestone | 1 Campfire | Workbench | 2 s | known |
@@ -57,25 +62,33 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Coastal Sloop | 36 Wood Plank, 10 Shore-Sheep Wool, 4 Sea-Brass Ingot, 2 Iron Ingot | 1 Coastal Sloop (kit) | Workbench | 12 s | locked |
 | Coastal Teahouse | 6 Wood Plank, 2 Polished Sea Glass | 1 Coastal Teahouse | Workbench | 2 s | find Kelp Fronds |
 | Communal Banquet Table | 12 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | 1 Communal Banquet Table | Workbench | 2 s | locked |
+| Community Stockpile Chest | 14 Wood Plank, 8 Driftwood, 2 Sea-Brass Ingot | 1 Community Stockpile Chest | Workbench | 2 s | locked |
 | Deck Harpoon Swivel | 4 Iron Ingot, 2 Sea-Brass Ingot, 2 Driftwood | 1 Deck Harpoon Swivel | Workbench | instant | locked |
 | Dock Cat's Basket | 6 Kelp Fronds, 2 Driftwood, 1 Silver Mackerel | 1 Dock Cat's Basket | Workbench | 2 s | locked |
 | Driftwood Chest | 6 Driftwood | 1 Driftwood Chest | Workbench | 2 s | known |
+| Driftwood Recurve Bow | 3 Tarred Wood, 3 Driftwood | 1 Driftwood Recurve Bow | Workbench | 6 s | locked |
 | Driftwood Rucksack | 4 Driftwood, 2 Shore-Sheep Wool | 1 Driftwood Rucksack | Workbench | 3 s | find Shore-Sheep Wool |
+| Farmer's Seed Stand | 4 Wood Plank, 2 Shore Wheat Seed | 1 Farmer's Seed Stand | Workbench | 2 s | locked |
 | Fisher's Bunk | 8 Wood Plank, 6 Forest Foliage | 1 Fisher's Bunk | Workbench | 2 s | known |
 | Fisher's Smokehouse | 12 Wood Plank, 6 Cobblestone | 1 Fisher's Smokehouse | Workbench | 2 s | find Cliff Salmon; recruit a Smoker & Chef; Wren: "A Warm Belly" |
+| Fisher's Tackle Bench | 4 Wood Plank, 2 Driftwood | 1 Fisher's Tackle Bench | Workbench | 2 s | known |
 | Glass Living Aquarium | 6 Polished Sea Glass, 2 Sea-Brass Ingot, 2 Sand | 1 Glass Living Aquarium | Workbench | 2 s | locked |
 | Guard Dog Kennel | 10 Wood Plank, 4 Driftwood, 2 Silver Mackerel | 1 Guard Dog Kennel | Workbench | 2 s | locked |
+| Harbor Slipway Dry-Dock | 18 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Harbor Slipway Dry-Dock | Workbench | 2 s | locked |
 | Harbour Bell | 2 Iron Ingot, 8 Wood Plank, 4 Cobblestone | 1 Harbour Bell | Workbench | 2 s | locked |
 | Hearth Stew Pot | 6 Cobblestone, 2 Wood Plank | 1 Hearth Stew Pot | Workbench | 2 s | find Brine Oyster; Wren: "A Warm Belly" |
 | Heavy Oilskin Coat | 4 Shore-Sheep Wool, 1 Marsh Honey | 1 Heavy Oilskin Coat | Workbench | 6 s | find Shore-Sheep Wool |
 | Heraldic Settlement Banner | 4 Shore-Sheep Wool, 4 Driftwood, 1 Sea-Brass Ingot | 1 Heraldic Settlement Banner | Workbench | 2 s | locked |
+| House Construction Site | 4 Driftwood, 2 Wood Plank | 1 House Construction Site | Workbench | 2 s | known |
 | Hydrographic Sea Chart | 1 Parchment Shore Chart, 1 Ghost Squid | 1 Hydrographic Sea Chart | Workbench | 2 s | find Ghost Squid |
+| Iron Broadhead Arrows (x8) | 2 Driftwood, 1 Iron Ingot | 8 Iron Broadhead Arrow | Workbench | 4 s | locked |
 | Kelp-Oil Lantern Post | 3 Driftwood, 2 Kelp Fronds, 1 Limestone | 1 Kelp-Oil Lantern Post | Workbench | 2 s | known |
 | Latched Pen Gate | 6 Wood Plank, 2 Driftwood | 1 Latched Pen Gate | Workbench | 2 s | known |
 | Live-Capture Trap | 4 Driftwood, 2 Wood Plank, 2 Kelp Fronds | 1 Live-Capture Trap | Workbench | 2 s | known |
 | Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 2 s | known |
 | Livestock Trough | 6 Wood Plank, 2 Limestone | 1 Livestock Trough | Workbench | 3 s | known |
 | Mangrove Beehive | 8 Wood Plank, 1 Marsh Honey, 4 Forest Foliage | 1 Mangrove Beehive | Workbench | 2 s | locked |
+| Mariner's Belt Lantern | 2 Copper Ore, 1 Refined Fish Oil, 1 Polished Sea Glass | 1 Mariner's Belt Lantern | Workbench | 4 s | locked |
 | Mariner's Chart Desk | 4 Wood Plank, 1 Sea-Brass Ingot, 2 Driftwood | 1 Mariner's Chart Desk | Workbench | instant | locked |
 | Mooring Bollard | 4 Driftwood, 1 Iron Ingot | 1 Mooring Bollard | Workbench | 2 s | locked |
 | Oak Aging Cask | 6 Wood Plank, 2 Iron Ingot, 2 Driftwood | 1 Oak Aging Cask | Workbench | 2 s | locked |
@@ -83,17 +96,22 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Ocean Schooner | 64 Wood Plank, 24 Tarred Wood, 20 Shore-Sheep Wool, 12 Sea-Brass Ingot, 8 Iron Ingot | 1 Ocean Schooner (kit) | Workbench | 20 s | locked |
 | Oilskin Scarecrow | 4 Driftwood, 4 Forest Foliage, 2 Wood Plank | 1 Oilskin Scarecrow | Workbench | 2 s | known |
 | Outrigger Skiff | 24 Wood Plank, 8 Driftwood, 10 Kelp Fronds, 4 Shore-Sheep Wool | 1 Outrigger Skiff (kit) | Workbench | 6 s | locked |
+| Paper Cartridges (x4) | 2 Black Powder, 1 Brine-Iron Ore | 4 Paper Black-Powder Cartridge | Workbench | 3 s | locked |
 | Phosphor Brazier | 4 Copper Ore, 2 Polished Sea Glass, 4 Limestone | 1 Phosphor Brazier | Workbench | 2 s | locked |
 | Pine Sapling | 2 Forest Foliage, 1 Driftwood | 1 Pine Sapling | Workbench | 2 s | known |
+| Rancher's Hitching Post | 4 Driftwood, 2 Wood Plank | 1 Rancher's Hitching Post | Workbench | 2 s | known |
 | Regatta Checkpoint Buoy | 4 Wood Plank, 1 Sea-Brass Ingot | 1 Regatta Checkpoint Buoy | Workbench | 2 s | locked |
+| Reinforced Boarding Shield | 4 Wood Plank, 2 Iron Ingot | 1 Reinforced Boarding Shield | Workbench | 6 s | locked |
 | Sailor's Sea Cot | 4 Wood Plank, 2 Shore-Sheep Wool | 1 Sailor's Sea Cot | Workbench | instant | locked |
 | Salvage Diving Winch | 4 Iron Ingot, 2 Sea-Brass Ingot, 3 Driftwood | 1 Salvage Diving Winch | Workbench | instant | locked |
+| Sawyer's Sawhorse | 4 Driftwood, 2 Wood Plank | 1 Sawyer's Sawhorse | Workbench | 2 s | known |
+| Sea-Reaver Outpost Dock | 12 Wood Plank, 8 Driftwood, 1 Sea-Reaver War Crest | 1 Sea-Reaver Outpost Dock | Workbench | 2 s | locked |
 | Sealed Pantry Barrel | 6 Wood Plank, 2 Kelp Fronds, 1 Limestone | 1 Sealed Pantry Barrel | Workbench | 2 s | known |
 | Shearing Shears | 2 Limestone, 2 Driftwood | 1 Shearing Shears | Workbench | 2 s | known |
 | Shepherd's Whistle | 2 Wood Plank, 1 Polished Sea Glass | 1 Shepherd's Whistle | Workbench | 2 s | locked |
 | Ship Deck Lantern | 2 Sea-Brass Ingot, 1 Polished Sea Glass | 1 Ship Deck Lantern | Workbench | instant | locked |
-| Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 2 s | known |
 | Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 4 s | known |
+| Shore Poultry Coop | 8 Wood Plank, 4 Driftwood | 1 Shore Poultry Coop | Workbench | 2 s | known |
 | Smelting Furnace | 8 Limestone, 4 Driftwood | 1 Smelting Furnace | Workbench | 2 s | known |
 | Spike Barricade | 6 Driftwood, 1 Iron Ingot | 1 Spike Barricade | Workbench | 2 s | locked |
 | Stone Hatchet | 2 Driftwood, 2 Limestone | 1 Stone Hatchet | Workbench | instant | known |
@@ -107,16 +125,20 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Tarred Wood | 2 Pine Wood, 1 Kelp Fronds | 2 Tarred Wood | Workbench | instant | locked |
 | Taxidermy Fish Mount | 2 Wood Plank, 2 Driftwood, 1 Silver Mackerel | 1 Taxidermy Fish Mount | Workbench | 2 s | locked |
 | Tidal Oyster Rack | 6 Wood Plank, 4 Kelp Fronds, 2 Limestone | 1 Tidal Oyster Rack | Workbench | 2 s | known |
-| Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 4 s | locked |
 | Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 2 s | locked |
+| Tidal Sluice Gate | 8 Wood Plank, 2 Iron Ingot | 1 Tidal Sluice Gate | Workbench | 4 s | locked |
 | Tide Hearth | 16 Cobblestone, 8 Driftwood, 2 Sea-Brass Ingot | 1 Tide Hearth | Workbench | 2 s | locked |
 | Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 2 s | locked |
 | Tide Mill Water Wheel | 16 Wood Plank, 4 Iron Ingot, 8 Driftwood | 1 Tide Mill Water Wheel | Workbench | 6 s | locked |
 | Tide-Barge | 40 Wood Plank, 12 Driftwood, 2 Iron Ingot, 10 Kelp Fronds | 1 Tide-Barge (kit) | Workbench | 10 s | locked |
+| Town Notice Board | 8 Wood Plank, 4 Driftwood, 1 Polished Sea Glass | 1 Town Notice Board | Workbench | 2 s | locked |
 | Town Sparring Ring | 12 Sand, 4 Wood Plank, 4 Driftwood | 1 Town Sparring Ring | Workbench | 2 s | known |
+| Trained Sea-Hawk Perch | 6 Driftwood, 2 Silver Mackerel, 2 Shore-Sheep Wool | 1 Trained Sea-Hawk Perch | Workbench | 5 s | locked |
 | Undertow Gauntlet Altar | 12 Cobblestone, 4 Polished Sea Glass | 1 Undertow Gauntlet Altar | Workbench | 2 s | locked |
+| Village Market Stall | 10 Wood Plank, 6 Driftwood, 2 Shore-Sheep Wool | 1 Village Market Stall | Workbench | 2 s | locked |
 | Watertight Cargo Crate | 6 Wood Plank, 1 Iron Ingot | 1 Watertight Cargo Crate | Workbench | instant | locked |
 | Watertight Sea Barrel | 6 Wood Plank, 2 Kelp Fronds | 1 Watertight Sea Barrel | Workbench | 2 s | find Silver Mackerel; find Tidepool Flounder; recruit a Fisher; Wren: "A Line in the Water" |
+| Whittled Shore Bow | 4 Driftwood, 2 Kelp Fronds | 1 Whittled Shore Bow | Workbench | 4 s | known |
 | Wicker Crab Pot | 3 Driftwood, 4 Kelp Fronds | 1 Wicker Crab Pot | Workbench | 2 s | recruit a Fisher; Wren: "Let the Tide Work" |
 | Wooden Pail | 4 Wood Plank, 1 Driftwood | 1 Wooden Pail | Workbench | 2 s | known |
 
@@ -158,7 +180,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Peppermint Kelp Tea | 2 Kelp Fronds, 1 Marsh Honey | 1 Peppermint Kelp Tea | Brewery | 5 s | find Kelp Fronds; recruit a Lamplighter |
 | Roasted Chicory Sea-Brew | 1 Root Potato, 1 Sea Salt | 1 Roasted Chicory Sea-Brew | Brewery | 5 s | recruit a Trader; merchant scroll; rare scroll (wrecks, sumps, caves) |
 
-## Forge (18)
+## Forge (19)
 
 | Recipe | Ingredients | Makes | Station | Time | Unlock |
 |---|---|---|---|---|---|
@@ -178,6 +200,7 @@ Every recipe, by station. **Known from the start** unless an unlock is listed: t
 | Harpoon Lance | 3 Tarred Wood, 1 Iron Ingot | 1 Harpoon Lance | Workbench | 5 s | find Sea-Brass Ingot |
 | Kiln-Fired Cobblestone | 2 Limestone, 1 Loam Soil | 4 Cobblestone | Furnace | instant | known |
 | Rusty Cutlass | 2 Iron Ingot, 1 Tarred Wood | 1 Rusty Cutlass | Workbench | 5 s | find Sea-Brass Ingot |
+| Sea-Dog's Brass Flintlock | 3 Iron Ingot, 2 Tarred Wood, 2 Copper Ore | 1 Sea-Dog's Brass Flintlock | Workbench | 8 s | locked |
 | Smelt Iron Ingot | 2 Brine-Iron Ore | 1 Iron Ingot | Furnace | instant | locked |
 | Smelt Sea-Brass Ingot | 2 Copper Ore | 1 Sea-Brass Ingot | Furnace | instant | locked |
 

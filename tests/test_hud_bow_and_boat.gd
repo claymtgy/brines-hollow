@@ -139,7 +139,9 @@ func test_hud_tool_context_ranged() -> void:
 	p.combat.is_drawing_bow = true
 	p.combat.bow_draw_t = 0.60 # 80% tension (0.60 / 0.75)
 	hud.update_hud(p, sky, "Solo", world, false)
-	assert_true("Drawing... 80% tension" in hud.info_label.text, "Context shows tension percentage")
+	assert_true("Drawing..." in hud.info_label.text, "Context says the bow is drawing")
+	assert_true(hud.info_bar.visible and is_equal_approx(hud.info_bar.value, hud._reticle_draw_ratio),
+		"Draw meter beside the tool line tracks the draw")
 	assert_true("Release" in hud.info_label.text, "Context instructs to release to shoot")
 
 	# Flintlock context

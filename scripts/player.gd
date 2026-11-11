@@ -26,6 +26,7 @@ var entities: EntityManager
 var placement: PlacementController   # Entities (Agent A): place / use / pick up
 var controller: ControllerManager
 var inventory_ui: InventoryUI
+var crafting_ui: CraftingUI
 var build_menu_ui: BuildMenuUI
 
 var inventory: Inventory = Inventory.new(24)
@@ -56,6 +57,10 @@ var brush := 0
 var mat_index := 0
 var pickaxe_flatten_mode: bool = false
 var _line_anchor := Vector3i(-99999, -99999, -99999)
+
+
+func is_shift_held() -> bool:
+	return Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_SHIFT)
 var prefab_id := 5
 var prefab_rot := 0
 var snap := true
@@ -153,20 +158,9 @@ func _ready() -> void:
 			model.apply_customizer(customizer)
 	)
 
-	inventory.equipment_changed.connect(func(slot_name: StringName, slot: ItemSlot) -> void:
-		if model == null:
-			return
-		if slot_name == &"backpack":
-			model.set_backpack_visible(not slot.is_empty())
-		elif slot_name == &"head":
-			var is_helm: bool = not slot.is_empty() and (slot.item_id == &"deep_diving_helmet" or slot.item_id == &"diving_rebreather")
-			model.set_diving_helmet_visible(is_helm)
-		elif slot_name == &"accessory":
-			var def: ItemDef = ItemDB.get_item(slot.item_id) if not slot.is_empty() else null
-			var is_shield: bool = def != null and def.has_tag("shield")
-			var is_lantern: bool = def != null and def.has_tag("light")
-			model.set_shield_visible(is_shield)
-			model.set_offhand_lantern_visible(is_lantern)
+	inventory.equipment_changed.connect(func(_slot_name: StringName, _slot: ItemSlot) -> void:
+		if model != null:
+			model.apply_equipment(inventory)
 	)
 
 	vitality.player_defeated.connect(func(pos: Vector3) -> void:
@@ -727,6 +721,8 @@ func _set_tool(new_tool: int) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if not input_enabled:
 		return
+	if e is InputEventKey and not e.pressed and (e.keycode == KEY_SHIFT or e.physical_keycode == KEY_SHIFT):
+		_line_anchor = Vector3i(-99999, -99999, -99999)
 	if is_seated():
 		if e.is_action_pressed("dodge") or (e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_C):
 			if boat != null:
@@ -889,6 +885,7 @@ func _flatten_at_target() -> void:
 		"target_y": cell.y,
 		"tool_tier": tier,
 	})
+	CombatAudio.play_sound("flatten_scrape", target.pos if target.has("pos") else position)
 	_use_cd = 0.22
 	if model != null:
 		model.swing()
@@ -993,7 +990,7 @@ func _process(delta: float) -> void:
 	var is_dodging: bool = (combat != null and combat.is_dodging())
 	if not is_dodging:
 		model.animate(delta, horizontal_speed, on_ground, swimming)
-	var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+	var shift_held := is_shift_held()
 	if not shift_held or tool != 1:
 		_line_anchor = Vector3i(-99999, -99999, -99999)
 	_update_fishing_bobber(delta)
@@ -1107,7 +1104,7 @@ func _update_cursor_highlight(origin: Vector3, dir: Vector3, hit: Dictionary) ->
 		var alpha_mult := 0.95 if in_reach else 0.52
 		var active_def := get_active_item_def()
 		var is_farm_item := active_def != null and (active_def.has_tag("hoe") or active_def.has_tag("seed"))
-		var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+		var shift_held := is_shift_held()
 		if can_flatten() and (pickaxe_flatten_mode or Input.is_action_pressed("alt_use")) and (tool == 0 or tool == -1):
 			var flat_r := 2
 			var hsz := Vector3((2 * flat_r + 1) * VS * 1.02, VS * 0.25, (2 * flat_r + 1) * VS * 1.02)
@@ -1195,6 +1192,7 @@ func _use_tool() -> void:
 					"target_y": cell.y,
 					"tool_tier": tier,
 				})
+				CombatAudio.play_sound("flatten_scrape", target.pos if target.has("pos") else position)
 				_use_cd = 0.22
 				if model != null:
 					model.swing()
@@ -1238,7 +1236,7 @@ func _use_tool() -> void:
 
 		1:
 			var c: Vector3i = cell + (target.normal as Vector3i)
-			var shift_held := Input.is_action_pressed("sprint") or Input.is_key_pressed(KEY_SHIFT)
+			var shift_held := is_shift_held()
 
 			if brush == 0 and shift_held and _line_anchor.x != -99999:
 				var delta := c - _line_anchor
@@ -1289,7 +1287,10 @@ func _use_tool() -> void:
 				_use_cd = 0.4
 				return
 			command_requested.emit({"t": "place", "p": c, "r": r, "m": current_material()})
-			_line_anchor = c
+			if shift_held:
+				_line_anchor = c
+			else:
+				_line_anchor = Vector3i(-99999, -99999, -99999)
 			quest_event(QuestDef.ObjectiveType.PLACE_VOXELS, &"")
 			if controller:
 				controller.pulse_place()

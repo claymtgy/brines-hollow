@@ -39,9 +39,11 @@ func _ready() -> void:
 
 
 func _sync_gen() -> bool:
+	if net == null or net.main == null:
+		return outposts.size() > 0
 	var w: Node = net.main.get("world")
 	if w == null or w.gen == null:
-		return false
+		return outposts.size() > 0
 	if w.gen != _gen:
 		_gen = w.gen
 		outposts = _gen.outposts
@@ -213,9 +215,9 @@ func outpost_captured(i: int) -> void:
 	var isle: String = net.main.atlas.name_of(int(outposts[i].island)) if net.main.get("atlas") != null else ""
 	var pp: Vector3 = net.main.player.position if net.main.player != null else Vector3.INF
 	if pp.distance_to(center_m(i)) < 140.0:
-		net.main.hud.show_banner("Outpost taken", "%s  ·  a forward base: sleep in the big tent to wake here" % isle)
+		net.main.hud.show_banner("Outpost taken", "%s  ·  forward base & dock: sleep in the big tent, skiff moored at the pier" % isle)
 	else:
-		net.main.hud.show_toast("The Sea-Reaver outpost on %s has been taken." % isle)
+		net.main.hud.show_toast("The Sea-Reaver outpost on %s has been taken: harbor and bunk secured." % isle)
 
 
 func _process(delta: float) -> void:
@@ -246,7 +248,7 @@ func chart_labels() -> Array:
 		return out
 	for i: int in discovered:
 		if i < outposts.size():
-			out.append({"pos": center_m(i), "name": "Forward base" if captured.has(i) else "Reaver outpost",
+			out.append({"pos": center_m(i), "name": "Forward harbor" if captured.has(i) else "Reaver outpost",
 				"camp": true, "cleared": captured.has(i)})
 	return out
 

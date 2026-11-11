@@ -100,6 +100,22 @@ static func wreck_loot(rng: RandomNumberGenerator) -> Array:
 	return out
 
 
+## A Sunken Calamity Galleon's abyssal strongbox: deep-sea armada relics, brass ingots, and treasures.
+static func calamity_galleon_loot(rng: RandomNumberGenerator) -> Array:
+	var out: Array = [
+		[&"sea_brass_ingot", rng.randi_range(3, 6)],
+		[&"brass_guilder", rng.randi_range(25, 60)],
+		[&"abyssal_pearl", rng.randi_range(2, 4)],
+		[&"chitin_plate", rng.randi_range(3, 6)],
+		[&"sea_glass", rng.randi_range(4, 8)]
+	]
+	if rng.randf() < 0.7:
+		out.append([&"diving_helmet", 1])
+	else:
+		out.append([&"harpoon_trident", 1])
+	return out
+
+
 ## What the Mud-Claws hoard: reef salvage, shell and the odd bit of worked metal.
 static func camp_loot(rng: RandomNumberGenerator) -> Array:
 	var out: Array = [[&"sea_glass", rng.randi_range(3, 6)], [&"chitin_plate", rng.randi_range(2, 4)],
@@ -290,7 +306,22 @@ func server_action(action: StringName, args: Dictionary, _peer: int) -> Dictiona
 			if left > 0:
 				res["grant"] = [[id, left]]   # didn't fit: give it back
 				res["toast"] = "%s is full" % entity_name if left == n else res["toast"] + " (%d didn't fit)" % left
+			elif args.get("quiet", false):
+				res.erase("toast")   # the Chest screen shows the move itself
 			return res
+		&"take_slot":
+			# Chest screen: take `n` from one particular slot.
+			var i := int(args.get("slot", -1))
+			var n := int(args.get("n", 0))
+			var inv: Inventory = container.inventory
+			if n <= 0 or i < 0 or i >= inv.capacity or inv.slots[i].is_empty():
+				return {}
+			var id: StringName = inv.slots[i].item_id
+			var taken := inv.remove_from_slot(i, n)
+			return {"changed": taken > 0, "grant": [[id, taken]]}
+		&"sort":
+			container.inventory.quick_sort(false)
+			return {"changed": true}
 		&"take":
 			for slot in container.inventory.slots:
 				if not slot.is_empty():

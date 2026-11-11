@@ -60,6 +60,10 @@ var slot_counts: Array = []
 var slot_keys: Array = []
 var info_label: Label
 var info_icon: TextureRect
+var info_bar: ProgressBar          ## bow draw meter beside the tool line
+var fishing_plaque: PanelContainer
+var fishing_gauge: FishingGauge
+var boat_trim_bar: ProgressBar
 var vitality_panel: PanelContainer
 var health_bar: ProgressBar
 var health_label: Label
@@ -775,6 +779,14 @@ func _build_hud() -> void:
 	bottom_bar.add_theme_constant_override("separation", 6)
 	bottom_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_root.add_child(bottom_bar)
+	fishing_plaque = PanelContainer.new()
+	fishing_plaque.theme_type_variation = &"Plaque"
+	fishing_plaque.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	fishing_plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fishing_plaque.visible = false
+	bottom_bar.add_child(fishing_plaque)
+	fishing_gauge = FishingGauge.new()
+	fishing_plaque.add_child(fishing_gauge)
 	var ctx := PanelContainer.new()
 	ctx.theme_type_variation = &"Plaque"
 	ctx.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -789,6 +801,9 @@ func _build_hud() -> void:
 	info_label.add_theme_color_override("font_color", UiTheme.CREAM)
 	info_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ch.add_child(info_label)
+	info_bar = _bar(ch, &"StaminaBar", 110)
+	info_bar.visible = false
+	info_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var bar := HBoxContainer.new()
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 4)
@@ -870,6 +885,10 @@ func _build_hud() -> void:
 	boat_status_row.add_child(boat_speed_label)
 	boat_sail_label = _label("", &"Small", 14)
 	boat_status_row.add_child(boat_sail_label)
+	boat_trim_bar = _bar(boat_status_row, &"StaminaBar", 70)
+	boat_trim_bar.custom_minimum_size = Vector2(70, 12)
+	boat_trim_bar.max_value = 1.0
+	boat_trim_bar.tooltip_text = "Sail trim"
 
 	boat_controls_label = _label("", &"Small", 13)
 	boat_controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -914,12 +933,12 @@ func _rebuild_help() -> void:
 	if _pad():
 		rows = [["L Stick", "move"], ["R Stick", "look"], [_glyph(&"jump", "Space"), "jump / swim up"],
 			[_glyph(&"use", "LMB"), "use tool"], [_glyph(&"interact", "F"), "interact (hold: pick up)"],
-			["LB / RB", "hotbar slot"], [_glyph(&"inventory_toggle", "I"), "pack & crafting"],
+			["LB / RB", "hotbar slot"], [_glyph(&"inventory_toggle", "I"), "pack (RB: crafting)"],
 			[_glyph(&"quest_log_toggle", "J"), "journal & quests"], [_glyph(&"menu_toggle", "Esc"), "menu"]]
 	else:
 		rows = [["WASD", "move"], ["Mouse", "look"], ["Space", "jump / swim up"], ["Shift", "sprint"],
 			["LMB", "use tool"], ["F", "interact (hold: pick up)"], ["1-8", "hotbar slots"],
-			["I / Tab", "pack & crafting"], ["J", "journal & quests"], ["Esc", "menu"]]
+			["I / Tab", "pack"], ["K", "crafting"], ["J", "journal & quests"], ["Esc", "menu"]]
 	for r: Array in rows:
 		g.add_child(UiTheme.keycap(r[0]))
 		g.add_child(_label(r[1], &"InkLabel", 14))
@@ -1177,12 +1196,16 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 		if b.has_sail():
 			var heading := b.forward2()
 			var wind := b.wind_vec()
-			var eff := Boat.sail_efficiency(heading, wind) * 100.0
+			var eff := Boat.sail_efficiency(heading, wind)
 			var pos_name := Boat.point_of_sail(heading, wind)
-			boat_sail_label.text = "%s (%.0f%% Eff)" % [pos_name, eff]
+			boat_sail_label.text = "%s  ·  %s" % [pos_name, trim_word(eff)]
 			boat_sail_label.visible = true
+			boat_trim_bar.visible = true
+			boat_trim_bar.value = eff
+			boat_trim_bar.modulate = Color.WHITE if eff >= 0.5 else (Color(1.15, 0.9, 0.35) if eff >= 0.2 else Color(1.4, 0.35, 0.35))
 		else:
 			boat_sail_label.visible = false
+			boat_trim_bar.visible = false
 
 		var disembark_btn := _glyph(&"interact", "F")
 		var patch_btn := _glyph(&"dodge", "C")
@@ -1290,6 +1313,8 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	var active_def: ItemDef = ItemDB.get_item(active_slot.item_id) if (active_slot != null and not active_slot.is_empty()) else null
 	var icon: Texture2D = ItemIcons.for_item(active_slot.item_id) if active_def != null else null
 	var text := ""
+	var bow_bar := false
+	var fishing_active := false
 	match player.tool:
 		0:
 			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.PICKAXE)
@@ -1312,6 +1337,8 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 		3:
 			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.ROD)
 			text = _fishing_text(player, use_btn)
+			fishing_active = fishing_gauge != null and fishing_gauge.sync(
+				player.fishing, player.fishing_cast_power, get_process_delta_time())
 		4:
 			icon = icon if icon != null else ItemIcons.for_tool(ItemIcons.Tool.HOE)
 			text = "%s  ·  %s till / harvest   %s plant / eat   (%s inventory)" % [
@@ -1320,8 +1347,10 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 			if player.combat != null and player.combat.is_holding_bow():
 				var arrows: int = player.combat.get_arrow_ammo_count()
 				if _reticle_is_drawing:
-					text = "%s  ·  Drawing... %.0f%% tension  ·  Arrows: %d  (Release %s to shoot)" % [
-						active_def.name if active_def else "Bow", _reticle_draw_ratio * 100.0, arrows, use_btn]
+					text = "%s  ·  %s  ·  Arrows: %d  (Release %s to shoot)" % [
+						active_def.name if active_def else "Bow",
+						"Full draw!" if _reticle_draw_ratio >= 1.0 else "Drawing...", arrows, use_btn]
+					bow_bar = true
 				else:
 					text = "%s  ·  Hold %s to draw & aim  ·  Arrows: %d   (%s inventory)" % [
 						active_def.name if active_def else "Bow", use_btn, arrows, inv_btn]
@@ -1341,6 +1370,16 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 	if place_text != "":
 		text = place_text
 		icon = ItemIcons.for_tool(ItemIcons.Tool.BLUEPRINT)
+		bow_bar = false
+		fishing_active = false
+	if info_bar != null:
+		info_bar.visible = bow_bar
+		if bow_bar:
+			info_bar.max_value = 1.0
+			info_bar.value = _reticle_draw_ratio
+			info_bar.modulate = Color(0.75, 1.25, 1.15) if _reticle_draw_ratio >= 1.0 else Color.WHITE
+	if fishing_plaque != null:
+		fishing_plaque.visible = fishing_active
 	info_label.text = text
 	info_icon.texture = icon
 	info_icon.visible = (icon != null)
@@ -1354,6 +1393,18 @@ func update_hud(player: Player, sky: SkyCycle, peers_text: String, world: VoxelW
 			Engine.get_frames_per_second(), world.stats_vertices / 1000, p.x, p.y, p.z]
 
 
+## One plain word for how well the sail is drawing (bar beside it shows the amount).
+static func trim_word(eff: float) -> String:
+	if eff >= 0.8:
+		return "full sail"
+	if eff >= 0.5:
+		return "drawing well"
+	if eff >= 0.2:
+		return "luffing"
+	return "no drive"
+
+
+## The one-line instruction under the fishing gauge. Numbers live on the gauge itself.
 func _fishing_text(player: Player, use_btn: String) -> String:
 	if player.fishing == null:
 		return "Fishing rod"
@@ -1361,16 +1412,16 @@ func _fishing_text(player: Player, use_btn: String) -> String:
 		FishingController.State.IDLE:
 			return "Fishing rod  ·  aim at water, hold %s to cast" % use_btn
 		FishingController.State.CASTING:
-			return "Casting...  power %.0f%%  (release %s)" % [player.fishing_cast_power * 100.0, use_btn]
+			return "Release %s to cast" % use_btn
 		FishingController.State.WAITING_FOR_BITE:
-			return "Bobber out %.1f m  ·  waiting for a bite" % player.fishing.line_distance
+			return "Bobber out %.0f m  ·  waiting for a bite  (%s to reel in)" % [
+				player.fishing.line_distance, use_btn]
 		FishingController.State.NIBBLING:
-			return "Nibble...  get ready"
+			return "Wait for it...  don't strike yet"
 		FishingController.State.HOOK_WINDOW:
-			return "BITE!  press %s to hook" % use_btn
+			return "Press %s to set the hook!" % use_btn
 		FishingController.State.REELING:
-			return "Reeling  %.1f m  ·  tension %.0f%%  (pulse %s)" % [
-				player.fishing.line_distance, player.fishing.line_tension * 100.0, use_btn]
+			return "Hold %s to reel  ·  let go when tension runs red" % use_btn
 		FishingController.State.CAUGHT:
 			return "Landed it!  (%s to cast again)" % use_btn
 		FishingController.State.LOST:
