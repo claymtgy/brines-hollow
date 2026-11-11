@@ -2,6 +2,7 @@
 .godot/
 *.import
 export/
+builds/
 export_presets.cfg
 
 # Native build output (rebuild with native/build.sh)
