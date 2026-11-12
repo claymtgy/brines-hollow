@@ -112,7 +112,7 @@ func server_action(action: StringName, args: Dictionary, _sender_id: int = 1) ->
 				grants.append([&"down_feather", feather_count])
 			egg_count = 0
 			feather_count = 0
-			return {"ok": true, "grant": grants}
+			return {"ok": true, "grant": grants, "gathered": true}
 		&"add_feed":
 			var item: StringName = StringName(args.get("item", &""))
 			if item in FEED_ITEMS and feed_count < max_feed:

@@ -94,6 +94,15 @@ func _init() -> void:
 	check(not CombatMath.parry_succeeds(0.5, o, Vector3.FORWARD, Vector3(0, 0, -2)), "late parry fails")
 	check(not CombatMath.parry_succeeds(0.1, o, Vector3.FORWARD, Vector3(0, 0, 2)), "parry can't block attacks from behind")
 	check(CombatMath.dodge_protects(0.2) and not CombatMath.dodge_protects(0.5) and not CombatMath.dodge_protects(-1.0), "dodge i-frames only during the roll")
+	var roll_d := 0.0
+	var hop_d := 0.0
+	var steps := 600
+	for k in steps:
+		var pr := (k + 0.5) / steps
+		roll_d += CombatMath.dodge_speed(pr) * CombatMath.DODGE_TIME / steps
+		hop_d += CombatMath.dodge_speed(pr, true) * CombatMath.DODGE_TIME / steps
+	check(absf(roll_d - 4.5) < 0.02, "dodge roll covers 4.5 m (%.2f)" % roll_d)
+	check(absf(hop_d - CombatMath.DODGE_HOP_DISTANCE) < 0.02, "backstep covers its distance (%.2f)" % hop_d)
 
 	print("-- perception")
 	var sneak := Perception.noise_radius(3.0, true, false, false)

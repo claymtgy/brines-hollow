@@ -579,6 +579,13 @@ func _walk(delta: float, goal: Vector3, speed: float) -> void:
 		wren.position = goal
 
 
+## Wren is in talking range (her "Talk" prompt is up).
+func wants_talk() -> bool:
+	var p: Player = main.player if main != null else null
+	return wren != null and p != null and not _arriving and not dialogue.is_open() \
+			and wren.position.distance_to(p.position) <= TALK_RANGE
+
+
 func _unhandled_input(e: InputEvent) -> void:
 	if wren == null or _arriving or dialogue.is_open() or not e.is_action_pressed("interact"):
 		return

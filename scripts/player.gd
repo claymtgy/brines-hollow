@@ -518,7 +518,7 @@ func _physics_process(delta: float) -> void:
 		position.y = (VoxelWorld.WY - 2) * VS
 
 	horizontal_speed = Vector2(vel.x, vel.z).length()
-	if combat != null and combat.is_dodging():
+	if combat != null and combat.is_rolling():
 		if not combat.is_dodge_hop() and (rig == null or not rig.first_person):
 			facing = atan2(combat.get_dodge_dir().x, combat.get_dodge_dir().z)
 	elif rig != null and rig.first_person:
@@ -1032,8 +1032,8 @@ func _process(delta: float) -> void:
 		facing = rig.yaw + PI
 	model.rotation = Vector3(0, facing, 0)
 	model.set_fishing_state(fishing.current_state if tool == 3 and fishing != null else 0, fishing_cast_power)
-	var is_dodging: bool = (combat != null and combat.is_dodging())
-	if not is_dodging:
+	var is_rolling: bool = (combat != null and combat.is_rolling())
+	if not is_rolling:
 		model.crouching = is_crouching()
 		model.animate(delta, horizontal_speed, on_ground, swimming)
 	var shift_held := is_shift_held()

@@ -383,7 +383,7 @@ func _authority_action(coord: Vector3i, action: StringName, args: Dictionary, pe
 	var grants: Array = res.get("grant", [])
 	var toast: String = res.get("toast", "")
 	if not grants.is_empty() or toast != "":
-		_grant(peer, grants, toast)
+		_grant(peer, grants, toast, bool(res.get("gathered", false)))
 
 
 func _broadcast_state(ent: WorldEntity) -> void:
@@ -393,14 +393,16 @@ func _broadcast_state(ent: WorldEntity) -> void:
 
 
 ## Gives items to `peer` (local inventory if it's us, otherwise via RPC) with an optional toast.
-func _grant(peer: int, items: Array, toast: String) -> void:
+## `gathered`: the items were harvested (salt pan, crab pot...), so they count toward
+## "collect N" quest steps.
+func _grant(peer: int, items: Array, toast: String, gathered := false) -> void:
 	if peer == _local_peer() or not _net():
-		_apply_grant(items, toast)
+		_apply_grant(items, toast, gathered)
 	else:
-		net_grant.rpc_id(peer, items, toast)
+		net_grant.rpc_id(peer, items, toast, gathered)
 
 
-func _apply_grant(items: Array, toast: String) -> void:
+func _apply_grant(items: Array, toast: String, gathered := false) -> void:
 	var p: Player = main.player if main != null else null
 	if p != null:
 		for g: Array in items:
@@ -408,6 +410,8 @@ func _apply_grant(items: Array, toast: String) -> void:
 				var left := p.inventory.add_item(StringName(g[0]), int(g[1]))
 				if left > 0:
 					toast += "  (inventory full: %d %s lost)" % [left, g[0]]
+				if gathered and int(g[1]) - left > 0:
+					p.quest_event(QuestDef.ObjectiveType.GATHER_ITEM, StringName(g[0]), int(g[1]) - left)
 	if toast != "" and main != null and main.hud != null:
 		main.hud.show_toast(toast)
 
@@ -433,8 +437,8 @@ func net_state(coord: Vector3i, data: Dictionary) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func net_grant(items: Array, toast: String) -> void:
-	_apply_grant(items, toast)
+func net_grant(items: Array, toast: String, gathered := false) -> void:
+	_apply_grant(items, toast, gathered)
 
 
 # ---------------------------------------------------------------- persistence & join sync

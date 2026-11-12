@@ -57,6 +57,9 @@ func handle_input(e: InputEvent) -> bool:
 		if boats != null and boats.nearest_boardable(player.position) != null:
 			return false  # boarding a boat wins
 		var ent := player.entities.get_closest_interactable(player.position)
+		var main: Node = player.entities.main
+		if ent != null and main != null and main.has_method("talk_beats_entity") and main.talk_beats_entity(ent):
+			return false  # talk to the villager instead (aim at closer furniture to use it)
 		if ent != null and ent.can_interact(player):
 			_hold_t = 0.0
 			_hold_target = ent

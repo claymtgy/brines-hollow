@@ -8,8 +8,11 @@ extends RefCounted
 enum Difficulty { COZY, TIDEWATCH, UNDERTOW }
 const DIFFICULTY_NAMES := ["Cozy", "Tidewatch", "Undertow"]
 
-const DODGE_TIME := 0.38          # i-frames + roll duration (s)
-const DODGE_SPEED := 8.5          # m/s during the roll
+const DODGE_TIME := 0.56          # full roll: dive, tuck-and-roll, come up into a crouch (s)
+const DODGE_IFRAMES := 0.36       # invulnerable for the dive and the roll itself, not the stand-up
+const DODGE_DISTANCE := 4.5       # metres covered by a full roll
+const DODGE_HOP_DISTANCE := 2.6   # metres covered by the backstep (no direction held)
+const _DODGE_CURVE_MEAN := 0.83125   # mean of dodge_speed_curve over 0..1 (exact)
 const DODGE_STAMINA := 14.0
 const DODGE_COOLDOWN := 0.45
 const PARRY_WINDOW := 0.28        # s after pressing parry in which a hit is deflected
@@ -228,7 +231,19 @@ static func parry_succeeds(since_press: float, defender: Vector3, facing: Vector
 
 ## Is the defender inside dodge i-frames?
 static func dodge_protects(dodge_elapsed: float) -> bool:
-	return dodge_elapsed >= 0.0 and dodge_elapsed <= DODGE_TIME
+	return dodge_elapsed >= 0.0 and dodge_elapsed <= DODGE_IFRAMES
+
+
+## Roll speed multiplier over the roll (0..1 progress): full momentum through the tumble,
+## bleeding off as you plant your feet and stand.
+static func dodge_speed_curve(prog: float) -> float:
+	return lerpf(1.0, 0.25, smoothstep(0.55, 1.0, prog))
+
+
+## Ground speed (m/s) at this point of the roll, scaled so the whole roll covers its distance.
+static func dodge_speed(prog: float, is_hop: bool = false) -> float:
+	var dist := DODGE_HOP_DISTANCE if is_hop else DODGE_DISTANCE
+	return dist / (DODGE_TIME * _DODGE_CURVE_MEAN) * dodge_speed_curve(prog)
 
 
 const HARPOON_SWEET_SPOT_MIN := 2.5

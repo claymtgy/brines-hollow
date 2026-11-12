@@ -142,8 +142,14 @@ func has_light() -> bool:
 	return has_offhand_light()
 
 
+## Inside the dodge i-frames.
 func is_dodging() -> bool:
 	return CombatMath.dodge_protects(_dodge_t)
+
+
+## The roll / hop animation and its movement are playing (lasts past the i-frames).
+func is_rolling() -> bool:
+	return _dodge_t >= 0.0
 
 
 func is_dodge_hop() -> bool:
@@ -179,14 +185,10 @@ func process_input(delta: float, can_input: bool) -> bool:
 		_dodge_t += delta
 		if _dodge_t > CombatMath.DODGE_TIME:
 			_dodge_t = -1.0
-			player.model.rotation.x = 0.0
 			if player.model.has_method("animate_dodge"):
 				player.model.animate_dodge(-1.0)
-		else:
-			if player.model.has_method("animate_dodge"):
-				player.model.animate_dodge(_dodge_t / CombatMath.DODGE_TIME, _dodge_is_hop)
-			else:
-				player.model.rotation.x = -TAU * (_dodge_t / CombatMath.DODGE_TIME)
+		elif player.model.has_method("animate_dodge"):
+			player.model.animate_dodge(_dodge_t / CombatMath.DODGE_TIME, _dodge_is_hop)
 
 	if _parry_t >= 0.0:
 		_parry_t += delta
@@ -486,16 +488,18 @@ func try_dodge() -> bool:
 		player.facing = atan2(_dodge_dir.x, _dodge_dir.z)
 	_dodge_t = 0.0
 	_dodge_cd = CombatMath.DODGE_COOLDOWN
-	CombatAudio.play_sound("dodge", player.position)
+	CombatAudio.play_sound("dodge_hop" if _dodge_is_hop else "dodge", player.position, -2.0, 0.05)
 	return true
 
 
 ## Hook from Player._physics_process: sneaking slows you, dodging overrides movement.
 func modify_move(target_v: Vector3) -> Vector3:
 	if _dodge_t >= 0.0:
-		player.vel.x = _dodge_dir.x * CombatMath.DODGE_SPEED
-		player.vel.z = _dodge_dir.z * CombatMath.DODGE_SPEED
-		return _dodge_dir * CombatMath.DODGE_SPEED
+		var prog := clampf(_dodge_t / CombatMath.DODGE_TIME, 0.0, 1.0)
+		var v := _dodge_dir * CombatMath.dodge_speed(prog, _dodge_is_hop)
+		player.vel.x = v.x
+		player.vel.z = v.z
+		return v
 	if guard_broken_t > 0.0:
 		return Vector3.ZERO
 	if is_guarding:

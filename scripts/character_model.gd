@@ -6,6 +6,7 @@ extends Node3D
 ## and dynamic paperdoll gear (backpacks, diving helm, maritime weaponry).
 
 const U := VoxelWorld.VS * 0.5  # character voxel size (0.09m)
+const HEAD_PIVOT := Vector3(0, 11, 0)   # neck, in character voxels above the feet
 
 var coat := Palette.COAT_A
 var hat := Palette.HAT_A
@@ -55,6 +56,7 @@ var _current_tool_idx := 0
 var _cast_anim := 0.0
 var _fishing_state := 0
 var _fishing_power := 0.0
+var _hop_lift := 0.0             # backstep airtime height, applied by _rest_on_ground
 
 
 static func _grid(sx: int, sy: int, sz: int) -> Prefabs.Grid:
@@ -166,7 +168,7 @@ func rebuild() -> void:
 
 	# ---------------------------------------------------------------- Head
 	head = Node3D.new()
-	head.position = Vector3(0, 11, 0) * U
+	head.position = HEAD_PIVOT * U
 	body.add_child(head)
 
 	var h := _grid(10, 10, 10)
@@ -548,62 +550,101 @@ func swing_attack(step: int = 1, is_charged: bool = false, is_thrust: bool = fal
 		_swing_step = step if step >= 1 and step <= 2 else 1
 
 
+## Rig sign conventions: +rotation.x on the body pitches it forward (face toward the ground);
+## -rotation.x on a limb swings it forward. The model faces +Z.
+## prog 0..1 drives one dodge; prog < 0 resets the pose for the regular animator.
 func animate_dodge(prog: float, is_hop: bool = false) -> void:
-	if prog < 0.0 or prog > 1.0:
-		if body != null:
-			body.rotation = Vector3.ZERO
-			body.position = Vector3.ZERO
-		if head != null:
-			head.rotation = Vector3.ZERO
-		if leg_l != null:
-			leg_l.rotation = Vector3.ZERO
-		if leg_r != null:
-			leg_r.rotation = Vector3.ZERO
-		if arm_l != null:
-			arm_l.rotation = Vector3.ZERO
-		if arm_r != null:
-			arm_r.rotation = Vector3.ZERO
+	if body == null or head == null or leg_l == null or leg_r == null or arm_l == null or arm_r == null:
 		return
-
-	var s := sin(prog * PI)
+	if prog < 0.0 or prog > 1.0:
+		body.rotation = Vector3.ZERO
+		body.position = Vector3.ZERO
+		body.scale = Vector3.ONE
+		head.rotation = Vector3.ZERO
+		head.position = HEAD_PIVOT * U
+		head.scale = Vector3.ONE
+		for limb: Node3D in [leg_l, leg_r, arm_l, arm_r]:
+			limb.rotation = Vector3.ZERO
+		return
 	if is_hop:
-		# Backward evasive hop: athletic spring, torso braced forward, legs trailing
-		if body != null:
-			body.position.y = 0.32 * s
-			body.rotation.x = 0.22 * s
-		if head != null:
-			head.rotation.x = 0.15 * s
-		if leg_l != null and leg_r != null:
-			var leg_trail := -0.35 * s
-			leg_l.rotation.x = leg_trail
-			leg_r.rotation.x = leg_trail
-		if arm_l != null and arm_r != null:
-			arm_l.rotation.x = 0.3 * s
-			arm_r.rotation.x = 0.3 * s
-			arm_l.rotation.z = -0.25 * s
-			arm_r.rotation.z = 0.25 * s
+		_pose_backstep(prog)
 	else:
-		# Acrobatic tucked forward somersault roll.
-		# Rotate around the character's center of mass (yc ~ 0.72m) so the roll
-		# stays above the ground instead of diving into the floor.
-		const YC := 8.0 * U  # ~0.72m center of mass height
-		var roll_angle := -TAU * prog
-		if body != null:
-			body.position.y = YC * (1.0 - cos(roll_angle)) - 0.28 * s
-			body.position.z = 0.0
-			body.rotation.x = roll_angle
-		if head != null:
-			head.rotation.x = 0.55 * s  # tuck chin to chest
-		if leg_l != null and leg_r != null:
-			var tuck := 1.35 * s
-			leg_l.rotation.x = tuck
-			leg_r.rotation.x = tuck
-		if arm_l != null and arm_r != null:
-			var arm_tuck := -1.4 * s
-			arm_l.rotation.x = arm_tuck
-			arm_r.rotation.x = arm_tuck
-			arm_l.rotation.z = -0.15 * s
-			arm_r.rotation.z = 0.15 * s
+		_pose_roll(prog)
+	_rest_on_ground()
+
+
+## Forward tuck-and-roll: dive with arms out, curl into a ball and tumble once over the
+## shoulder, plant into a low split-stance crouch, then rise.
+func _pose_roll(p: float) -> void:
+	var dive := smoothstep(0.0, 0.1, p) * (1.0 - smoothstep(0.1, 0.28, p))
+	var tuck := smoothstep(0.06, 0.24, p) * (1.0 - smoothstep(0.6, 0.78, p))
+	var land := smoothstep(0.6, 0.78, p) * (1.0 - smoothstep(0.84, 1.0, p))
+	var spin := TAU * smoothstep(0.06, 0.74, p)   # one full forward somersault
+
+	body.rotation = Vector3(spin + 0.45 * dive + 0.42 * land, 0.0, 0.28 * sin(spin * 0.5) * tuck)
+	body.scale = Vector3(1.0 + 0.05 * tuck, 1.0 - 0.14 * tuck, 1.0 + 0.05 * tuck)   # curl up
+	# Spin about the curled body's middle (torso centre), not the feet.
+	var centre := Vector3(0.0, 8.0 * U, 0.0)
+	body.position = Vector3(0.0, 0.0, -(body.basis * centre).z)
+
+	# Chin to chest (head pulled down into the shoulders so the ball stays round), then eyes up.
+	head.rotation = Vector3(1.35 * tuck + 0.2 * dive - 0.45 * land, 0.0, 0.0)
+	# The chibi head is as long as the torso, so it also sinks into the collar and shrinks a
+	# touch while curled; at roll speed this reads as a tight tuck rather than a headstand.
+	head.position = (HEAD_PIVOT + Vector3(0.0, -4.5, 1.0) * tuck) * U
+	head.scale = Vector3.ONE * (1.0 - 0.15 * tuck)
+	# Knees to chest in the tuck; one leg forward / one back when landing.
+	leg_l.rotation = Vector3(-2.15 * tuck + (-0.85 - 0.42) * land - 0.25 * dive, 0.0, 0.0)
+	leg_r.rotation = Vector3(-2.15 * tuck + (0.85 - 0.42) * land + 0.3 * dive, 0.0, 0.0)
+	# Reach out into the dive, hug the shins through the tumble, brace forward on landing.
+	var arm_x := -2.2 * dive - 1.15 * tuck - 0.6 * land
+	arm_l.rotation = Vector3(arm_x, 0.0, -0.1 * dive - 0.35 * tuck - 0.25 * land)
+	arm_r.rotation = Vector3(arm_x, 0.0, 0.1 * dive + 0.35 * tuck + 0.25 * land)
+
+
+## No direction held: a quick crouched backstep hop, torso braced forward, guard up.
+func _pose_backstep(p: float) -> void:
+	var crouch := smoothstep(0.0, 0.18, p) * (1.0 - smoothstep(0.75, 1.0, p))
+	var air := sin(clampf((p - 0.12) / 0.6, 0.0, 1.0) * PI)
+	body.scale = Vector3.ONE
+	body.rotation = Vector3(0.32 * crouch, 0.0, 0.0)
+	body.position = Vector3.ZERO
+	head.rotation = Vector3(-0.25 * crouch, 0.0, 0.0)
+	head.position = HEAD_PIVOT * U
+	head.scale = Vector3.ONE
+	# Bent-knee stance; feet swing forward while airborne (body travels backward).
+	leg_l.rotation = Vector3(-0.32 * crouch - 0.55 * air, 0.0, 0.0)
+	leg_r.rotation = Vector3(0.25 * crouch - 0.3 * air, 0.0, 0.0)
+	arm_l.rotation = Vector3(-1.0 * crouch, 0.0, -0.3 * crouch)
+	arm_r.rotation = Vector3(-1.15 * crouch, 0.0, 0.3 * crouch)
+	_hop_lift = 0.38 * air   # added on top of ground contact
+
+
+## Drop / raise the body so its lowest point touches the ground (model origin = feet),
+## so the roll stays in contact with the floor instead of floating or sinking.
+func _rest_on_ground() -> void:
+	var lift := _hop_lift
+	_hop_lift = 0.0
+	body.position.y = 0.0
+	var bx := body.transform
+	var lowest := INF
+	var back := -3.6 if (backpack_node != null and backpack_node.visible) else -2.0
+	for x: float in [-3.0, 3.0]:
+		for y: float in [5.0, 11.0]:
+			for z: float in [back, 2.2]:
+				lowest = minf(lowest, (bx * (Vector3(x, y, z) * U)).y)
+	var hx := bx * head.transform
+	for x: float in [-4.0, 4.0]:
+		for y: float in [0.0, 8.5]:
+			for z: float in [-4.0, 4.5]:
+				lowest = minf(lowest, (hx * (Vector3(x, y, z) * U)).y)
+	for leg: Node3D in [leg_l, leg_r]:
+		var lx := bx * leg.transform
+		for z: float in [-1.5, 1.5]:
+			lowest = minf(lowest, (lx * (Vector3(0.0, -5.0, z) * U)).y)
+	for arm: Node3D in [arm_l, arm_r]:
+		lowest = minf(lowest, ((bx * arm.transform) * (Vector3(0.0, -6.0, 0.0) * U)).y)
+	body.position.y = -lowest + lift
 
 
 func cast_line() -> void:

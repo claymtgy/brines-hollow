@@ -62,7 +62,9 @@ static func init_audio(force: bool = false) -> void:
 	_sounds["parry"] = _bake_sound(0.35, _gen_parry)
 	_sounds["block"] = _bake_sound(0.16, _gen_block)
 	_sounds["poise_break"] = _bake_sound(0.38, _gen_poise_break)
-	_sounds["dodge"] = _bake_sound(0.18, _gen_dodge)
+	_sounds["dodge"] = _bake_dodge()
+	_sounds["dodge_hop"] = _bake_backstep()
+	_sounds["dodge_evade"] = _bake_evade()
 	_sounds["plunge_land"] = _bake_sound(0.32, _gen_plunge_land)
 	_sounds["tell_snap"] = _bake_sound(0.15, _gen_tell_snap)
 	_sounds["tell_screech"] = _bake_sound(0.25, _gen_tell_screech)
@@ -231,12 +233,116 @@ static func _gen_poise_break(i: int, n: int) -> float:
 	return (crack * 0.5 + ring1 * 0.3 + ring2 * 0.3 + ring3 * 0.2) * 1.0
 
 
-# Dodge roll: swift fabric swoosh & ground scuff
-static func _gen_dodge(i: int, n: int) -> float:
-	var prog := float(i) / n
-	var env := sin(prog * PI)
-	var wn := randf_range(-1.0, 1.0)
-	return wn * env * 0.5
+## Dodge roll, timed to the 0.56 s roll animation: a soft cloth whoosh on the dive, a dull
+## shoulder thud as you hit the ground, a gritty scuff through the tumble, then two boot plants.
+## Built from filtered noise (stateful), so it lives outside the per-sample generators.
+static func _bake_dodge() -> AudioStreamWAV:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7041
+	var n := int(0.62 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp_cloth := 0.0     # cloth whoosh: band-limited noise (two one-pole lowpasses, difference)
+	var lp_cloth_lo := 0.0
+	var lp_grit := 0.0      # ground scuff: darker lowpassed noise, grain-modulated
+	var grain := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var w := rng.randf_range(-1.0, 1.0)
+		# Cloth whoosh 0..0.2 s, cutoff sweeping down like the body falling.
+		var cut := lerpf(0.22, 0.06, clampf(t / 0.2, 0.0, 1.0))
+		lp_cloth += (w - lp_cloth) * cut
+		lp_cloth_lo += (w - lp_cloth_lo) * 0.012
+		var cloth := (lp_cloth - lp_cloth_lo) * _bump(t, 0.02, 0.09, 0.22) * 1.6
+		# Shoulder hits the ground at ~0.13 s: low thump with a short soft attack.
+		var tt := t - 0.13
+		var thud := 0.0
+		if tt >= 0.0:
+			thud = sin(TAU * (75.0 * tt - 60.0 * tt * tt)) * (1.0 - exp(-tt * 400.0)) * exp(-tt * 28.0)
+		# Rolling scuff 0.13..0.42 s: sand/grit grains.
+		lp_grit += (w - lp_grit) * 0.09
+		if rng.randf() < 0.004:
+			grain = rng.randf_range(0.5, 1.0)
+		grain *= 0.996
+		var grit := lp_grit * (0.35 + 0.65 * grain) * _bump(t, 0.12, 0.2, 0.44) * 1.3
+		# Boot plants at ~0.40 s and ~0.47 s.
+		var steps := _boot(t - 0.40, 0.8) + _boot(t - 0.47, 0.55)
+		out[i] = thud * 0.55 + cloth * 0.5 + grit * 0.45 + steps * 0.4
+	return _to_wav(out, 0.85)
+
+
+## Backstep hop (dodge with no direction): a short cloth flick on push-off, two boots landing.
+static func _bake_backstep() -> AudioStreamWAV:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3313
+	var n := int(0.5 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	var lp_lo := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var w := rng.randf_range(-1.0, 1.0)
+		lp += (w - lp) * 0.14
+		lp_lo += (w - lp_lo) * 0.015
+		var cloth := (lp - lp_lo) * _bump(t, 0.0, 0.05, 0.16) * 1.6
+		var push := _boot(t - 0.02, 0.35)
+		var land := _boot(t - 0.36, 0.8) + _boot(t - 0.405, 0.6)
+		out[i] = cloth * 0.5 + (push + land) * 0.45
+	return _to_wav(out, 0.75)
+
+
+## Something swung through where you were: a fast, airy pass-by whoosh (no body sounds,
+## so it layers cleanly over the roll that is already playing).
+static func _bake_evade() -> AudioStreamWAV:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9187
+	var n := int(0.22 * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var lp := 0.0
+	var lp_lo := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var w := rng.randf_range(-1.0, 1.0)
+		var cut := lerpf(0.12, 0.35, _bump(t, 0.0, 0.07, 0.22))   # brightens as it passes, then fades
+		lp += (w - lp) * cut
+		lp_lo += (w - lp_lo) * 0.03
+		out[i] = (lp - lp_lo) * pow(_bump(t, 0.0, 0.06, 0.22), 1.5)
+	return _to_wav(out, 0.6)
+
+
+## 0 before a, rises to 1 at peak, falls back to 0 at b (smooth).
+static func _bump(t: float, a: float, peak: float, b: float) -> float:
+	if t <= a or t >= b:
+		return 0.0
+	if t < peak:
+		return smoothstep(a, peak, t)
+	return 1.0 - smoothstep(peak, b, t)
+
+
+## Short muffled boot thump starting at tt = 0.
+static func _boot(tt: float, gain: float) -> float:
+	if tt < 0.0 or tt > 0.08:
+		return 0.0
+	return sin(TAU * 110.0 * tt) * exp(-tt * 70.0) * (1.0 - exp(-tt * 900.0)) * gain
+
+
+## Normalises a float buffer to the given peak and packs it as 16-bit WAV.
+static func _to_wav(buf: PackedFloat32Array, peak: float) -> AudioStreamWAV:
+	var mx := 0.0001
+	for s in buf:
+		mx = maxf(mx, absf(s))
+	var data := PackedByteArray()
+	data.resize(buf.size() * 2)
+	for i in buf.size():
+		data.encode_s16(i * 2, int(clampf(buf[i] / mx * peak, -1.0, 1.0) * 32000.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = RATE
+	w.stereo = false
+	w.data = data
+	return w
 
 
 # Plunging attack land: explosive bass boom & debris rumble

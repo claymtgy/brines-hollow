@@ -761,7 +761,7 @@ func _local_hurt(amount: float, from: Vector3, cid: int) -> void:
 	var p_pos := _combat.player.position if _combat.player != null else Vector3.ZERO
 	match res:
 		"dodged":
-			CombatAudio.play_sound("dodge", p_pos)
+			CombatAudio.play_sound("dodge_evade", p_pos, -4.0)
 			if main.hud != null:
 				main.hud.show_toast("Dodged!")
 		"parried":

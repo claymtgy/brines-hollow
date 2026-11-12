@@ -29,6 +29,7 @@ enum Routine {
 @export var profession: Profession = Profession.FISHER
 @export var morale: float = 0.8         ## 0.0 to 1.0; boosts productivity by up to +30%
 @export var assigned_room_id: int = -1  ## Index of assigned validated room, or -1 if homeless
+@export var job_locked := false         ## the player picked this job; the town won't reassign them
 var current_routine: Routine = Routine.WORK
 var work_progress_sec: float = 0.0
 var last_gift_time: float = -9999.0
@@ -168,7 +169,11 @@ func tick_builder_site(delta_sec: float, site: ConstructionSiteEntity, chest: Ch
 
 
 func profession_name() -> String:
-	match profession:
+	return profession_label(profession)
+
+
+static func profession_label(prof: int) -> String:
+	match prof:
 		Profession.FISHER: return "Fisher"
 		Profession.FARMER: return "Farmer"
 		Profession.CARPENTER: return "Carpenter"
@@ -187,7 +192,8 @@ func serialize() -> Dictionary:
 		"profession": profession,
 		"morale": morale,
 		"room_id": assigned_room_id,
-		"work_progress": work_progress_sec
+		"work_progress": work_progress_sec,
+		"job_locked": job_locked
 	}
 
 
@@ -200,4 +206,5 @@ static func deserialize(d: Dictionary) -> DrifterDef:
 	drifter.morale = float(d.get("morale", 0.8))
 	drifter.assigned_room_id = int(d.get("room_id", -1))
 	drifter.work_progress_sec = float(d.get("work_progress", 0.0))
+	drifter.job_locked = bool(d.get("job_locked", false))
 	return drifter

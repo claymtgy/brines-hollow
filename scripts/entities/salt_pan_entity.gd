@@ -62,7 +62,7 @@ func server_action(action: StringName, _args: Dictionary, _peer: int) -> Diction
 	if action == &"harvest" and pan.accumulated_salt > 0:
 		var n := pan.harvest()
 		_refresh_visuals()
-		return {"changed": true, "grant": [[&"sea_salt", n]], "toast": "Collected %d sea salt!" % n}
+		return {"changed": true, "grant": [[&"sea_salt", n]], "gathered": true, "toast": "Collected %d sea salt!" % n}
 	return {}
 
 

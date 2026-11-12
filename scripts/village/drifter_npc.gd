@@ -176,7 +176,7 @@ func at_goal() -> bool:
 
 
 func simulate(delta: float) -> void:
-	if path.is_empty():
+	if path.is_empty() or talk_look_t > 0.0:   # (paused while someone is talking to them)
 		speed = 0.0
 		return
 	var wp: Vector3 = path[0]

@@ -105,7 +105,7 @@ func server_action(action: StringName, args: Dictionary, _peer: int) -> Dictiona
 			pot.trapped_catch.clear()
 			if total == 0:
 				return {}
-			return {"changed": true, "grant": grants, "toast": "Collected %d shellfish!" % total}
+			return {"changed": true, "grant": grants, "gathered": true, "toast": "Collected %d shellfish!" % total}
 	return {}
 
 

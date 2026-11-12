@@ -8,7 +8,7 @@ var main: Node
 var _root: Control
 var _speaker: Label
 var _text: Label
-var _choices: HBoxContainer
+var _choices: HFlowContainer
 var _open := false
 var _reveal := 1.0
 
@@ -49,8 +49,10 @@ func setup(p_main: Node) -> void:
 	_text.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_text.custom_minimum_size = Vector2(680, 0)
 	v.add_child(_text)
-	_choices = HBoxContainer.new()
-	_choices.alignment = BoxContainer.ALIGNMENT_END
+	_choices = HFlowContainer.new()   # wraps onto more rows when there are many choices
+	_choices.alignment = FlowContainer.ALIGNMENT_END
+	_choices.add_theme_constant_override("h_separation", 8)
+	_choices.add_theme_constant_override("v_separation", 6)
 	v.add_child(_choices)
 
 

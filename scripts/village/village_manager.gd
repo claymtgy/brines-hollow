@@ -26,6 +26,12 @@ const INTERACT_RANGE := 2.6
 const STATE_HZ := 8.0
 const WATCH_RANGE := 90.0       # metres: farther than this from every player, NPCs skip walking
 const SCAN_DEBOUNCE := 1.5
+## Jobs offered when you assign a villager by hand, in menu order.
+const JOB_ORDER := [
+	DrifterDef.Profession.FISHER, DrifterDef.Profession.FARMER, DrifterDef.Profession.RANCHER,
+	DrifterDef.Profession.CARPENTER, DrifterDef.Profession.BUILDER, DrifterDef.Profession.SMOKER_CHEF,
+	DrifterDef.Profession.LAMPLIGHTER, DrifterDef.Profession.TRADER,
+]
 
 var main: Node
 var npcs: Array[DrifterNPC] = []
@@ -40,6 +46,8 @@ var _ceil_memo := {}
 var _ceil_cols := {}            # Vector2i -> [[y_lo, y_hi], ...] spans known to be roofed
 var _world_ver := 0
 var _prompt_npc: DrifterNPC = null
+var _talking: DrifterNPC = null   # villager whose dialogue is open
+var _declined_quests := {}        # quest id -> true: turned down this session; offered via "Any tasks?"
 var _quests_bound := false
 var _auto_work_t := 15.0
 var _cook_t := 2.0
@@ -322,6 +330,12 @@ func _process(delta: float) -> void:
 	_bind_quests()
 	if is_authority():
 		_authority_tick(delta)
+	if _talking != null:
+		var dlg := _dialogue()
+		if dlg != null and dlg.is_open() and is_instance_valid(_talking) and main.player != null:
+			_talking.face_player(main.player.position)   # stand still and face you while you talk
+		else:
+			_talking = null
 	_update_prompt()
 	if Engine.get_process_frames() % 15 == 0:
 		_refresh_npc_markers()
@@ -782,9 +796,13 @@ func _update_job_assignments() -> void:
 				break
 		if not has_worker:
 			for npc in npcs:
-				if npc.recruited and npc.def.profession != prof:
-					npc.def.profession = prof
-					npc.refresh_label()
+				if npc.recruited and not npc.def.job_locked and npc.def.profession != prof:
+					var was := npc.def.profession
+					_apply_job(npc.idx, prof, false)
+					if main.is_net and main.multiplayer.multiplayer_peer != null:
+						npc_job.rpc(npc.idx, prof, false)
+					print("[village] %s moves from %s to the empty %s station" % [npc.def.name,
+						DrifterNPC.PROFESSION_NAMES[int(was)], npc.profession_name()])
 					break
 
 
@@ -941,9 +959,20 @@ func _nearest_npc(pos: Vector3) -> DrifterNPC:
 	return best
 
 
+## The villager whose "Talk" prompt is showing, if any.
+func prompt_npc() -> DrifterNPC:
+	return _prompt_npc
+
+
+func _dialogue() -> DialogueBox:
+	return main.npc_villages.dialogue if main.npc_villages != null else null
+
+
 func _update_prompt() -> void:
 	var p: Player = main.player
-	if p == null or p.is_seated() or (main.settings_menu != null and main.settings_menu.is_open()):
+	var dlg := _dialogue()
+	if p == null or p.is_seated() or (main.settings_menu != null and main.settings_menu.is_open()) \
+			or (dlg != null and dlg.is_open()) or (orders_ui != null and orders_ui.is_open()):
 		_prompt_npc = null
 		return
 	_prompt_npc = _nearest_npc(p.position)
@@ -951,7 +980,7 @@ func _update_prompt() -> void:
 		return
 	var key: String = main.controller.get_action_glyph(&"interact") if main.controller != null and main.controller.has_method("get_action_glyph") else "F"
 	if _prompt_npc.recruited:
-		main.hud.set_prompt("%s  Talk to %s" % [key, _prompt_npc.def.name])
+		main.hud.set_prompt("%s  Talk to %s the %s" % [key, _prompt_npc.def.name, _prompt_npc.profession_name()])
 	elif _prompt_npc.castaway and not tide_low():
 		main.hud.set_prompt("%s is pinned under the timbers. Free them at low water." % _prompt_npc.def.name)
 	elif _prompt_npc.castaway:
@@ -966,8 +995,10 @@ func _unhandled_input(e: InputEvent) -> void:
 	var p: Player = main.player
 	if p == null or not p.input_enabled:
 		return
-	if main.entities != null and main.entities.get_closest_interactable(p.position) != null:
-		return   # an object is closer: let the player handle it
+	if main.entities != null:
+		var ent: WorldEntity = main.entities.get_closest_interactable(p.position)
+		if ent != null and ent.can_interact(p) and not main.talk_beats_entity(ent):
+			return   # aiming at closer furniture: let the player use it
 	get_viewport().set_input_as_handled()
 	if _prompt_npc.recruited:
 		_talk(_prompt_npc)
@@ -978,6 +1009,7 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _talk(npc: DrifterNPC) -> void:
+	var dlg := _dialogue()
 	if main.player != null:
 		npc.face_player(main.player.position)
 
@@ -985,78 +1017,171 @@ func _talk(npc: DrifterNPC) -> void:
 		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, npc.def.id)
 		main.player.quest_event(QuestDef.ObjectiveType.TALK_TO, StringName(npc.def.name))
 		main.quests.check_paused_rewards(main.player.inventory)
+	if dlg == null:
+		main.hud.show_toast("%s the %s: \"%s\"" % [npc.def.name, npc.profession_name(), _chat_line(npc)])
+		return
+	_talking = npc
+	var who := "%s, %s" % [npc.def.name, npc.profession_name()]
 
 	if main.quests != null:
 		var avail_q: QuestDef = _get_available_quest_for_npc(npc)
 		if avail_q != null:
-			main.quests.accept_quest(avail_q.id)
-			main.hud.show_toast("%s (%s): \"Here, take this task: %s\"" % [npc.def.name, npc.profession_name(), avail_q.title])
-			_refresh_npc_markers()
-			return
+			if not _declined_quests.has(avail_q.id):
+				_offer_quest(npc, avail_q)
+				return
 
 	# High Morale Daily Gratitude Gift
 	var now: float = Time.get_ticks_msec() / 1000.0
 	if npc.recruited and npc.def.morale >= 0.75 and (now - npc.def.last_gift_time > 180.0) and main.player != null and main.player.inventory != null:
 		npc.def.last_gift_time = now
-		var gift_item: StringName = &"silver_mackerel"
-		var gift_count: int = 1
-		match npc.def.profession:
-			DrifterDef.Profession.FISHER:
-				gift_item = &"silver_mackerel"; gift_count = 1
-			DrifterDef.Profession.FARMER:
-				gift_item = &"shore_wheat"; gift_count = 2
-			DrifterDef.Profession.CARPENTER:
-				gift_item = &"wood_plank"; gift_count = 2
-			DrifterDef.Profession.SMOKER_CHEF:
-				gift_item = &"smoked_fish_ration"; gift_count = 1
-			DrifterDef.Profession.LAMPLIGHTER:
-				gift_item = &"fish_oil"; gift_count = 1
-			DrifterDef.Profession.TRADER:
-				gift_item = &"brass_guilder"; gift_count = 2
-			DrifterDef.Profession.RANCHER:
-				gift_item = &"salt_milk" if randf() < 0.5 else &"sea_egg"; gift_count = 1
-			DrifterDef.Profession.BUILDER:
-				gift_item = &"cobblestone"; gift_count = 2
-		main.player.inventory.add_item(gift_item, gift_count)
-		var iname := TradeManager._item_name(gift_item)
-		main.hud.show_toast("%s the %s: \"Here, captain—fresh %s (%d) from today's work! Our village is thriving.\"" % [
-			npc.def.name, npc.profession_name(), iname, gift_count
-		])
+		var gift: Array = _gift_for(npc.def.profession)
+		main.player.inventory.add_item(gift[0], gift[1])
+		var iname := TradeManager._item_name(gift[0])
+		dlg.say(who, "Here, captain - fresh from today's work: %s (%d). Brine's Hollow is thriving!" % [iname, gift[1]], [
+			["Thank you", func() -> void: _talk_menu(npc)]])
 		return
 
+	_talk_menu(npc)
+
+
+## A villager asks for help. Turning it down (or changing their job first) doesn't lose it:
+## "Any tasks?" in the conversation brings it back, and they stop opening with it.
+func _offer_quest(npc: DrifterNPC, q: QuestDef) -> void:
+	var dlg := _dialogue()
+	var who := "%s, %s" % [npc.def.name, npc.profession_name()]
+	_declined_quests.erase(q.id)
+	var choices := [
+		["I'll do it", func() -> void:
+			main.quests.accept_quest(q.id)
+			main.hud.show_toast("New task: %s" % q.title)
+			_refresh_npc_markers()
+			dlg.close()],
+		["Not now", func() -> void:
+			_declined_quests[q.id] = true
+			_talk_menu(npc, "No matter - ask me again whenever you like.")]]
+	if npc.recruited:
+		choices.append(["Change job", func() -> void:
+			_declined_quests[q.id] = true
+			_job_menu(npc)])
+	dlg.say(who, "Captain, could you lend a hand? %s" % q.title, choices)
+
+
+## The everyday conversation: a line about what they're up to, plus what you can ask of them.
+func _talk_menu(npc: DrifterNPC, line := "") -> void:
+	var dlg := _dialogue()
+	var who := "%s, %s" % [npc.def.name, npc.profession_name()]
+	var choices := []
+	var avail_q: QuestDef = _get_available_quest_for_npc(npc)
+	if avail_q != null:
+		choices.append(["Any tasks?", func() -> void: _offer_quest(npc, avail_q)])
 	if npc.def.profession == DrifterDef.Profession.SMOKER_CHEF:
-		open_cook_orders(npc)
-		return
+		choices.append(["Pantry orders", func() -> void:
+			dlg.close()
+			open_cook_orders(npc)])
+	if npc.recruited:
+		choices.append(["Change job", func() -> void: _job_menu(npc)])
+	choices.append(["Goodbye", dlg.close])
+	dlg.say(who, line if line != "" else _chat_line(npc), choices)
 
-	# Contextual immersion dialogue
-	var line := ""
+
+## Pick a villager's trade. A job you choose sticks; "Any job" hands it back to the town,
+## which fills empty work stations on its own.
+func _job_menu(npc: DrifterNPC) -> void:
+	var dlg := _dialogue()
+	var who := "%s, %s" % [npc.def.name, npc.profession_name()]
+	var choices := []
+	for prof: int in JOB_ORDER:
+		var label: String = DrifterNPC.PROFESSION_NAMES[int(prof)]
+		if prof == npc.def.profession:
+			label = "• " + label
+		choices.append([label, func() -> void: _choose_job(npc, prof, true)])
+	choices.append(["Any job", func() -> void: _choose_job(npc, npc.def.profession, false)])
+	choices.append(["Back", func() -> void: _talk_menu(npc)])
+	var held := "You asked me to work as a %s." % npc.profession_name().to_lower() if npc.def.job_locked \
+			else "The town has me working as a %s for now." % npc.profession_name().to_lower()
+	dlg.say(who, "%s What should I turn my hand to?" % held, choices)
+
+
+func _choose_job(npc: DrifterNPC, prof: int, locked: bool) -> void:
+	if is_authority():
+		set_job(npc.idx, prof, locked)
+	else:
+		req_set_job.rpc_id(1, npc.idx, prof, locked)
+		npc.def.profession = prof as DrifterDef.Profession   # predict; the host confirms
+		npc.def.job_locked = locked
+		npc.refresh_label()
+	var line := "Aye, captain. I'll take up the %s's work." % String(DrifterNPC.PROFESSION_NAMES[int(prof)]).to_lower() if locked \
+			else "Right you are - I'll go wherever the town needs hands."
+	_talk_menu(npc, line)
+
+
+## Authority: change a recruited villager's job and tell every peer.
+func set_job(npc_idx: int, prof: int, locked: bool) -> void:
+	if npc_idx < 0 or npc_idx >= npcs.size():
+		return
+	var npc := npcs[npc_idx]
+	if not npc.recruited:
+		return
+	_apply_job(npc_idx, prof, locked)
+	if not locked:
+		_update_job_assignments()   # let the town fill an empty station with them right away
+	if main.is_net and main.multiplayer.multiplayer_peer != null:
+		npc_job.rpc(npc_idx, int(npc.def.profession), npc.def.job_locked)
+	_sync_village()
+
+
+func _apply_job(npc_idx: int, prof: int, locked: bool) -> void:
+	var npc := npcs[npc_idx]
+	var changed := npc.def.profession != prof
+	npc.def.profession = prof as DrifterDef.Profession
+	npc.def.job_locked = locked
+	if changed:
+		npc.def.work_progress_sec = 0.0
+		_cook_station.erase(npc_idx)   # (their work spot follows the job, so they re-route on their own)
+	npc.refresh_label()
+	_refresh_npc_markers()
+
+
+static func _gift_for(prof: int) -> Array:
+	match prof:
+		DrifterDef.Profession.FARMER: return [&"shore_wheat", 2]
+		DrifterDef.Profession.CARPENTER: return [&"wood_plank", 2]
+		DrifterDef.Profession.SMOKER_CHEF: return [&"smoked_fish_ration", 1]
+		DrifterDef.Profession.LAMPLIGHTER: return [&"fish_oil", 1]
+		DrifterDef.Profession.TRADER: return [&"brass_guilder", 2]
+		DrifterDef.Profession.RANCHER: return [&"salt_milk" if randf() < 0.5 else &"sea_egg", 1]
+		DrifterDef.Profession.BUILDER: return [&"cobblestone", 2]
+	return [&"silver_mackerel", 1]
+
+
+func _chat_line(npc: DrifterNPC) -> String:
+	if not npc.recruited:
+		return "Fair winds, stranger."
 	match npc.def.current_routine:
 		DrifterDef.Routine.SLEEP:
-			line = "*Zzz... resting up for tomorrow's low tide...*"
+			return "*Yawn*... resting up for tomorrow's low tide..."
 		DrifterDef.Routine.EAT:
-			line = "Nothing beats a warm meal by the hearth after a long shift!"
+			return "Nothing beats a warm meal by the hearth after a long shift!"
 		DrifterDef.Routine.SOCIALIZE:
-			line = "Good company and the sound of waves—a fine evening in the Hollow."
-		DrifterDef.Routine.WORK:
-			match npc.def.profession:
-				DrifterDef.Profession.FISHER:
-					line = "Tides are running sweet today. The mackerel are biting near the outer stacks!"
-				DrifterDef.Profession.FARMER:
-					line = "The sweet-soil beds are thriving! Brackish rye is shooting up nicely."
-				DrifterDef.Profession.CARPENTER:
-					line = "Splitting driftwood planks at the sawhorse. Shipshape timber for our harbor!"
-				DrifterDef.Profession.SMOKER_CHEF:
-					line = "Got the smokehouse stoked with dry beech. These cured rations will keep for months!"
-				DrifterDef.Profession.LAMPLIGHTER:
-					line = "Wicks trimmed and lanterns filled with fish oil. The beacon burns through the thickest fog."
-				DrifterDef.Profession.TRADER:
-					line = "Fair winds and full holds! Visiting merchant ships always look for our cured goods."
-				DrifterDef.Profession.RANCHER:
-					line = "The salt-goats are grazing peacefully. Just sheared a fresh bundle of shore wool!"
-				DrifterDef.Profession.BUILDER:
-					line = "Cobblestone and timber squared away. Building up Brine's Hollow stone by stone!"
-
-	main.hud.show_toast("%s the %s: \"%s\"" % [npc.def.name, npc.profession_name(), line])
+			return "Good company and the sound of waves - a fine evening in the Hollow."
+	match npc.def.profession:
+		DrifterDef.Profession.FISHER:
+			return "Tides are running sweet today. The mackerel are biting near the outer stacks!"
+		DrifterDef.Profession.FARMER:
+			return "The sweet-soil beds are thriving! Brackish rye is shooting up nicely."
+		DrifterDef.Profession.CARPENTER:
+			return "Splitting driftwood planks at the sawhorse. Shipshape timber for our harbor!"
+		DrifterDef.Profession.SMOKER_CHEF:
+			return "Got the smokehouse stoked with dry beech. These cured rations will keep for months!"
+		DrifterDef.Profession.LAMPLIGHTER:
+			return "Wicks trimmed and lanterns filled with fish oil. The beacon burns through the thickest fog."
+		DrifterDef.Profession.TRADER:
+			return "Fair winds and full holds! Visiting merchant ships always look for our cured goods."
+		DrifterDef.Profession.RANCHER:
+			return "The salt-goats are grazing peacefully. Just sheared a fresh bundle of shore wool!"
+		DrifterDef.Profession.BUILDER:
+			return "Cobblestone and timber squared away. Building up Brine's Hollow stone by stone!"
+	return "Fine day for it."
 
 
 func _get_available_quest_for_npc(npc: DrifterNPC) -> QuestDef:
@@ -1187,6 +1312,22 @@ func npc_recruited(npc_idx: int) -> void:
 func village_event(text: String) -> void:
 	if main.hud != null:
 		main.hud.show_toast(text)
+
+
+@rpc("authority", "call_remote", "reliable")
+func npc_job(npc_idx: int, prof: int, locked: bool) -> void:
+	if _ready_done and npc_idx >= 0 and npc_idx < npcs.size():
+		_apply_job(npc_idx, prof, locked)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func req_set_job(npc_idx: int, prof: int, locked: bool) -> void:
+	if not is_authority() or not _ready_done or not DrifterDef.Profession.values().has(prof):
+		return
+	var peer := main.multiplayer.get_remote_sender_id()
+	if npc_idx < 0 or npc_idx >= npcs.size() or not main.remotes.has(peer) 			or main.remotes[peer].position.distance_to(npcs[npc_idx].position) > INTERACT_RANGE + 3.0:
+		return
+	set_job(npc_idx, prof, locked)
 
 
 @rpc("any_peer", "call_remote", "reliable")

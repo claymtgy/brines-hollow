@@ -117,8 +117,8 @@ func server_action(action: StringName, _args: Dictionary, _peer: int) -> Diction
 		stored = 0
 		_seep = 0.0
 		_refresh_visuals()
-		return {"changed": true, "grant": [[&"spring_water", n]], "toast": "Drew %d flasks of spring water." % n}
-	return {"grant": [[&"spring_water", SPRING_FILL]], "toast": "Filled %d flasks of cold spring water." % SPRING_FILL}
+		return {"changed": true, "grant": [[&"spring_water", n]], "gathered": true, "toast": "Drew %d flasks of spring water." % n}
+	return {"grant": [[&"spring_water", SPRING_FILL]], "gathered": true, "toast": "Filled %d flasks of cold spring water." % SPRING_FILL}
 
 
 func server_tick(delta: float, _env: Dictionary) -> bool:

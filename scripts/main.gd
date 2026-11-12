@@ -647,6 +647,31 @@ func _tick_pad_view() -> void:
 			_toggle_quest_log()
 
 
+## Distance to whoever's "Talk" prompt is up (INF if nobody). F goes to them rather than to
+## nearby furniture, unless the player is aiming at furniture that is closer than they are.
+func talk_target_distance() -> float:
+	if player == null:
+		return INF
+	var best := INF
+	if village_mgr != null and village_mgr.prompt_npc() != null:
+		best = minf(best, player.position.distance_to(village_mgr.prompt_npc().position))
+	if npc_villages != null and npc_villages._near != null:
+		best = minf(best, player.position.distance_to(npc_villages._near.position))
+	if tutorial != null and tutorial.wants_talk():
+		best = minf(best, player.position.distance_to(tutorial.wren.position))
+	return best
+
+
+## True when F should talk instead of using the given (nearest) furniture entity.
+func talk_beats_entity(ent: Node3D) -> bool:
+	var d := talk_target_distance()
+	if d == INF:
+		return false
+	if ent == null:
+		return true
+	return ent != player.hovered_entity or player.position.distance_to(ent.position) > d
+
+
 func _unhandled_input(e: InputEvent) -> void:
 	if controller != null:
 		controller.track_input_event(e)

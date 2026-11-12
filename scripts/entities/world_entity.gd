@@ -110,7 +110,9 @@ func interact(player: Player) -> void:
 	interacted.emit(player)
 
 
-## Authority only. Returns {"grant": [[item_id, count], ...], "toast": String, "changed": bool}.
+## Authority only. Returns {"grant": [[item_id, count], ...], "toast": String, "changed": bool,
+## "gathered": bool}. "gathered" = the grant is a harvest (counts toward "collect N" quests);
+## leave it off for chest withdrawals, refunds and the like.
 func server_action(_action: StringName, _args: Dictionary, _peer: int) -> Dictionary:
 	return {}
 
